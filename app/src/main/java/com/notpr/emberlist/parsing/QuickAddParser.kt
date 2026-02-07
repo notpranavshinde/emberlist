@@ -34,9 +34,15 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val tokens = input.trim()
         val priority = parsePriority(tokens) ?: Priority.P4
         val project = parseProject(tokens)
-        val due = parseDue(tokens, now)
+        var due = parseDue(tokens, now)
         val deadline = parseDeadline(tokens, now)
         val recurrence = parseRecurrence(tokens)
+
+        if (due == null && recurrence != null) {
+            val time = parseTime(tokens) ?: LocalTime.of(DEFAULT_TIME_HOUR, 0)
+            due = LocalDateTime.of(now.toLocalDate(), time).atZone(zoneId).toInstant().toEpochMilli()
+        }
+
         val reminders = parseReminders(tokens, now, due)
 
         val title = stripTokens(tokens)
@@ -150,6 +156,8 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val everyWeekday = Regex("every\\s+weekday", RegexOption.IGNORE_CASE)
         val everyInterval = Regex("every\\s+(\\d+)\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
         val monthlyOn = Regex("every\\s+month\\s+on\\s+the\\s+(\\d+)(st|nd|rd|th)?", RegexOption.IGNORE_CASE)
+        val everyNamedDay = Regex("every\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOption.IGNORE_CASE)
+        val everyBareUnit = Regex("every\\s+(week|month|year)\\b", RegexOption.IGNORE_CASE)
 
         return when {
             everyWeekday.containsMatchIn(input) -> "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
@@ -158,11 +166,29 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
                 val day = monthlyOn.find(input)?.groupValues?.get(1)?.toInt() ?: 1
                 "FREQ=MONTHLY;BYMONTHDAY=$day"
             }
+            everyNamedDay.containsMatchIn(input) -> {
+                val dayName = everyNamedDay.find(input)!!.groupValues[1].uppercase()
+                val byDay = when {
+                    dayName.startsWith("MON") -> "MO"
+                    dayName.startsWith("TUE") -> "TU"
+                    dayName.startsWith("WED") -> "WE"
+                    dayName.startsWith("THU") -> "TH"
+                    dayName.startsWith("FRI") -> "FR"
+                    dayName.startsWith("SAT") -> "SA"
+                    dayName.startsWith("SUN") -> "SU"
+                    else -> "MO"
+                }
+                "FREQ=WEEKLY;BYDAY=$byDay"
+            }
             everyInterval.containsMatchIn(input) -> {
                 val match = everyInterval.find(input)!!
                 val interval = match.groupValues[1].toInt()
                 val unit = match.groupValues[2].uppercase()
                 "FREQ=${unit}LY;INTERVAL=$interval"
+            }
+            everyBareUnit.containsMatchIn(input) -> {
+                val unit = everyBareUnit.find(input)!!.groupValues[1].uppercase()
+                "FREQ=${unit}LY"
             }
             else -> null
         }

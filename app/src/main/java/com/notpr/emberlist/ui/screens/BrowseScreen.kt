@@ -65,9 +65,6 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
             Divider()
         }
         item {
-            Text(text = "Settings", modifier = Modifier.padding(16.dp))
-        }
-        item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
