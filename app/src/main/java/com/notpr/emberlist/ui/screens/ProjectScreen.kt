@@ -45,7 +45,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val tasks by viewModel.observeTasks(projectId).collectAsState()
     val sections by viewModel.observeSections(projectId).collectAsState()
 
-    var viewPref by remember(project?.viewPreference) { mutableStateOf(project?.viewPreference ?: ViewPreference.LIST) }
+    val viewPref = project?.viewPreference ?: ViewPreference.LIST
     var dragWindowOffset by remember { mutableStateOf<Offset?>(null) }
     val columnBounds = remember { mutableStateOf<Map<String?, Rect>>(emptyMap()) }
     var showCreateSection by remember { mutableStateOf(false) }
@@ -59,8 +59,8 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
         ) {
             Text(text = project?.name ?: "Project")
             Button(onClick = {
-                viewPref = if (viewPref == ViewPreference.LIST) ViewPreference.BOARD else ViewPreference.LIST
-                project?.let { viewModel.updateProject(it.copy(viewPreference = viewPref)) }
+                val newPref = if (viewPref == ViewPreference.LIST) ViewPreference.BOARD else ViewPreference.LIST
+                project?.let { viewModel.updateProject(it.copy(viewPreference = newPref)) }
             }) {
                 Text(text = if (viewPref == ViewPreference.LIST) "Board" else "List")
             }
