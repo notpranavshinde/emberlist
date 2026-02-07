@@ -35,9 +35,12 @@ class QuickAddViewModel(
 
     private val dueOverride = MutableStateFlow<Long?>(null)
     private val deadlineOverride = MutableStateFlow<Long?>(null)
+    private val allDayOverride = MutableStateFlow<Boolean?>(null)
+    private val deadlineAllDayOverride = MutableStateFlow<Boolean?>(null)
     private val priorityOverride = MutableStateFlow<Priority?>(null)
     private val projectOverride = MutableStateFlow<String?>(null)
     private val recurrenceOverride = MutableStateFlow<String?>(null)
+    private val deadlineRecurrenceOverride = MutableStateFlow<String?>(null)
     private val remindersOverride = MutableStateFlow<List<ReminderSpec>?>(null)
 
     val projects = repository.observeProjects()
@@ -50,11 +53,13 @@ class QuickAddViewModel(
 
     fun setDueOverride(value: Long?) {
         dueOverride.value = value
+        allDayOverride.value = false
         _parsed.value = mergeOverrides(_parsed.value)
     }
 
     fun setDeadlineOverride(value: Long?) {
         deadlineOverride.value = value
+        deadlineAllDayOverride.value = false
         _parsed.value = mergeOverrides(_parsed.value)
     }
 
@@ -73,6 +78,11 @@ class QuickAddViewModel(
         _parsed.value = mergeOverrides(_parsed.value)
     }
 
+    fun setDeadlineRecurrenceOverride(value: String?) {
+        deadlineRecurrenceOverride.value = value
+        _parsed.value = mergeOverrides(_parsed.value)
+    }
+
     fun setRemindersOverride(value: List<ReminderSpec>?) {
         remindersOverride.value = value
         _parsed.value = mergeOverrides(_parsed.value)
@@ -84,7 +94,14 @@ class QuickAddViewModel(
             val now = System.currentTimeMillis()
             val taskId = UUID.randomUUID().toString()
             if (result.dueAt == null && !result.recurrenceRule.isNullOrBlank()) {
-                result = result.copy(dueAt = now + 60 * 60 * 1000) // default to next hour today
+                val zone = java.time.ZoneId.systemDefault()
+                val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+                result = result.copy(dueAt = startOfDay, allDay = true)
+            }
+            if (result.deadlineAt == null && !result.deadlineRecurringRule.isNullOrBlank()) {
+                val zone = java.time.ZoneId.systemDefault()
+                val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+                result = result.copy(deadlineAt = startOfDay, deadlineAllDay = true)
             }
             val projectId = result.projectName?.let { name ->
                 val existing = repository.getProjectByName(name)
@@ -115,9 +132,11 @@ class QuickAddViewModel(
                 sectionId = null,
                 priority = result.priority,
                 dueAt = result.dueAt,
-                allDay = false,
+                allDay = result.allDay,
                 deadlineAt = result.deadlineAt,
+                deadlineAllDay = result.deadlineAllDay,
                 recurringRule = result.recurrenceRule,
+                deadlineRecurringRule = result.deadlineRecurringRule,
                 status = TaskStatus.OPEN,
                 completedAt = null,
                 parentTaskId = null,
@@ -150,9 +169,12 @@ class QuickAddViewModel(
         return base.copy(
             dueAt = dueOverride.value ?: base.dueAt,
             deadlineAt = deadlineOverride.value ?: base.deadlineAt,
+            allDay = allDayOverride.value ?: base.allDay,
+            deadlineAllDay = deadlineAllDayOverride.value ?: base.deadlineAllDay,
             priority = priorityOverride.value ?: base.priority,
             projectName = projectOverride.value ?: base.projectName,
             recurrenceRule = recurrenceOverride.value ?: base.recurrenceRule,
+            deadlineRecurringRule = deadlineRecurrenceOverride.value ?: base.deadlineRecurringRule,
             reminders = remindersOverride.value ?: base.reminders
         )
     }

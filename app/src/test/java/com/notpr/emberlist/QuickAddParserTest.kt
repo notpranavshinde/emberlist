@@ -63,8 +63,8 @@ class QuickAddParserTest {
         val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
         val result = parser.parse("Pay rent every month", now)
         assertNotNull(result.dueAt)
-        // Due date should default to today at 9am (DEFAULT_TIME_HOUR)
-        val expectedDue = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        // Due date should default to today at start of day (all-day)
+        val expectedDue = LocalDateTime.of(2026, Month.FEBRUARY, 6, 0, 0)
             .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
         assertEquals(expectedDue, result.dueAt)
     }

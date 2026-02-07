@@ -11,6 +11,7 @@ interface TaskRepository {
     fun observeInbox(): Flow<List<TaskEntity>>
     fun observeToday(endOfDay: Long): Flow<List<TaskEntity>>
     fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>>
+    fun observeOverdueRecurring(startOfTomorrow: Long): Flow<List<TaskEntity>>
     fun observeProjects(): Flow<List<ProjectEntity>>
     fun observeProject(projectId: String): Flow<ProjectEntity?>
     suspend fun getProjectByName(name: String): ProjectEntity?

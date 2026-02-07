@@ -20,11 +20,33 @@ suspend fun completeTaskWithRecurrence(repository: TaskRepository, task: TaskEnt
 
     val rule = task.recurringRule
     val dueAt = task.dueAt
-    if (rule != null && dueAt != null) {
-        val nextDue = RecurrenceEngine.nextDue(dueAt, rule) ?: return
+    val deadlineRule = task.deadlineRecurringRule
+    val deadlineAt = task.deadlineAt
+
+    val zone = java.time.ZoneId.systemDefault()
+    val nextDue = if (rule != null && dueAt != null) {
+        RecurrenceEngine.nextAt(dueAt, rule, zone, keepTime = !task.allDay)
+    } else {
+        null
+    }
+
+    val nextDeadlineFromRule = if (deadlineRule != null && deadlineAt != null) {
+        RecurrenceEngine.nextAt(deadlineAt, deadlineRule, zone, keepTime = !task.deadlineAllDay)
+    } else {
+        null
+    }
+
+    val deadlineOffset = if (deadlineAt != null && dueAt != null) deadlineAt - dueAt else null
+    val nextDeadline = nextDeadlineFromRule
+        ?: if (nextDue != null && deadlineOffset != null) nextDue + deadlineOffset else null
+
+    if (nextDue != null || nextDeadline != null) {
         val next = task.copy(
             id = UUID.randomUUID().toString(),
             dueAt = nextDue,
+            allDay = if (nextDue != null) task.allDay else false,
+            deadlineAt = nextDeadline,
+            deadlineAllDay = if (nextDeadline != null) task.deadlineAllDay else false,
             status = TaskStatus.OPEN,
             completedAt = null,
             createdAt = now,

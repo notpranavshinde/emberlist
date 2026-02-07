@@ -20,6 +20,19 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE status = :status AND dueAt IS NOT NULL AND dueAt >= :startOfTomorrow ORDER BY dueAt ASC")
     fun observeUpcoming(status: TaskStatus = TaskStatus.OPEN, startOfTomorrow: Long): Flow<List<TaskEntity>>
 
+    @Query("""
+        SELECT * FROM tasks
+        WHERE status = :status
+          AND recurringRule IS NOT NULL
+          AND dueAt IS NOT NULL
+          AND dueAt < :startOfTomorrow
+        ORDER BY dueAt ASC
+    """)
+    fun observeOverdueRecurring(
+        status: TaskStatus = TaskStatus.OPEN,
+        startOfTomorrow: Long
+    ): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE projectId = :projectId AND status = :status ORDER BY `order` ASC")
     fun observeProjectTasks(projectId: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 

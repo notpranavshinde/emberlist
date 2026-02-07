@@ -3,6 +3,7 @@ package com.notpr.emberlist.ui.screens.quickadd
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,22 +12,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
@@ -63,20 +71,82 @@ fun QuickAddSheet() {
             val projects by viewModel.projects.collectAsState()
             val context = LocalContext.current
             val zone = ZoneId.systemDefault()
+            val projectNames = projects.map { it.name }
+            var inputState by remember { mutableStateOf(TextFieldValue(input)) }
+            var projectMenuOpen by remember { mutableStateOf(false) }
+            val projectQuery = remember(inputState.text) {
+                val hashIndex = inputState.text.lastIndexOf('#')
+                if (hashIndex == -1) return@remember null
+                val after = inputState.text.substring(hashIndex + 1)
+                val token = after.takeWhile { !it.isWhitespace() }
+                token
+            }
+            val shouldSuggest = projectQuery != null
+            val projectMatches = remember(projectQuery, projectNames) {
+                val query = projectQuery?.trim().orEmpty()
+                if (projectQuery == null) emptyList()
+                else if (query.isBlank()) projectNames
+                else projectNames.filter { it.contains(query, ignoreCase = true) }
+            }
 
             var showPriorityDialog by remember { mutableStateOf(false) }
             var showProjectDialog by remember { mutableStateOf(false) }
             var showRecurrenceDialog by remember { mutableStateOf(false) }
+            var showDeadlineRecurrenceDialog by remember { mutableStateOf(false) }
             var showReminderDialog by remember { mutableStateOf(false) }
+
+            LaunchedEffect(input) {
+                if (inputState.text != input) {
+                    inputState = inputState.copy(text = input, selection = TextRange(input.length))
+                }
+            }
 
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(text = "Quick Add")
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = viewModel::updateInput,
-                    placeholder = { Text("e.g. Pay rent tomorrow 8am #Home p1") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box {
+                    OutlinedTextField(
+                        value = inputState,
+                        onValueChange = { value ->
+                            inputState = value
+                            viewModel.updateInput(value.text)
+                            projectMenuOpen = value.text.lastIndexOf('#') != -1
+                        },
+                        placeholder = { Text("e.g. Pay rent tomorrow 8am #Home p1") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                projectMenuOpen = focusState.isFocused && shouldSuggest
+                            }
+                    )
+                    DropdownMenu(
+                        expanded = projectMenuOpen && shouldSuggest,
+                        onDismissRequest = { projectMenuOpen = false },
+                        properties = PopupProperties(focusable = false),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        projectMatches.forEach { name ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = {
+                                    val currentText = inputState.text
+                                    val hashIndex = currentText.lastIndexOf('#')
+                                    if (hashIndex != -1) {
+                                        val before = currentText.substring(0, hashIndex + 1)
+                                        val after = currentText.substring(hashIndex + 1)
+                                        val remainder = after.dropWhile { !it.isWhitespace() }
+                                        val spacer = if (remainder.isEmpty()) " " else ""
+                                        val newText = "$before$name$spacer$remainder"
+                                        val cursor = (before.length + name.length + spacer.length)
+                                        inputState = TextFieldValue(newText, selection = TextRange(cursor))
+                                        viewModel.updateInput(newText)
+                                        viewModel.setProjectOverride(name)
+                                        projectMenuOpen = false
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
                 ParsedChips(
                     parsed = parsed,
                     onDueClick = {
@@ -88,6 +158,7 @@ fun QuickAddSheet() {
                     onPriorityClick = { showPriorityDialog = true },
                     onProjectClick = { showProjectDialog = true },
                     onRecurrenceClick = { showRecurrenceDialog = true },
+                    onDeadlineRecurrenceClick = { showDeadlineRecurrenceDialog = true },
                     onReminderClick = { showReminderDialog = true }
                 )
 
@@ -136,6 +207,17 @@ fun QuickAddSheet() {
                 )
             }
 
+            if (showDeadlineRecurrenceDialog) {
+                RecurrenceDialog(
+                    current = parsed.deadlineRecurringRule.orEmpty(),
+                    onDismiss = { showDeadlineRecurrenceDialog = false },
+                    onSave = {
+                        viewModel.setDeadlineRecurrenceOverride(it.ifBlank { null })
+                        showDeadlineRecurrenceDialog = false
+                    }
+                )
+            }
+
             if (showReminderDialog) {
                 ReminderDialog(
                     onDismiss = { showReminderDialog = false },
@@ -161,6 +243,7 @@ private fun ParsedChips(
     onPriorityClick: () -> Unit,
     onProjectClick: () -> Unit,
     onRecurrenceClick: () -> Unit,
+    onDeadlineRecurrenceClick: () -> Unit,
     onReminderClick: () -> Unit
 ) {
     val zone = ZoneId.systemDefault()
@@ -169,20 +252,35 @@ private fun ParsedChips(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             parsed.dueAt?.let {
                 val dt = Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime()
-                AssistChip(onClick = onDueClick, label = { Text("Due ${dt.format(formatter)}") })
+                val label = if (parsed.allDay) {
+                    "Due ${dt.toLocalDate().toString()} · All day"
+                } else {
+                    "Due ${dt.format(formatter)}"
+                }
+                AssistChip(onClick = onDueClick, label = { Text(label) })
             } ?: AssistChip(onClick = onDueClick, label = { Text("Set due") })
             parsed.deadlineAt?.let {
                 val dt = Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime()
-                AssistChip(onClick = onDeadlineClick, label = { Text("Deadline ${dt.format(formatter)}") })
+                val label = if (parsed.deadlineAllDay) {
+                    "Deadline ${dt.toLocalDate().toString()} · All day"
+                } else {
+                    "Deadline ${dt.format(formatter)}"
+                }
+                AssistChip(onClick = onDeadlineClick, label = { Text(label) })
             } ?: AssistChip(onClick = onDeadlineClick, label = { Text("Set deadline") })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             AssistChip(onClick = onPriorityClick, label = { Text(parsed.priority.name) })
             AssistChip(onClick = onProjectClick, label = { Text(parsed.projectName?.let { "#${it}" } ?: "Inbox") })
         }
-        parsed.recurrenceRule?.let {
-            AssistChip(onClick = onRecurrenceClick, label = { Text("Repeat") })
-        } ?: AssistChip(onClick = onRecurrenceClick, label = { Text("Add repeat") })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            parsed.recurrenceRule?.let {
+                AssistChip(onClick = onRecurrenceClick, label = { Text("Repeat") })
+            } ?: AssistChip(onClick = onRecurrenceClick, label = { Text("Add repeat") })
+            parsed.deadlineRecurringRule?.let {
+                AssistChip(onClick = onDeadlineRecurrenceClick, label = { Text("Deadline repeat") })
+            } ?: AssistChip(onClick = onDeadlineRecurrenceClick, label = { Text("Add deadline repeat") })
+        }
         AssistChip(onClick = onReminderClick, label = { Text("Reminders") })
     }
 }

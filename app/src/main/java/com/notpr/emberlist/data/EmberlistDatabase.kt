@@ -27,7 +27,7 @@ import com.notpr.emberlist.data.model.TaskEntity
         ReminderEntity::class,
         ActivityEventEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -60,9 +60,17 @@ abstract class EmberlistDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN deadlineAllDay INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE tasks ADD COLUMN deadlineRecurringRule TEXT")
+            }
+        }
+
         fun build(context: Context): EmberlistDatabase {
             return Room.databaseBuilder(context, EmberlistDatabase::class.java, DB_NAME)
                 .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_2_3)
                 .build()
         }
     }

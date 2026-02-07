@@ -14,6 +14,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Composable
 fun TaskRow(
@@ -40,6 +43,17 @@ fun TaskRow(
             Text(text = task.title)
             task.description.takeIf { it.isNotBlank() }?.let { desc ->
                 Text(text = desc)
+            }
+            task.deadlineAt?.let { deadline ->
+                val zone = ZoneId.systemDefault()
+                val formatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
+                val dt = Instant.ofEpochMilli(deadline).atZone(zone).toLocalDateTime()
+                val label = if (task.deadlineAllDay) {
+                    "Deadline: ${dt.toLocalDate()} · All day"
+                } else {
+                    "Deadline: ${dt.format(formatter)}"
+                }
+                Text(text = label)
             }
         }
         Checkbox(

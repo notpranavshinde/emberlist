@@ -3,11 +3,22 @@ package com.notpr.emberlist.domain
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 
 object RecurrenceEngine {
     fun nextDue(currentDueAt: Long, rule: String, zoneId: ZoneId = ZoneId.systemDefault()): Long? {
+        return nextAt(currentDueAt, rule, zoneId, keepTime = false)
+    }
+
+    fun nextAt(
+        currentAt: Long,
+        rule: String,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        keepTime: Boolean = true
+    ): Long? {
         val parts = rule.split(";").associate {
             val kv = it.split("=")
             kv[0].uppercase() to kv.getOrElse(1) { "" }
@@ -17,7 +28,9 @@ object RecurrenceEngine {
         val byDay = parts["BYDAY"]?.split(",")?.mapNotNull { parseDay(it) }
         val byMonthDay = parts["BYMONTHDAY"]?.toIntOrNull()
 
-        val currentDate = Instant.ofEpochMilli(currentDueAt).atZone(zoneId).toLocalDate()
+        val currentZoned = Instant.ofEpochMilli(currentAt).atZone(zoneId)
+        val currentDate = currentZoned.toLocalDate()
+        val currentTime = currentZoned.toLocalTime()
 
         val nextDate = when (freq) {
             "DAILY" -> currentDate.plusDays(interval.toLong())
@@ -41,7 +54,8 @@ object RecurrenceEngine {
             else -> return null
         }
 
-        return nextDate.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val time = if (keepTime) currentTime else LocalTime.MIDNIGHT
+        return LocalDateTime.of(nextDate, time).atZone(zoneId).toInstant().toEpochMilli()
     }
 
     private fun parseDay(token: String): DayOfWeek? {

@@ -20,9 +20,12 @@ data class QuickAddResult(
     val title: String,
     val dueAt: Long?,
     val deadlineAt: Long?,
+    val allDay: Boolean,
+    val deadlineAllDay: Boolean,
     val priority: Priority,
     val projectName: String?,
     val recurrenceRule: String?,
+    val deadlineRecurringRule: String?,
     val reminders: List<ReminderSpec>
 )
 
@@ -34,13 +37,30 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val tokens = input.trim()
         val priority = parsePriority(tokens) ?: Priority.P4
         val project = parseProject(tokens)
+        val explicitTime = parseTime(tokens)
         var due = parseDue(tokens, now)
-        val deadline = parseDeadline(tokens, now)
+        val deadlinePhrase = extractDeadlinePhrase(tokens)
+        val deadlineTime = deadlinePhrase?.let { parseTime(it) }
+        var deadline = deadlinePhrase?.let { parseDeadline(it, now) }
         val recurrence = parseRecurrence(tokens)
+        val deadlineRecurrence = deadlinePhrase?.let { parseRecurrence(it) }
+        var allDay = false
+        var deadlineAllDay = false
 
         if (due == null && recurrence != null) {
-            val time = parseTime(tokens) ?: LocalTime.of(DEFAULT_TIME_HOUR, 0)
+            val time = explicitTime ?: LocalTime.MIDNIGHT
+            allDay = explicitTime == null
             due = LocalDateTime.of(now.toLocalDate(), time).atZone(zoneId).toInstant().toEpochMilli()
+        } else if (due != null) {
+            allDay = explicitTime == null
+        }
+
+        if (deadline == null && deadlineRecurrence != null) {
+            val time = deadlineTime ?: LocalTime.MIDNIGHT
+            deadlineAllDay = deadlineTime == null
+            deadline = LocalDateTime.of(now.toLocalDate(), time).atZone(zoneId).toInstant().toEpochMilli()
+        } else if (deadline != null) {
+            deadlineAllDay = deadlineTime == null
         }
 
         val reminders = parseReminders(tokens, now, due)
@@ -50,9 +70,12 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             title = title.ifBlank { "Untitled task" },
             dueAt = due,
             deadlineAt = deadline,
+            allDay = allDay,
+            deadlineAllDay = deadlineAllDay,
             priority = priority,
             projectName = project,
             recurrenceRule = recurrence,
+            deadlineRecurringRule = deadlineRecurrence,
             reminders = reminders
         )
     }
@@ -83,7 +106,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             else -> null
         } ?: return null
 
-        val time = parseTime(input) ?: LocalTime.of(DEFAULT_TIME_HOUR, 0)
+        val time = parseTime(input) ?: LocalTime.MIDNIGHT
         val date = when (duePhrase) {
             "today" -> now.toLocalDate()
             "tomorrow" -> now.toLocalDate().plusDays(1)
@@ -100,17 +123,17 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         return LocalDateTime.of(date, time).atZone(zoneId).toInstant().toEpochMilli()
     }
 
-    private fun parseDeadline(input: String, now: LocalDateTime): Long? {
-        val deadlineMatch = Regex("(deadline|by)\\s+([^#]+)", RegexOption.IGNORE_CASE).find(input)
-        val braceMatch = Regex("\\{deadline:\\s*([^}]+)\\}", RegexOption.IGNORE_CASE).find(input)
-        val phrase = deadlineMatch?.groupValues?.get(2)?.trim()
-            ?: braceMatch?.groupValues?.get(1)?.trim()
-            ?: return null
-
-        val time = parseTime(phrase) ?: LocalTime.of(DEFAULT_TIME_HOUR, 0)
+    private fun parseDeadline(phrase: String, now: LocalDateTime): Long? {
+        val time = parseTime(phrase) ?: LocalTime.MIDNIGHT
         val date = when {
             phrase.contains("today", ignoreCase = true) -> now.toLocalDate()
             phrase.contains("tomorrow", ignoreCase = true) -> now.toLocalDate().plusDays(1)
+            phrase.contains("next week", ignoreCase = true) -> now.toLocalDate().plusWeeks(1)
+            Regex("in\\s+\\d+\\s+days", RegexOption.IGNORE_CASE).containsMatchIn(phrase) -> {
+                val days = Regex("in\\s+(\\d+)\\s+days", RegexOption.IGNORE_CASE)
+                    .find(phrase)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+                now.toLocalDate().plusDays(days)
+            }
             DayOfWeek.values().any { phrase.contains(it.name.substring(0, 3), ignoreCase = true) } ->
                 parseWeekday(phrase, now.toLocalDate())
             explicitDateRegex.containsMatchIn(phrase) -> parseExplicitDate(phrase, now.toLocalDate())
@@ -156,6 +179,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val everyWeekday = Regex("every\\s+weekday", RegexOption.IGNORE_CASE)
         val everyInterval = Regex("every\\s+(\\d+)\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
         val monthlyOn = Regex("every\\s+month\\s+on\\s+the\\s+(\\d+)(st|nd|rd|th)?", RegexOption.IGNORE_CASE)
+        val monthlyOrdinal = Regex("(\\d+)(st|nd|rd|th)?\\s+of\\s+every\\s+month", RegexOption.IGNORE_CASE)
         val everyNamedDay = Regex("every\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOption.IGNORE_CASE)
         val everyBareUnit = Regex("every\\s+(week|month|year)\\b", RegexOption.IGNORE_CASE)
 
@@ -164,6 +188,10 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             everyDay.containsMatchIn(input) -> "FREQ=DAILY"
             monthlyOn.containsMatchIn(input) -> {
                 val day = monthlyOn.find(input)?.groupValues?.get(1)?.toInt() ?: 1
+                "FREQ=MONTHLY;BYMONTHDAY=$day"
+            }
+            monthlyOrdinal.containsMatchIn(input) -> {
+                val day = monthlyOrdinal.find(input)?.groupValues?.get(1)?.toInt() ?: 1
                 "FREQ=MONTHLY;BYMONTHDAY=$day"
             }
             everyNamedDay.containsMatchIn(input) -> {
@@ -240,9 +268,17 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             .replace(Regex("\\{deadline:[^}]+\\}", RegexOption.IGNORE_CASE), "")
             .replace(Regex("remind me[^#]+", RegexOption.IGNORE_CASE), "")
             .replace(Regex("every\\s+[^#]+", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\d+(st|nd|rd|th)?\\s+of\\s+every\\s+month", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\d{4}-\\d{1,2}-\\d{1,2}"), "")
             .replace(Regex("\\d{1,2}/\\d{1,2}(/\\d{2,4})?"), "")
             .replace(Regex("\\d{1,2}(:\\d{2})?\\s?(am|pm)", RegexOption.IGNORE_CASE), "")
             .trim()
+    }
+
+    private fun extractDeadlinePhrase(input: String): String? {
+        val deadlineMatch = Regex("(deadline|by)\\s+([^#]+)", RegexOption.IGNORE_CASE).find(input)
+        val braceMatch = Regex("\\{deadline:\\s*([^}]+)\\}", RegexOption.IGNORE_CASE).find(input)
+        return deadlineMatch?.groupValues?.get(2)?.trim()
+            ?: braceMatch?.groupValues?.get(1)?.trim()
     }
 }

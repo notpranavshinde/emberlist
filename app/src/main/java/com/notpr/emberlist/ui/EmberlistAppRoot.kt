@@ -2,6 +2,7 @@ package com.notpr.emberlist.ui
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.ListAlt
@@ -90,6 +91,10 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
 private fun TopBar(navController: NavHostController) {
     val currentBackStack by navController.currentBackStackEntryAsState()
     val route = currentBackStack?.destination?.route
+    val isRoot = route == NavRoute.Inbox.route ||
+        route == NavRoute.Today.route ||
+        route == NavRoute.Upcoming.route ||
+        route == NavRoute.Browse.route
     val title = when (route) {
         NavRoute.Inbox.route -> stringResource(R.string.inbox)
         NavRoute.Today.route -> stringResource(R.string.today)
@@ -99,6 +104,13 @@ private fun TopBar(navController: NavHostController) {
     }
     TopAppBar(
         title = { Text(title) },
+        navigationIcon = {
+            if (!isRoot && navController.previousBackStackEntry != null) {
+                IconButton(onClick = { navController.popBackStack() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            }
+        },
         actions = {
             IconButton(onClick = { navController.navigate("search") }) {
                 Icon(Icons.Default.Search, contentDescription = "Search")

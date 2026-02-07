@@ -28,9 +28,9 @@ import java.time.format.DateTimeFormatter
 fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: UpcomingViewModel = viewModel(factory = EmberlistViewModelFactory(container))
-    val tasks by viewModel.tasks.collectAsState()
-    val grouped = tasks.groupBy { task ->
-        val date = task.dueAt?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate() }
+    val items by viewModel.tasks.collectAsState()
+    val grouped = items.groupBy { item ->
+        val date = Instant.ofEpochMilli(item.displayDueAt).atZone(ZoneId.systemDefault()).toLocalDate()
         date ?: Instant.ofEpochMilli(System.currentTimeMillis()).atZone(ZoneId.systemDefault()).toLocalDate()
     }
 
@@ -44,15 +44,15 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
                     modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
                 )
             }
-            items(list, key = { it.id }) { task ->
+            items(list, key = { it.task.id + it.displayDueAt }) { item ->
                 DraggableTaskRow(
-                    taskTitle = task.title,
-                    onReschedule = { delta -> viewModel.reschedule(task, delta) }
+                    taskTitle = item.task.title,
+                    onReschedule = { delta -> viewModel.reschedule(item.task, delta) }
                 ) {
                     TaskRow(
-                        task = task,
+                        task = item.task,
                         onToggle = viewModel::toggleComplete,
-                        onClick = { navController.navigate("task/${task.id}") }
+                        onClick = { navController.navigate("task/${item.task.id}") }
                     )
                 }
             }

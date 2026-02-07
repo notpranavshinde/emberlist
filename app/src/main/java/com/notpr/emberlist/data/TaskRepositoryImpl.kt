@@ -26,6 +26,9 @@ class TaskRepositoryImpl(
     override fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>> =
         taskDao.observeUpcoming(startOfTomorrow = startOfTomorrow)
 
+    override fun observeOverdueRecurring(startOfTomorrow: Long): Flow<List<TaskEntity>> =
+        taskDao.observeOverdueRecurring(startOfTomorrow = startOfTomorrow)
+
     override fun observeProjects(): Flow<List<ProjectEntity>> = projectDao.observeActiveProjects()
 
     override fun observeProject(projectId: String): Flow<ProjectEntity?> = projectDao.observeProject(projectId)

@@ -6,9 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -40,12 +44,17 @@ import java.time.format.DateTimeFormatter
 fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     val container = LocalAppContainer.current
     val viewModel: TaskDetailViewModel = viewModel(factory = EmberlistViewModelFactory(container))
-    val task by viewModel.observeTask(taskId).collectAsState()
-    val activity by viewModel.observeActivity(taskId).collectAsState()
-    val subtasks by viewModel.observeSubtasks(taskId).collectAsState()
-    val reminders by viewModel.observeReminders(taskId).collectAsState()
-    val projects by viewModel.observeProjects().collectAsState()
-    val sections by viewModel.observeSections(task?.projectId ?: "").collectAsState()
+    val taskFlow = remember(taskId) { viewModel.observeTask(taskId) }
+    val activityFlow = remember(taskId) { viewModel.observeActivity(taskId) }
+    val subtasksFlow = remember(taskId) { viewModel.observeSubtasks(taskId) }
+    val remindersFlow = remember(taskId) { viewModel.observeReminders(taskId) }
+    val projectsFlow = remember { viewModel.observeProjects() }
+
+    val task by taskFlow.collectAsState()
+    val activity by activityFlow.collectAsState()
+    val subtasks by subtasksFlow.collectAsState()
+    val reminders by remindersFlow.collectAsState()
+    val projects by projectsFlow.collectAsState()
 
     var title by remember(task?.title) { mutableStateOf(task?.title ?: "") }
     var description by remember(task?.description) { mutableStateOf(task?.description ?: "") }
@@ -53,16 +62,26 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     var dueAt by remember(task?.dueAt) { mutableStateOf(task?.dueAt) }
     var deadlineAt by remember(task?.deadlineAt) { mutableStateOf(task?.deadlineAt) }
     var allDay by remember(task?.allDay) { mutableStateOf(task?.allDay ?: false) }
+    var deadlineAllDay by remember(task?.deadlineAllDay) { mutableStateOf(task?.deadlineAllDay ?: false) }
     var recurrenceRule by remember(task?.recurringRule) { mutableStateOf(task?.recurringRule ?: "") }
+    var deadlineRecurrenceRule by remember(task?.deadlineRecurringRule) { mutableStateOf(task?.deadlineRecurringRule ?: "") }
     var projectId by remember(task?.projectId) { mutableStateOf(task?.projectId) }
     var sectionId by remember(task?.sectionId) { mutableStateOf(task?.sectionId) }
     var reminderOffsetText by remember { mutableStateOf("30") }
+    val sectionsFlow = remember(projectId) { viewModel.observeSections(projectId ?: "") }
+    val sections by sectionsFlow.collectAsState()
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
 
-    Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
         Text(text = "Task Detail")
         OutlinedTextField(
             value = title,
@@ -110,8 +129,8 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
         DuePicker(
             label = "Deadline",
             epochMillis = deadlineAt,
-            allDay = false,
-            onAllDayChange = {},
+            allDay = deadlineAllDay,
+            onAllDayChange = { deadlineAllDay = it },
             onChange = { deadlineAt = it },
             context = context,
             zone = zone,
@@ -126,6 +145,13 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
             modifier = Modifier.fillMaxWidth()
         )
 
+        OutlinedTextField(
+            value = deadlineRecurrenceRule,
+            onValueChange = { deadlineRecurrenceRule = it },
+            label = { Text("Deadline recurrence (RRULE)") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
         Button(onClick = {
             task?.let {
                 viewModel.updateTask(
@@ -136,7 +162,9 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                         dueAt = dueAt,
                         deadlineAt = deadlineAt,
                         allDay = allDay,
+                        deadlineAllDay = deadlineAllDay,
                         recurringRule = recurrenceRule.ifBlank { null },
+                        deadlineRecurringRule = deadlineRecurrenceRule.ifBlank { null },
                         projectId = projectId,
                         sectionId = sectionId
                     )
@@ -346,39 +374,52 @@ private fun DuePicker(
         val timeText = if (allDay) "All day" else time?.format(timeFormatter)
         "$dateText · $timeText"
     }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(text = "$label: $display")
-        Button(onClick = {
-            val base = date ?: LocalDate.now(zone)
-            DatePickerDialog(
-                context,
-                { _, year, month, day ->
-                    val pickedDate = LocalDate.of(year, month + 1, day)
-                    val pickedTime = if (allDay) LocalTime.MIDNIGHT else time ?: LocalTime.of(9, 0)
-                    val instant = LocalDateTime.of(pickedDate, pickedTime).atZone(zone).toInstant().toEpochMilli()
-                    onChange(instant)
-                },
-                base.year,
-                base.monthValue - 1,
-                base.dayOfMonth
-            ).show()
-        }) { Text("Pick Date") }
-        if (!allDay) {
-            Button(onClick = {
-                val base = time ?: LocalTime.of(9, 0)
-                TimePickerDialog(
-                    context,
-                    { _, hour, minute ->
-                        val pickedDate = date ?: LocalDate.now(zone)
-                        val instant = LocalDateTime.of(pickedDate, LocalTime.of(hour, minute))
-                            .atZone(zone).toInstant().toEpochMilli()
-                        onChange(instant)
-                    },
-                    base.hour,
-                    base.minute,
-                    false
-                ).show()
-            }) { Text("Pick Time") }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = {
+                    val base = date ?: LocalDate.now(zone)
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day ->
+                            val pickedDate = LocalDate.of(year, month + 1, day)
+                            val pickedTime = if (allDay) LocalTime.MIDNIGHT else time ?: LocalTime.of(9, 0)
+                            val instant = LocalDateTime.of(pickedDate, pickedTime).atZone(zone)
+                                .toInstant().toEpochMilli()
+                            onChange(instant)
+                        },
+                        base.year,
+                        base.monthValue - 1,
+                        base.dayOfMonth
+                    ).show()
+                }
+            ) { Text("Pick Date") }
+            if (!allDay) {
+                Button(
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        val base = time ?: LocalTime.of(9, 0)
+                        TimePickerDialog(
+                            context,
+                            { _, hour, minute ->
+                                val pickedDate = date ?: LocalDate.now(zone)
+                                val instant = LocalDateTime.of(pickedDate, LocalTime.of(hour, minute))
+                                    .atZone(zone).toInstant().toEpochMilli()
+                                onChange(instant)
+                            },
+                            base.hour,
+                            base.minute,
+                            false
+                        ).show()
+                    }
+                ) { Text("Pick Time") }
+            }
         }
     }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
