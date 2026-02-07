@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Emberlist</string>
+    <string name="inbox">Inbox</string>
+    <string name="today">Today</string>
+    <string name="upcoming">Upcoming</string>
+    <string name="browse">Browse</string>
+</resources>

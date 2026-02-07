@@ -1,0 +1,40 @@
+# Gradle
+.gradle/
+build/
+
+# Local configuration
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+
+# Mac/Windows
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# APKs
+*.apk
+*.ap_
+
+# Generated
+*/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+# Kotlin
+*.class
+
+# NDK
+obj/
+
+# Intellij
+out/
+
+# Misc
+*.keystore
+*.jks

@@ -1,0 +1,10 @@
+<resources>
+    <color name="ember_primary">#EE6A3C</color>
+    <color name="ember_secondary">#1E2D2F</color>
+    <color name="ember_tertiary">#F2D0A4</color>
+    <color name="ember_background">#F7F4F0</color>
+    <color name="ember_surface">#FFFFFF</color>
+    <color name="ember_on_primary">#FFFFFF</color>
+    <color name="ember_on_secondary">#FFFFFF</color>
+    <color name="ember_on_background">#221E1C</color>
+</resources>
