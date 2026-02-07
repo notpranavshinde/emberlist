@@ -167,7 +167,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
                 "FREQ=MONTHLY;BYMONTHDAY=$day"
             }
             everyNamedDay.containsMatchIn(input) -> {
-                val dayName = everyNamedDay.find(input)!!.groupValues[1].uppercase()
+                val dayName = (everyNamedDay.find(input) ?: return null).groupValues[1].uppercase()
                 val byDay = when {
                     dayName.startsWith("MON") -> "MO"
                     dayName.startsWith("TUE") -> "TU"
@@ -181,13 +181,13 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
                 "FREQ=WEEKLY;BYDAY=$byDay"
             }
             everyInterval.containsMatchIn(input) -> {
-                val match = everyInterval.find(input)!!
+                val match = everyInterval.find(input) ?: return null
                 val interval = match.groupValues[1].toInt()
                 val unit = match.groupValues[2].uppercase()
                 "FREQ=${unit}LY;INTERVAL=$interval"
             }
             everyBareUnit.containsMatchIn(input) -> {
-                val unit = everyBareUnit.find(input)!!.groupValues[1].uppercase()
+                val unit = (everyBareUnit.find(input) ?: return null).groupValues[1].uppercase()
                 "FREQ=${unit}LY"
             }
             else -> null
