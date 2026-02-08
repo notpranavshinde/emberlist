@@ -14,12 +14,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -38,7 +42,9 @@ import com.notpr.emberlist.ui.screens.SettingsScreen
 import com.notpr.emberlist.ui.screens.TaskDetailScreen
 import com.notpr.emberlist.ui.screens.TodayScreen
 import com.notpr.emberlist.ui.screens.UpcomingScreen
+import com.notpr.emberlist.ui.screens.ActivityScreen
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddSheet
+import kotlinx.coroutines.launch
 
 sealed class NavRoute(val route: String, val labelRes: Int, val icon: @Composable () -> Unit) {
     object Inbox : NavRoute("inbox", R.string.inbox, { Icon(Icons.Default.Inbox, null) })
@@ -56,6 +62,8 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     val currentRoute = currentBackStack?.destination?.route
     val currentProjectId = currentBackStack?.arguments?.getString("projectId")
     val defaultDueToday = currentRoute == NavRoute.Today.route || currentRoute == NavRoute.Inbox.route
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(openTaskId) {
         if (!openTaskId.isNullOrBlank()) {
@@ -64,9 +72,22 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
         }
     }
 
+    LaunchedEffect(Unit) {
+        UndoBus.events.collect { event ->
+            val result = snackbarHostState.showSnackbar(
+                message = event.message,
+                actionLabel = event.actionLabel
+            )
+            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                scope.launch { event.undo() }
+            }
+        }
+    }
+
     Scaffold(
         topBar = { TopBar(navController) },
         bottomBar = { BottomBar(navController, navItems) },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             QuickAddSheet(
                 defaultDueToday = defaultDueToday,
@@ -92,6 +113,7 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                 val taskId = backStack.arguments?.getString("taskId") ?: return@composable
                 TaskDetailScreen(padding, taskId)
             }
+            composable("activity") { ActivityScreen(padding, navController) }
             composable("settings") { SettingsScreen(padding) }
         }
     }

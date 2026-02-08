@@ -11,6 +11,7 @@ import com.notpr.emberlist.ui.screens.SettingsViewModel
 import com.notpr.emberlist.ui.screens.TaskDetailViewModel
 import com.notpr.emberlist.ui.screens.TodayViewModel
 import com.notpr.emberlist.ui.screens.UpcomingViewModel
+import com.notpr.emberlist.ui.screens.ActivityViewModel
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddViewModel
 
 class EmberlistViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -29,6 +30,8 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
                 QuickAddViewModel(container.repository, container.reminderScheduler)
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
                 SettingsViewModel(container.settingsRepository, container.repository)
+            modelClass.isAssignableFrom(ActivityViewModel::class.java) ->
+                ActivityViewModel(container.repository)
             else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")
         } as T
     }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
+import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.domain.completeTaskWithRecurrence
 import com.notpr.emberlist.domain.deleteTaskWithLog
@@ -12,6 +13,8 @@ import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.domain.RecurrenceEngine
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
+import com.notpr.emberlist.ui.UndoBus
+import com.notpr.emberlist.ui.UndoEvent
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class UpcomingItem(
@@ -67,10 +71,23 @@ class UpcomingViewModel(private val repository: TaskRepository) : ViewModel() {
         (upcomingItems + previewItems).sortedBy { it.displayDueAt }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val projects = repository.observeProjects()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             if (task.status != TaskStatus.COMPLETED) {
                 completeTaskWithRecurrence(repository, task)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task completed",
+                        undo = {
+                            repository.upsertTask(before)
+                            logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
+                        }
+                    )
+                )
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -80,6 +97,15 @@ class UpcomingViewModel(private val repository: TaskRepository) : ViewModel() {
                     )
                 )
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task marked open",
+                        undo = {
+                            repository.upsertTask(before)
+                            logTaskActivity(repository, ActivityType.COMPLETED, before)
+                        }
+                    )
+                )
             }
         }
     }
@@ -90,9 +116,19 @@ class UpcomingViewModel(private val repository: TaskRepository) : ViewModel() {
         val date = Instant.ofEpochMilli(dueAt).atZone(zone).toLocalDate().plusDays(deltaDays)
         val newDue = date.atStartOfDay(zone).toInstant().toEpochMilli()
         viewModelScope.launch {
+            val before = task
             val updated = task.copy(dueAt = newDue, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
+            UndoBus.post(
+                UndoEvent(
+                    message = "Task rescheduled",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
         }
     }
 
@@ -102,6 +138,7 @@ class UpcomingViewModel(private val repository: TaskRepository) : ViewModel() {
 
     fun rescheduleToDate(task: TaskEntity, date: LocalDate) {
         viewModelScope.launch {
+            val before = task
             val zone = ZoneId.systemDefault()
             val time = if (task.dueAt != null && !task.allDay) {
                 Instant.ofEpochMilli(task.dueAt).atZone(zone).toLocalTime()
@@ -113,12 +150,112 @@ class UpcomingViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
+            UndoBus.post(
+                UndoEvent(
+                    message = "Task rescheduled",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
+        }
+    }
+
+    fun rescheduleTasksToDate(taskIds: List<String>, date: LocalDate) {
+        if (taskIds.isEmpty()) return
+        viewModelScope.launch {
+            val zone = ZoneId.systemDefault()
+            val before = taskIds.mapNotNull { repository.observeTask(it).first() }
+            taskIds.forEach { id ->
+                val task = before.firstOrNull { it.id == id } ?: return@forEach
+                val time = if (!task.allDay && task.dueAt != null) {
+                    Instant.ofEpochMilli(task.dueAt).atZone(zone).toLocalTime()
+                } else {
+                    LocalTime.MIDNIGHT
+                }
+                val newDue = LocalDateTime.of(date, time).atZone(zone).toInstant().toEpochMilli()
+                val updated = task.copy(dueAt = newDue, updatedAt = System.currentTimeMillis())
+                repository.upsertTask(updated)
+                logTaskActivity(repository, ActivityType.UPDATED, updated)
+            }
+            UndoBus.post(
+                UndoEvent(
+                    message = "Tasks rescheduled",
+                    undo = { before.forEach { repository.upsertTask(it) } }
+                )
+            )
         }
     }
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             deleteTaskWithLog(repository, task)
+            UndoBus.post(
+                UndoEvent(
+                    message = "Task deleted",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
+        }
+    }
+
+    fun deleteTasks(taskIds: List<String>) {
+        if (taskIds.isEmpty()) return
+        viewModelScope.launch {
+            val tasks = taskIds.mapNotNull { repository.observeTask(it).first() }
+            taskIds.forEach { id ->
+                val task = tasks.firstOrNull { it.id == id } ?: return@forEach
+                deleteTaskWithLog(repository, task)
+            }
+            UndoBus.post(
+                UndoEvent(
+                    message = "Tasks deleted",
+                    undo = { tasks.forEach { repository.upsertTask(it) } }
+                )
+            )
+        }
+    }
+
+    fun moveTasksToProject(taskIds: List<String>, projectId: String?) {
+        if (taskIds.isEmpty()) return
+        viewModelScope.launch {
+            val before = taskIds.mapNotNull { repository.observeTask(it).first() }
+            taskIds.forEach { id ->
+                val task = before.firstOrNull { it.id == id } ?: return@forEach
+                val updated = task.copy(projectId = projectId, sectionId = null, updatedAt = System.currentTimeMillis())
+                repository.upsertTask(updated)
+                logTaskActivity(repository, ActivityType.UPDATED, updated)
+            }
+            UndoBus.post(
+                UndoEvent(
+                    message = "Tasks moved",
+                    undo = { before.forEach { repository.upsertTask(it) } }
+                )
+            )
+        }
+    }
+
+    fun setPriorityForTasks(taskIds: List<String>, priority: Priority) {
+        if (taskIds.isEmpty()) return
+        viewModelScope.launch {
+            val before = taskIds.mapNotNull { repository.observeTask(it).first() }
+            taskIds.forEach { id ->
+                val task = before.firstOrNull { it.id == id } ?: return@forEach
+                val updated = task.copy(priority = priority, updatedAt = System.currentTimeMillis())
+                repository.upsertTask(updated)
+                logTaskActivity(repository, ActivityType.UPDATED, updated)
+            }
+            UndoBus.post(
+                UndoEvent(
+                    message = "Priority updated",
+                    undo = { before.forEach { repository.upsertTask(it) } }
+                )
+            )
         }
     }
 

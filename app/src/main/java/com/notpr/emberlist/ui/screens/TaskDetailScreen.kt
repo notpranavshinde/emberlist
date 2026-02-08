@@ -36,6 +36,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.data.model.TaskStatus
+import com.notpr.emberlist.data.model.ActivityEventEntity
+import com.notpr.emberlist.data.model.ObjectType
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import java.time.Instant
 import java.time.LocalDate
@@ -43,6 +45,9 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @Composable
 fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
@@ -52,11 +57,13 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     val subtasksFlow = remember(taskId) { viewModel.observeSubtasks(taskId) }
     val remindersFlow = remember(taskId) { viewModel.observeReminders(taskId) }
     val projectsFlow = remember { viewModel.observeProjects() }
+    val activityFlow = remember(taskId) { viewModel.observeActivity(taskId) }
 
     val task by taskFlow.collectAsState()
     val subtasks by subtasksFlow.collectAsState()
     val reminders by remindersFlow.collectAsState()
     val projects by projectsFlow.collectAsState()
+    val activity by activityFlow.collectAsState()
 
     var title by remember(task?.title) { mutableStateOf(task?.title ?: "") }
     var description by remember(task?.description) { mutableStateOf(task?.description ?: "") }
@@ -78,6 +85,8 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     val zone = ZoneId.systemDefault()
     val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
+    val activityFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
+    val json = remember { Json { ignoreUnknownKeys = true } }
 
     Column(
         modifier = Modifier
@@ -316,6 +325,23 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                 Text(text = subtask.title, style = MaterialTheme.typography.bodySmall)
             }
         }
+
+        if (activity.isNotEmpty()) {
+            Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Text(text = "Activity", style = MaterialTheme.typography.titleSmall)
+            activity.forEach { event ->
+                val timestamp = Instant.ofEpochMilli(event.createdAt).atZone(zone).format(activityFormatter)
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    val detail = taskActivityLabel(event, json)
+                    Text(text = detail, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        text = timestamp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+        }
     }
 
     if (showDeleteDialog) {
@@ -517,5 +543,17 @@ private fun InlinePickerRow(label: String, value: String, onChange: () -> Unit) 
             Text(text = value, style = MaterialTheme.typography.bodyMedium)
         }
         TextButton(onClick = onChange) { Text("Change") }
+    }
+}
+
+private fun taskActivityLabel(event: ActivityEventEntity, json: Json): String {
+    if (event.objectType != ObjectType.TASK) return event.type.name
+    return try {
+        val payload = json.parseToJsonElement(event.payloadJson).jsonObject
+        val title = payload["title"]?.jsonPrimitive?.content
+        val action = event.type.name.lowercase().replaceFirstChar { it.uppercase() }
+        if (title.isNullOrBlank()) action else "$action: $title"
+    } catch (_: Exception) {
+        event.type.name
     }
 }

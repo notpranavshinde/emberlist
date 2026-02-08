@@ -12,6 +12,9 @@ interface ActivityDao {
     @Query("SELECT * FROM activity_events WHERE objectId = :objectId ORDER BY createdAt DESC")
     fun observeForObject(objectId: String): Flow<List<ActivityEventEntity>>
 
+    @Query("SELECT * FROM activity_events ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<ActivityEventEntity>>
+
     @Query("SELECT * FROM activity_events")
     suspend fun getAll(): List<ActivityEventEntity>
 

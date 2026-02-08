@@ -8,11 +8,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -43,6 +55,13 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
     var rescheduleOverdue by remember { mutableStateOf(false) }
+    var selectionMode by remember { mutableStateOf(false) }
+    val selectedIds = remember { mutableStateOf(setOf<String>()) }
+    var rescheduleSelected by remember { mutableStateOf(false) }
+    var showPriorityPicker by remember { mutableStateOf(false) }
+    var showProjectPicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    val projects by viewModel.projects.collectAsState()
 
     LaunchedEffect(rescheduleTarget) {
         val task = rescheduleTarget ?: return@LaunchedEffect
@@ -81,6 +100,26 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         dialog.show()
     }
 
+    LaunchedEffect(rescheduleSelected) {
+        if (!rescheduleSelected) return@LaunchedEffect
+        val baseDate = LocalDate.now(zone)
+        val dialog = DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                viewModel.rescheduleTasksToDate(selectedIds.value.toList(), LocalDate.of(year, month + 1, day))
+                rescheduleSelected = false
+                selectionMode = false
+                selectedIds.value = emptySet()
+            },
+            baseDate.year,
+            baseDate.monthValue - 1,
+            baseDate.dayOfMonth
+        )
+        dialog.setOnCancelListener { rescheduleSelected = false }
+        dialog.setOnDismissListener { rescheduleSelected = false }
+        dialog.show()
+    }
+
     LazyColumn(
         contentPadding = padding,
         modifier = Modifier.background(MaterialTheme.colorScheme.background)
@@ -93,6 +132,49 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
+            }
+        }
+        if (selectionMode) {
+            item(key = "bulk_actions") {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        IconButton(onClick = {
+                            selectionMode = false
+                            selectedIds.value = emptySet()
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel")
+                        }
+                    }
+                    if (selectedIds.value.isNotEmpty()) {
+                        item {
+                            IconButton(onClick = { rescheduleSelected = true }) {
+                                Icon(Icons.Default.CalendarMonth, contentDescription = "Reschedule")
+                            }
+                        }
+                        item {
+                            IconButton(onClick = { showProjectPicker = true }) {
+                                Icon(Icons.Default.DriveFileMove, contentDescription = "Move")
+                            }
+                        }
+                        item {
+                            IconButton(onClick = { showPriorityPicker = true }) {
+                                Icon(Icons.Default.Flag, contentDescription = "Priority")
+                            }
+                        }
+                        item {
+                            IconButton(onClick = { showDeleteConfirm = true }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
         if (overdue.isNotEmpty()) {
@@ -108,22 +190,145 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 }
             }
             items(overdue, key = { it.task.id }) { item ->
-                TaskRow(
+                TaskRowSelectable(
                     item = item,
+                    selectionMode = selectionMode,
+                    selected = selectedIds.value.contains(item.task.id),
+                    onSelectToggle = { checked ->
+                        selectedIds.value = if (checked) selectedIds.value + item.task.id else selectedIds.value - item.task.id
+                    },
+                    onEnterSelection = {
+                        selectionMode = true
+                        selectedIds.value = selectedIds.value + item.task.id
+                    },
+                    onOpen = { navController.navigate("task/${item.task.id}") },
                     onToggle = viewModel::toggleComplete,
                     onReschedule = { rescheduleTarget = it },
-                    onDelete = viewModel::deleteTask,
-                    onClick = { navController.navigate("task/${item.task.id}") }
+                    onDelete = viewModel::deleteTask
                 )
             }
         }
         items(today, key = { it.task.id }) { item ->
-            TaskRow(
+            TaskRowSelectable(
                 item = item,
+                selectionMode = selectionMode,
+                selected = selectedIds.value.contains(item.task.id),
+                onSelectToggle = { checked ->
+                    selectedIds.value = if (checked) selectedIds.value + item.task.id else selectedIds.value - item.task.id
+                },
+                onEnterSelection = {
+                    selectionMode = true
+                    selectedIds.value = selectedIds.value + item.task.id
+                },
+                onOpen = { navController.navigate("task/${item.task.id}") },
                 onToggle = viewModel::toggleComplete,
                 onReschedule = { rescheduleTarget = it },
-                onDelete = viewModel::deleteTask,
-                onClick = { navController.navigate("task/${item.task.id}") }
+                onDelete = viewModel::deleteTask
+            )
+        }
+    }
+
+    if (showPriorityPicker) {
+        AlertDialog(
+            onDismissRequest = { showPriorityPicker = false },
+            title = { Text("Change priority") },
+            text = {
+                Column {
+                    com.notpr.emberlist.data.model.Priority.values().forEach { p ->
+                        TextButton(onClick = {
+                            viewModel.setPriorityForTasks(selectedIds.value.toList(), p)
+                            showPriorityPicker = false
+                            selectionMode = false
+                            selectedIds.value = emptySet()
+                        }) { Text(p.name) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showPriorityPicker = false }) { Text("Close") } }
+        )
+    }
+
+    if (showProjectPicker) {
+        AlertDialog(
+            onDismissRequest = { showProjectPicker = false },
+            title = { Text("Move tasks") },
+            text = {
+                Column {
+                    TextButton(onClick = {
+                        viewModel.moveTasksToProject(selectedIds.value.toList(), null)
+                        showProjectPicker = false
+                        selectionMode = false
+                        selectedIds.value = emptySet()
+                    }) { Text("Inbox") }
+                    projects.forEach { project ->
+                        TextButton(onClick = {
+                            viewModel.moveTasksToProject(selectedIds.value.toList(), project.id)
+                            showProjectPicker = false
+                            selectionMode = false
+                            selectedIds.value = emptySet()
+                        }) { Text(project.name) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showProjectPicker = false }) { Text("Close") } }
+        )
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete tasks") },
+            text = { Text("Delete ${selectedIds.value.size} tasks?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteTasks(selectedIds.value.toList())
+                    showDeleteConfirm = false
+                    selectionMode = false
+                    selectedIds.value = emptySet()
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") } }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TaskRowSelectable(
+    item: com.notpr.emberlist.ui.components.TaskListItem,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onSelectToggle: (Boolean) -> Unit,
+    onEnterSelection: () -> Unit,
+    onOpen: () -> Unit,
+    onToggle: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
+    onReschedule: ((com.notpr.emberlist.data.model.TaskEntity) -> Unit)?,
+    onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit
+) {
+    val modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp, vertical = 6.dp)
+        .combinedClickable(
+            onClick = {
+                if (selectionMode) onSelectToggle(!selected) else onOpen()
+            },
+            onLongClick = {
+                if (!selectionMode) onEnterSelection()
+            }
+        )
+    Row(modifier = modifier) {
+        if (selectionMode) {
+            androidx.compose.material3.Checkbox(checked = selected, onCheckedChange = null)
+        }
+        Column(modifier = Modifier.weight(1f).padding(start = if (selectionMode) 8.dp else 0.dp)) {
+            TaskRow(
+                item = item,
+                onToggle = if (selectionMode) ({ _: com.notpr.emberlist.data.model.TaskEntity -> }) else onToggle,
+                onReschedule = if (selectionMode) null else onReschedule,
+                onDelete = if (selectionMode) null else onDelete,
+                onClick = null
             )
         }
     }

@@ -15,6 +15,8 @@ import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
+import com.notpr.emberlist.ui.UndoBus
+import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +48,10 @@ class TaskDetailViewModel(
         repository.observeSections(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    fun observeActivity(taskId: String) =
+        repository.observeActivity(taskId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
             repository.upsertTask(task.copy(updatedAt = System.currentTimeMillis()))
@@ -55,8 +61,18 @@ class TaskDetailViewModel(
 
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             if (task.status != TaskStatus.COMPLETED) {
                 completeTaskWithRecurrence(repository, task)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task completed",
+                        undo = {
+                            repository.upsertTask(before)
+                            logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
+                        }
+                    )
+                )
             } else {
                 val updated = task.copy(
                     status = TaskStatus.OPEN,
@@ -65,12 +81,22 @@ class TaskDetailViewModel(
                 )
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, updated)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task marked open",
+                        undo = {
+                            repository.upsertTask(before)
+                            logTaskActivity(repository, ActivityType.COMPLETED, before)
+                        }
+                    )
+                )
             }
         }
     }
 
     fun toggleArchive(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             val archived = task.status != TaskStatus.ARCHIVED
             val updated = task.copy(
                 status = if (archived) TaskStatus.ARCHIVED else TaskStatus.OPEN,
@@ -78,6 +104,15 @@ class TaskDetailViewModel(
             )
             repository.upsertTask(updated)
             logTaskActivity(repository, if (archived) ActivityType.ARCHIVED else ActivityType.UNARCHIVED, updated)
+            UndoBus.post(
+                UndoEvent(
+                    message = if (archived) "Task archived" else "Task unarchived",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
         }
     }
 
@@ -137,7 +172,20 @@ class TaskDetailViewModel(
     fun deleteTask(taskId: String) {
         viewModelScope.launch {
             val task = repository.observeTask(taskId).first()
-            if (task != null) deleteTaskWithLog(repository, task) else repository.deleteTask(taskId)
+            if (task != null) {
+                deleteTaskWithLog(repository, task)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task deleted",
+                        undo = {
+                            repository.upsertTask(task)
+                            logTaskActivity(repository, ActivityType.UPDATED, task)
+                        }
+                    )
+                )
+            } else {
+                repository.deleteTask(taskId)
+            }
         }
     }
 }

@@ -8,6 +8,8 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskWithRecurrence
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.ui.UndoBus
+import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
@@ -41,8 +43,18 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
 
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             if (task.status != TaskStatus.COMPLETED) {
                 completeTaskWithRecurrence(repository, task)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task completed",
+                        undo = {
+                            repository.upsertTask(before)
+                            logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
+                        }
+                    )
+                )
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -52,12 +64,22 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
                     )
                 )
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
+                UndoBus.post(
+                    UndoEvent(
+                        message = "Task marked open",
+                        undo = {
+                            repository.upsertTask(before)
+                            logTaskActivity(repository, ActivityType.COMPLETED, before)
+                        }
+                    )
+                )
             }
         }
     }
 
     fun rescheduleTomorrow(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             val zone = ZoneId.systemDefault()
             val newDue = if (task.dueAt != null) {
                 Instant.ofEpochMilli(task.dueAt).atZone(zone).plusDays(1).toInstant().toEpochMilli()
@@ -68,11 +90,21 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
+            UndoBus.post(
+                UndoEvent(
+                    message = "Task rescheduled",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
         }
     }
 
     fun rescheduleToDate(task: TaskEntity, date: LocalDate) {
         viewModelScope.launch {
+            val before = task
             val zone = ZoneId.systemDefault()
             val time = if (task.dueAt != null && !task.allDay) {
                 Instant.ofEpochMilli(task.dueAt).atZone(zone).toLocalTime()
@@ -84,12 +116,31 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
+            UndoBus.post(
+                UndoEvent(
+                    message = "Task rescheduled",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
         }
     }
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
+            val before = task
             deleteTaskWithLog(repository, task)
+            UndoBus.post(
+                UndoEvent(
+                    message = "Task deleted",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
         }
     }
 }

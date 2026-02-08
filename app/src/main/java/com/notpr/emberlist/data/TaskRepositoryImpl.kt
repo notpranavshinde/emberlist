@@ -55,6 +55,8 @@ class TaskRepositoryImpl(
 
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = activityDao.observeForObject(objectId)
 
+    override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = activityDao.observeAll()
+
     override fun search(query: String): Flow<List<TaskEntity>> = taskDao.search(query)
 
     override suspend fun upsertProject(project: ProjectEntity) {

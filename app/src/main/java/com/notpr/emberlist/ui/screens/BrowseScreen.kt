@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Inbox
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
@@ -72,6 +73,14 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
                 title = "Inbox",
                 leadingIcon = { Icon(Icons.Default.Inbox, contentDescription = null) },
                 onClick = { navController.navigate("inbox") }
+            )
+        }
+
+        item(key = "browse_activity") {
+            BrowseRow(
+                title = "Activity history",
+                leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                onClick = { navController.navigate("activity") }
             )
         }
 

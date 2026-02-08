@@ -2,6 +2,27 @@
 
 Emberlist is a single‑device, offline‑first Android task manager inspired by Todoist’s workflow. It ships with fast capture, Inbox/Today/Upcoming, projects with sections, time‑based reminders, recurring due/deadlines, and local backup/restore.
 
+## Features
+
+- Offline‑first (no accounts, no sync)
+- Quick Add with live parsing (due, deadline, priority, project, recurrence, reminders)
+- Live project suggestions when typing `#`
+- Inbox, Today (with Overdue), Upcoming (grouped by date)
+- Projects with sections
+- List + Board views for projects
+- Drag‑and‑drop between sections in Board view
+- Task detail editor (title, description, priority, due, deadline, recurrence, reminders)
+- Task archive/unarchive
+- Subtasks in task detail
+- Task activity log
+- Recurring tasks (due + deadline recurrence)
+- Time‑based reminders with notifications
+- Notification actions (complete, snooze)
+- Swipe actions on tasks (reschedule via date picker, delete with confirmation)
+- Search
+- Backup export/import (JSON)
+- Clear completed tasks
+
 ## Architecture
 
 - **UI**: Jetpack Compose + Navigation Compose
