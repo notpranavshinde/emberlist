@@ -15,7 +15,7 @@ class SettingsViewModel(
     private val repository: TaskRepository
 ) : ViewModel() {
     val settings: StateFlow<SettingsState> = settingsRepository.settings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState(1, false, "System", "Ember", 30))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState(1, false, "Ember", 30))
 
     fun updateWeekStart(value: Int) {
         viewModelScope.launch { settingsRepository.updateWeekStart(value) }
@@ -23,10 +23,6 @@ class SettingsViewModel(
 
     fun updateUse24h(value: Boolean) {
         viewModelScope.launch { settingsRepository.updateUse24h(value) }
-    }
-
-    fun updateTheme(value: String) {
-        viewModelScope.launch { settingsRepository.updateTheme(value) }
     }
 
     fun updateAccent(value: String) {

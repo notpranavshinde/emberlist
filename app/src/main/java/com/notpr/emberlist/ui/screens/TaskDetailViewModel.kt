@@ -142,4 +142,10 @@ class TaskDetailViewModel(
             reminderScheduler.cancelReminder(reminder.id)
         }
     }
+
+    fun deleteTask(taskId: String) {
+        viewModelScope.launch {
+            repository.deleteTask(taskId)
+        }
+    }
 }

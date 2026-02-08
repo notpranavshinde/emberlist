@@ -13,6 +13,9 @@ interface SectionDao {
     @Query("SELECT * FROM sections WHERE projectId = :projectId ORDER BY `order` ASC")
     fun observeSections(projectId: String): Flow<List<SectionEntity>>
 
+    @Query("SELECT * FROM sections")
+    fun observeAllSections(): Flow<List<SectionEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(section: SectionEntity)
 

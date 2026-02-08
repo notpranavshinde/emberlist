@@ -32,6 +32,10 @@ data class QuickAddResult(
 class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
     private val timeRegex = Regex("(\\d{1,2})(?::(\\d{2}))?\\s?(am|pm)", RegexOption.IGNORE_CASE)
     private val explicitDateRegex = Regex("(\\d{4})-(\\d{1,2})-(\\d{1,2})|(\\d{1,2})/(\\d{1,2})(?:/(\\d{2,4}))?")
+    private val weekdayTokenRegex = Regex(
+        "\\b(mon(day)?|tue(sday)?|wed(nesday)?|thu(rsday)?|fri(day)?|sat(urday)?|sun(day)?)\\b",
+        RegexOption.IGNORE_CASE
+    )
 
     fun parse(input: String, now: LocalDateTime = LocalDateTime.now(zoneId)): QuickAddResult {
         val tokens = input.trim()
@@ -101,7 +105,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             input.contains("tomorrow", ignoreCase = true) -> "tomorrow"
             input.contains("next week", ignoreCase = true) -> "next week"
             Regex("in\\s+\\d+\\s+days", RegexOption.IGNORE_CASE).containsMatchIn(input) -> "in"
-            DayOfWeek.values().any { input.contains(it.name.substring(0, 3), ignoreCase = true) } -> "weekday"
+            weekdayTokenRegex.containsMatchIn(input) -> "weekday"
             explicitDateRegex.containsMatchIn(input) -> "explicit"
             else -> null
         } ?: return null
@@ -134,7 +138,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
                     .find(phrase)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
                 now.toLocalDate().plusDays(days)
             }
-            DayOfWeek.values().any { phrase.contains(it.name.substring(0, 3), ignoreCase = true) } ->
+            weekdayTokenRegex.containsMatchIn(phrase) ->
                 parseWeekday(phrase, now.toLocalDate())
             explicitDateRegex.containsMatchIn(phrase) -> parseExplicitDate(phrase, now.toLocalDate())
             else -> null
@@ -180,7 +184,10 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val everyInterval = Regex("every\\s+(\\d+)\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
         val monthlyOn = Regex("every\\s+month\\s+on\\s+the\\s+(\\d+)(st|nd|rd|th)?", RegexOption.IGNORE_CASE)
         val monthlyOrdinal = Regex("(\\d+)(st|nd|rd|th)?\\s+of\\s+every\\s+month", RegexOption.IGNORE_CASE)
-        val everyNamedDay = Regex("every\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)", RegexOption.IGNORE_CASE)
+        val everyNamedDay = Regex(
+            "every\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|\\bmon\\b|\\btue\\b|\\bwed\\b|\\bthu\\b|\\bfri\\b|\\bsat\\b|\\bsun\\b)",
+            RegexOption.IGNORE_CASE
+        )
         val everyBareUnit = Regex("every\\s+(week|month|year)\\b", RegexOption.IGNORE_CASE)
 
         return when {
@@ -211,12 +218,25 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             everyInterval.containsMatchIn(input) -> {
                 val match = everyInterval.find(input) ?: return null
                 val interval = match.groupValues[1].toInt()
-                val unit = match.groupValues[2].uppercase()
-                "FREQ=${unit}LY;INTERVAL=$interval"
+                val unit = match.groupValues[2].lowercase()
+                val freq = when (unit) {
+                    "day" -> "DAILY"
+                    "week" -> "WEEKLY"
+                    "month" -> "MONTHLY"
+                    "year" -> "YEARLY"
+                    else -> return null
+                }
+                "FREQ=$freq;INTERVAL=$interval"
             }
             everyBareUnit.containsMatchIn(input) -> {
-                val unit = (everyBareUnit.find(input) ?: return null).groupValues[1].uppercase()
-                "FREQ=${unit}LY"
+                val unit = (everyBareUnit.find(input) ?: return null).groupValues[1].lowercase()
+                val freq = when (unit) {
+                    "week" -> "WEEKLY"
+                    "month" -> "MONTHLY"
+                    "year" -> "YEARLY"
+                    else -> return null
+                }
+                "FREQ=$freq"
             }
             else -> null
         }
@@ -236,9 +256,18 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
     }
 
     private fun parseWeekday(input: String, base: LocalDate): LocalDate {
-        val map = DayOfWeek.values().associateBy { it.name.substring(0, 3).lowercase() }
-        val key = map.keys.firstOrNull { input.lowercase().contains(it) } ?: "mon"
-        val target = map[key] ?: DayOfWeek.MONDAY
+        val match = weekdayTokenRegex.find(input) ?: return base
+        val token = match.value.lowercase()
+        val target = when {
+            token.startsWith("mon") -> DayOfWeek.MONDAY
+            token.startsWith("tue") -> DayOfWeek.TUESDAY
+            token.startsWith("wed") -> DayOfWeek.WEDNESDAY
+            token.startsWith("thu") -> DayOfWeek.THURSDAY
+            token.startsWith("fri") -> DayOfWeek.FRIDAY
+            token.startsWith("sat") -> DayOfWeek.SATURDAY
+            token.startsWith("sun") -> DayOfWeek.SUNDAY
+            else -> DayOfWeek.MONDAY
+        }
         return base.with(TemporalAdjusters.nextOrSame(target))
     }
 
@@ -268,6 +297,8 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             .replace(Regex("\\{deadline:[^}]+\\}", RegexOption.IGNORE_CASE), "")
             .replace(Regex("remind me[^#]+", RegexOption.IGNORE_CASE), "")
             .replace(Regex("every\\s+[^#]+", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("everyday", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("every\\s+day", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\d+(st|nd|rd|th)?\\s+of\\s+every\\s+month", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\d{4}-\\d{1,2}-\\d{1,2}"), "")
             .replace(Regex("\\d{1,2}/\\d{1,2}(/\\d{2,4})?"), "")

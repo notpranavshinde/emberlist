@@ -23,6 +23,12 @@ enum class ActivityType { CREATED, UPDATED, COMPLETED, UNCOMPLETED, ARCHIVED, UN
 @Serializable
 enum class ObjectType { TASK, PROJECT, SECTION, REMINDER }
 
+@Serializable
+data class ProjectTaskCount(
+    val projectId: String?,
+    val count: Int
+)
+
 @Entity(tableName = "projects")
 @Serializable
 data class ProjectEntity(

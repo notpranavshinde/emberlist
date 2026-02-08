@@ -70,20 +70,6 @@ fun SettingsScreen(padding: PaddingValues) {
 
         RowSwitch(label = "Use 24h time", checked = settings.use24h, onCheckedChange = viewModel::updateUse24h)
 
-        DropdownRow(
-            label = "Theme",
-            value = settings.theme,
-            options = listOf("System", "Light", "Dark"),
-            onSelect = viewModel::updateTheme
-        )
-
-        DropdownRow(
-            label = "Accent",
-            value = settings.accent,
-            options = listOf("Ember", "Sea", "Forest"),
-            onSelect = viewModel::updateAccent
-        )
-
         OutlinedTextField(
             value = settings.defaultReminderOffset.toString(),
             onValueChange = { value -> value.toIntOrNull()?.let(viewModel::updateDefaultReminderOffset) },

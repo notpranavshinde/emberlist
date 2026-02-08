@@ -10,6 +10,11 @@ fun endOfTodayMillis(zoneId: ZoneId = ZoneId.systemDefault()): Long {
     return end.atZone(zoneId).toInstant().toEpochMilli()
 }
 
+fun startOfTodayMillis(zoneId: ZoneId = ZoneId.systemDefault()): Long {
+    val start = LocalDate.now(zoneId).atStartOfDay()
+    return start.atZone(zoneId).toInstant().toEpochMilli()
+}
+
 fun startOfTomorrowMillis(zoneId: ZoneId = ZoneId.systemDefault()): Long {
     val start = LocalDate.now(zoneId).plusDays(1).atStartOfDay()
     return start.atZone(zoneId).toInstant().toEpochMilli()

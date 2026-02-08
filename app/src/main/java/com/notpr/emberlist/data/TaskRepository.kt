@@ -13,10 +13,12 @@ interface TaskRepository {
     fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>>
     fun observeOverdueRecurring(startOfTomorrow: Long): Flow<List<TaskEntity>>
     fun observeProjects(): Flow<List<ProjectEntity>>
+    fun observeProjectTaskCounts(): Flow<List<com.notpr.emberlist.data.model.ProjectTaskCount>>
     fun observeProject(projectId: String): Flow<ProjectEntity?>
     suspend fun getProjectByName(name: String): ProjectEntity?
     fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>>
     fun observeSections(projectId: String): Flow<List<SectionEntity>>
+    fun observeAllSections(): Flow<List<SectionEntity>>
     fun observeTask(taskId: String): Flow<TaskEntity?>
     fun observeSubtasks(parentId: String): Flow<List<TaskEntity>>
     fun observeReminders(taskId: String): Flow<List<ReminderEntity>>

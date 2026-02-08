@@ -31,6 +31,9 @@ class TaskRepositoryImpl(
 
     override fun observeProjects(): Flow<List<ProjectEntity>> = projectDao.observeActiveProjects()
 
+    override fun observeProjectTaskCounts(): Flow<List<com.notpr.emberlist.data.model.ProjectTaskCount>> =
+        taskDao.observeProjectTaskCounts()
+
     override fun observeProject(projectId: String): Flow<ProjectEntity?> = projectDao.observeProject(projectId)
 
     override suspend fun getProjectByName(name: String): ProjectEntity? = projectDao.getByName(name)
@@ -38,6 +41,8 @@ class TaskRepositoryImpl(
     override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> = taskDao.observeProjectTasks(projectId)
 
     override fun observeSections(projectId: String): Flow<List<SectionEntity>> = sectionDao.observeSections(projectId)
+
+    override fun observeAllSections(): Flow<List<SectionEntity>> = sectionDao.observeAllSections()
 
     override fun observeTask(taskId: String): Flow<TaskEntity?> = taskDao.observeTask(taskId)
 

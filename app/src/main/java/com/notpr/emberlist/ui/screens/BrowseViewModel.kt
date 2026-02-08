@@ -6,13 +6,24 @@ import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.ProjectEntity
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 class BrowseViewModel(private val repository: TaskRepository) : ViewModel() {
-    val projects: StateFlow<List<ProjectEntity>> = repository.observeProjects()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val projectRows: StateFlow<List<ProjectRow>> = combine(
+        repository.observeProjects(),
+        repository.observeProjectTaskCounts()
+    ) { projects, counts ->
+        val countByProject = counts.associate { it.projectId to it.count }
+        projects.map { project ->
+            ProjectRow(
+                project = project,
+                taskCount = countByProject[project.id] ?: 0
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun createProject(name: String) {
         viewModelScope.launch {
@@ -32,17 +43,9 @@ class BrowseViewModel(private val repository: TaskRepository) : ViewModel() {
         }
     }
 
-    fun renameProject(project: ProjectEntity, name: String) {
-        viewModelScope.launch {
-            repository.upsertProject(project.copy(name = name, updatedAt = System.currentTimeMillis()))
-        }
-    }
-
-    fun toggleArchive(project: ProjectEntity) {
-        viewModelScope.launch {
-            repository.upsertProject(
-                project.copy(archived = !project.archived, updatedAt = System.currentTimeMillis())
-            )
-        }
-    }
 }
+
+data class ProjectRow(
+    val project: ProjectEntity,
+    val taskCount: Int
+)

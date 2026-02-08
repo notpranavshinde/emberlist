@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.notpr.emberlist.data.model.TaskEntity
+import com.notpr.emberlist.data.model.ProjectTaskCount
 import com.notpr.emberlist.data.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
 
@@ -47,6 +48,14 @@ interface TaskDao {
 
     @Query("SELECT * FROM tasks WHERE title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
     fun search(query: String): Flow<List<TaskEntity>>
+
+    @Query("""
+        SELECT projectId as projectId, COUNT(*) as count
+        FROM tasks
+        WHERE status = :status
+        GROUP BY projectId
+    """)
+    fun observeProjectTaskCounts(status: TaskStatus = TaskStatus.OPEN): Flow<List<ProjectTaskCount>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(task: TaskEntity)

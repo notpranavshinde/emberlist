@@ -2,6 +2,7 @@ package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -68,8 +69,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     var projectId by remember(task?.projectId) { mutableStateOf(task?.projectId) }
     var sectionId by remember(task?.sectionId) { mutableStateOf(task?.sectionId) }
     var reminderOffsetText by remember { mutableStateOf("30") }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     val sectionsFlow = remember(projectId) { viewModel.observeSections(projectId ?: "") }
     val sections by sectionsFlow.collectAsState()
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val dateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d")
@@ -243,6 +246,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
             Text(text = if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive")
         }
 
+        Button(onClick = { showDeleteDialog = true }) {
+            Text(text = "Delete")
+        }
+
         Text(text = "Subtasks")
         subtasks.forEach { subtask ->
             Text(text = subtask.title)
@@ -252,6 +259,24 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
         activity.take(5).forEach { event ->
             Text(text = "${event.type} at ${event.createdAt}")
         }
+    }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete task") },
+            text = { Text("Delete \"${task?.title ?: "this task"}\"?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    task?.let { viewModel.deleteTask(it.id) }
+                    showDeleteDialog = false
+                    backDispatcher?.onBackPressed()
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 

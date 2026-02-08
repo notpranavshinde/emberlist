@@ -16,6 +16,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import com.notpr.emberlist.ui.startOfTomorrowMillis
 
 class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
     fun observeProject(projectId: String): StateFlow<ProjectEntity?> =
@@ -90,6 +96,39 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
                 )
                 logActivity(repository, ActivityType.UNCOMPLETED, ObjectType.TASK, task.id)
             }
+        }
+    }
+
+    fun rescheduleTomorrow(task: TaskEntity) {
+        viewModelScope.launch {
+            val zone = ZoneId.systemDefault()
+            val newDue = if (task.dueAt != null) {
+                Instant.ofEpochMilli(task.dueAt).atZone(zone).plusDays(1).toInstant().toEpochMilli()
+            } else {
+                startOfTomorrowMillis(zone)
+            }
+            val allDay = if (task.dueAt == null) true else task.allDay
+            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun rescheduleToDate(task: TaskEntity, date: LocalDate) {
+        viewModelScope.launch {
+            val zone = ZoneId.systemDefault()
+            val time = if (task.dueAt != null && !task.allDay) {
+                Instant.ofEpochMilli(task.dueAt).atZone(zone).toLocalTime()
+            } else {
+                LocalTime.MIDNIGHT
+            }
+            val newDue = LocalDateTime.of(date, time).atZone(zone).toInstant().toEpochMilli()
+            val allDay = if (task.dueAt == null) true else task.allDay
+            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun deleteTask(task: TaskEntity) {
+        viewModelScope.launch {
+            repository.deleteTask(task.id)
         }
     }
 }

@@ -43,13 +43,14 @@ sealed class NavRoute(val route: String, val labelRes: Int, val icon: @Composabl
     object Inbox : NavRoute("inbox", R.string.inbox, { Icon(Icons.Default.Inbox, null) })
     object Today : NavRoute("today", R.string.today, { Icon(Icons.Default.CalendarMonth, null) })
     object Upcoming : NavRoute("upcoming", R.string.upcoming, { Icon(Icons.Default.ListAlt, null) })
+    object Search : NavRoute("search", R.string.search, { Icon(Icons.Default.Search, null) })
     object Browse : NavRoute("browse", R.string.browse, { Icon(Icons.Default.Menu, null) })
 }
 
 @Composable
 fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     val navController = rememberNavController()
-    val navItems = listOf(NavRoute.Inbox, NavRoute.Today, NavRoute.Upcoming, NavRoute.Browse)
+    val navItems = listOf(NavRoute.Today, NavRoute.Upcoming, NavRoute.Search, NavRoute.Browse)
 
     LaunchedEffect(openTaskId) {
         if (!openTaskId.isNullOrBlank()) {
@@ -65,13 +66,14 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = NavRoute.Inbox.route,
+            startDestination = NavRoute.Today.route,
             modifier = Modifier
         ) {
             composable(NavRoute.Inbox.route) { InboxScreen(padding, navController) }
             composable(NavRoute.Today.route) { TodayScreen(padding, navController) }
             composable(NavRoute.Upcoming.route) { UpcomingScreen(padding, navController) }
             composable(NavRoute.Browse.route) { BrowseScreen(padding, navController) }
+            composable(NavRoute.Search.route) { SearchScreen(padding, navController) }
             composable("project/{projectId}") { backStack ->
                 val projectId = backStack.arguments?.getString("projectId") ?: return@composable
                 ProjectScreen(padding, projectId, navController)
@@ -81,7 +83,6 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                 TaskDetailScreen(padding, taskId)
             }
             composable("settings") { SettingsScreen(padding) }
-            composable("search") { SearchScreen(padding, navController) }
         }
     }
 }
@@ -94,29 +95,28 @@ private fun TopBar(navController: NavHostController) {
     val isRoot = route == NavRoute.Inbox.route ||
         route == NavRoute.Today.route ||
         route == NavRoute.Upcoming.route ||
+        route == NavRoute.Search.route ||
         route == NavRoute.Browse.route
-    val title = when (route) {
-        NavRoute.Inbox.route -> stringResource(R.string.inbox)
-        NavRoute.Today.route -> stringResource(R.string.today)
-        NavRoute.Upcoming.route -> stringResource(R.string.upcoming)
-        NavRoute.Browse.route -> stringResource(R.string.browse)
-        else -> stringResource(R.string.app_name)
-    }
-    TopAppBar(
-        title = { Text(title) },
-        navigationIcon = {
-            if (!isRoot && navController.previousBackStackEntry != null) {
-                IconButton(onClick = { navController.popBackStack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    if (!isRoot) {
+        val title = when (route) {
+            NavRoute.Inbox.route -> stringResource(R.string.inbox)
+            NavRoute.Today.route -> stringResource(R.string.today)
+            NavRoute.Upcoming.route -> stringResource(R.string.upcoming)
+            NavRoute.Search.route -> stringResource(R.string.search)
+            NavRoute.Browse.route -> stringResource(R.string.browse)
+            else -> stringResource(R.string.app_name)
+        }
+        TopAppBar(
+            title = { Text(title) },
+            navigationIcon = {
+                if (navController.previousBackStackEntry != null) {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
                 }
             }
-        },
-        actions = {
-            IconButton(onClick = { navController.navigate("search") }) {
-                Icon(Icons.Default.Search, contentDescription = "Search")
-            }
-        }
-    )
+        )
+    }
 }
 
 @Composable
@@ -128,10 +128,13 @@ private fun BottomBar(navController: NavHostController, items: List<NavRoute>) {
             NavigationBarItem(
                 selected = currentRoute == item.route,
                 onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
+                    val popped = navController.popBackStack(item.route, inclusive = false)
+                    if (!popped) {
+                        navController.navigate(item.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     }
                 },
                 icon = item.icon,

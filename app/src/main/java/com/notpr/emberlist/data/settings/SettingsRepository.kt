@@ -13,7 +13,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     companion object {
         val KEY_WEEK_START = intPreferencesKey("week_start")
         val KEY_24H = booleanPreferencesKey("use_24h")
-        val KEY_THEME = stringPreferencesKey("theme")
         val KEY_ACCENT = stringPreferencesKey("accent")
         val KEY_DEFAULT_REMINDER = intPreferencesKey("default_reminder_offset")
     }
@@ -22,7 +21,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         SettingsState(
             weekStart = prefs[KEY_WEEK_START] ?: 1,
             use24h = prefs[KEY_24H] ?: false,
-            theme = prefs[KEY_THEME] ?: "System",
             accent = prefs[KEY_ACCENT] ?: "Ember",
             defaultReminderOffset = prefs[KEY_DEFAULT_REMINDER] ?: 30
         )
@@ -34,10 +32,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun updateUse24h(value: Boolean) {
         dataStore.edit { it[KEY_24H] = value }
-    }
-
-    suspend fun updateTheme(value: String) {
-        dataStore.edit { it[KEY_THEME] = value }
     }
 
     suspend fun updateAccent(value: String) {
@@ -52,7 +46,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 data class SettingsState(
     val weekStart: Int,
     val use24h: Boolean,
-    val theme: String,
     val accent: String,
     val defaultReminderOffset: Int
 )

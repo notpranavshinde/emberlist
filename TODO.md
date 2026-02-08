@@ -1,5 +1,15 @@
 # TODO
 
+## Recent changes (2026-02-07)
+
+- Forced light-only theme across the app; disabled dark mode and removed the Theme selector.
+- Updated bottom navigation to Today/Upcoming/Search/Browse and simplified the top app bar on root screens.
+- Redesigned task rows to match the reference (circular toggle, due date + recurrence, project/section label, light dividers).
+- Added task list headers and an Overdue section on Today.
+- Added project/section labels to list rows by combining tasks with projects/sections.
+- Added `startOfTodayMillis` and task list mapping helpers for list screens.
+- Updated Browse UI structure and styling (section headers, Inbox row, project list styling).
+
 1. ~~Quick Add parsing:~~
    - ~~Support phrases like "every friday" and "every month" reliably.~~
    - ~~For monthly recurrence (e.g., "pay rent every month"), default due date should be today’s date and repeat same day next month unless edited.~~
@@ -22,3 +32,10 @@
 10. ~~Deadline parity:~~
     - ~~Deadline recurrence supported~~
     - ~~Deadline shown on task rows~~
+11. ~~Swipe left on a task to reschecule, swipe right to delete, witha confirmation popu~~
+12. ~~delete button in the task detail menu~~
+13. ~~when i am in a sub menu or sub window inside inbox, today, upcoming or browse. reclicking on the main menu(inbox, today, upcoming or browse) should bring me back to the main window. it should basically function the same as the back button.~~
+14. ~~remove the ability to chose accents, and keep only one accent that matches the UI of the app the best.~~
+15. ~~"task_name every 2 days" doesn't work. at least it doesn't show up on coming every 2 days.~~
+16. ~~swiping left on a task to reschedule should open the pick date window, and reshedule the date chosen and not automatically reschedule to any date.~~
+17. ~~when i type "task_name everyday #project_name" in quick add. it adds the the task appropriately with right recurence and in the right project, but the name of the task is added as "task_name everyday" instead of just "task_name"~~
