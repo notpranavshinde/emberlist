@@ -1,6 +1,6 @@
 # Emberlist (Offline Task Manager)
 
-Emberlist is a single‑device, offline‑first Android task manager inspired by Todoist’s workflow. It ships with fast capture, Inbox/Today/Upcoming, projects with sections, time‑based reminders, and local backup/restore.
+Emberlist is a single‑device, offline‑first Android task manager inspired by Todoist’s workflow. It ships with fast capture, Inbox/Today/Upcoming, projects with sections, time‑based reminders, recurring due/deadlines, and local backup/restore.
 
 ## Architecture
 
@@ -17,7 +17,7 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 
 ### Key flows
 - Quick Add parses text live into due/deadline/priority/project/recurrence/reminder chips.
-- Completing a recurring task generates the next instance via `RecurrenceEngine`.
+- Completing a recurring task generates the next instance via `RecurrenceEngine` (due + deadline recurrence supported).
 - Reminders are scheduled through `ReminderScheduler` (AlarmManager; WorkManager fallback).
 - Export/import uses JSON via `BackupManager`.
 
@@ -40,7 +40,7 @@ Entities live in `app/src/main/java/com/notpr/emberlist/data/model/Models.kt`.
 - `ReminderEntity`
 - `ActivityEventEntity`
 
-Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/data/EmberlistDatabase.kt` with migration `1 -> 2`.
+Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/data/EmberlistDatabase.kt` with migrations `1 -> 2` and `2 -> 3`.
 
 ## Reminders
 
@@ -77,6 +77,8 @@ Run:
 2. **Quick Add parsing**
    - Enter: `Pay rent tomorrow 8am p1 #Home remind me 30m before`
    - Ensure chips appear and task is created with parsed fields
+   - Enter: `Task every 2 days` and `Task this weekend`
+   - Ensure recurrence and due date are parsed correctly
 3. **Quick Add chip editing**
    - Tap Due/Deadline/Priority/Project/Repeat/Reminders chips and edit values
    - Verify created task uses edited values
@@ -85,9 +87,13 @@ Run:
    - Today shows today + overdue
    - Upcoming groups by date
    - Drag a task up/down in Upcoming to reschedule by −1/+1 day
+   - Swipe left on a task and pick a reschedule date
+   - Swipe right on a task to delete with confirmation
 5. **Recurring tasks**
    - Create a task with `every day`
    - Complete it, verify a new instance appears for next day
+   - Create a task with `deadline every friday`
+   - Complete it, verify the next instance includes the next deadline
 6. **Reminders**
    - Add reminder: `remind me at 6pm`
    - Verify notification fires
@@ -107,6 +113,8 @@ Run:
    - Create, rename, and delete sections in a project
 11. **Settings data tools**
    - Clear completed tasks and verify they are removed
+12. **Task deletion**
+   - Open a task and delete from Task Detail
 
 ## Notes
 
