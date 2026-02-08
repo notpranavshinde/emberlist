@@ -3,21 +3,23 @@ package com.notpr.emberlist.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.notpr.emberlist.data.TaskRepository
-import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.ReminderType
 import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
-import com.notpr.emberlist.domain.completeTaskWithRecurrence
-import com.notpr.emberlist.domain.logActivity
-import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.ObjectType
+import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.deleteTaskWithLog
+import com.notpr.emberlist.domain.logActivity
+import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -27,10 +29,6 @@ class TaskDetailViewModel(
 ) : ViewModel() {
     fun observeTask(taskId: String): StateFlow<TaskEntity?> = repository.observeTask(taskId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
-    fun observeActivity(taskId: String): StateFlow<List<ActivityEventEntity>> =
-        repository.observeActivity(taskId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun observeSubtasks(taskId: String): StateFlow<List<TaskEntity>> =
         repository.observeSubtasks(taskId)
@@ -51,7 +49,7 @@ class TaskDetailViewModel(
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
             repository.upsertTask(task.copy(updatedAt = System.currentTimeMillis()))
-            logActivity(repository, ActivityType.UPDATED, ObjectType.TASK, task.id)
+            logTaskActivity(repository, ActivityType.UPDATED, task)
         }
     }
 
@@ -60,14 +58,13 @@ class TaskDetailViewModel(
             if (task.status != TaskStatus.COMPLETED) {
                 completeTaskWithRecurrence(repository, task)
             } else {
-                repository.upsertTask(
-                    task.copy(
-                        status = TaskStatus.OPEN,
-                        completedAt = null,
-                        updatedAt = System.currentTimeMillis()
-                    )
+                val updated = task.copy(
+                    status = TaskStatus.OPEN,
+                    completedAt = null,
+                    updatedAt = System.currentTimeMillis()
                 )
-                logActivity(repository, ActivityType.UNCOMPLETED, ObjectType.TASK, task.id)
+                repository.upsertTask(updated)
+                logTaskActivity(repository, ActivityType.UNCOMPLETED, updated)
             }
         }
     }
@@ -75,18 +72,12 @@ class TaskDetailViewModel(
     fun toggleArchive(task: TaskEntity) {
         viewModelScope.launch {
             val archived = task.status != TaskStatus.ARCHIVED
-            repository.upsertTask(
-                task.copy(
-                    status = if (archived) TaskStatus.ARCHIVED else TaskStatus.OPEN,
-                    updatedAt = System.currentTimeMillis()
-                )
+            val updated = task.copy(
+                status = if (archived) TaskStatus.ARCHIVED else TaskStatus.OPEN,
+                updatedAt = System.currentTimeMillis()
             )
-            logActivity(
-                repository,
-                if (archived) ActivityType.ARCHIVED else ActivityType.UNARCHIVED,
-                ObjectType.TASK,
-                task.id
-            )
+            repository.upsertTask(updated)
+            logTaskActivity(repository, if (archived) ActivityType.ARCHIVED else ActivityType.UNARCHIVED, updated)
         }
     }
 
@@ -145,7 +136,8 @@ class TaskDetailViewModel(
 
     fun deleteTask(taskId: String) {
         viewModelScope.launch {
-            repository.deleteTask(taskId)
+            val task = repository.observeTask(taskId).first()
+            if (task != null) deleteTaskWithLog(repository, task) else repository.deleteTask(taskId)
         }
     }
 }

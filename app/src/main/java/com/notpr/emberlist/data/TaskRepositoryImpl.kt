@@ -38,6 +38,9 @@ class TaskRepositoryImpl(
 
     override suspend fun getProjectByName(name: String): ProjectEntity? = projectDao.getByName(name)
 
+    override suspend fun getSectionByName(projectId: String, name: String): SectionEntity? =
+        sectionDao.getByProjectAndName(projectId, name)
+
     override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> = taskDao.observeProjectTasks(projectId)
 
     override fun observeSections(projectId: String): Flow<List<SectionEntity>> = sectionDao.observeSections(projectId)
@@ -64,6 +67,18 @@ class TaskRepositoryImpl(
 
     override suspend fun deleteSection(sectionId: String) {
         sectionDao.delete(sectionId)
+    }
+
+    override suspend fun deleteProject(projectId: String) {
+        projectDao.delete(projectId)
+    }
+
+    override suspend fun deleteTasksByProject(projectId: String) {
+        taskDao.deleteByProject(projectId)
+    }
+
+    override suspend fun deleteSectionsByProject(projectId: String) {
+        sectionDao.deleteByProject(projectId)
     }
 
     override suspend fun upsertTask(task: TaskEntity) {

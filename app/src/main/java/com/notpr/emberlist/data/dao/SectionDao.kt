@@ -22,9 +22,15 @@ interface SectionDao {
     @Query("SELECT * FROM sections")
     suspend fun getAll(): List<SectionEntity>
 
+    @Query("SELECT * FROM sections WHERE projectId = :projectId AND name = :name LIMIT 1")
+    suspend fun getByProjectAndName(projectId: String, name: String): SectionEntity?
+
     @Update
     suspend fun update(section: SectionEntity)
 
     @Query("DELETE FROM sections WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("DELETE FROM sections WHERE projectId = :projectId")
+    suspend fun deleteByProject(projectId: String)
 }

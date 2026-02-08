@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -51,6 +52,10 @@ sealed class NavRoute(val route: String, val labelRes: Int, val icon: @Composabl
 fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     val navController = rememberNavController()
     val navItems = listOf(NavRoute.Today, NavRoute.Upcoming, NavRoute.Search, NavRoute.Browse)
+    val currentBackStack by navController.currentBackStackEntryAsState()
+    val currentRoute = currentBackStack?.destination?.route
+    val currentProjectId = currentBackStack?.arguments?.getString("projectId")
+    val defaultDueToday = currentRoute == NavRoute.Today.route || currentRoute == NavRoute.Inbox.route
 
     LaunchedEffect(openTaskId) {
         if (!openTaskId.isNullOrBlank()) {
@@ -62,7 +67,12 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     Scaffold(
         topBar = { TopBar(navController) },
         bottomBar = { BottomBar(navController, navItems) },
-        floatingActionButton = { QuickAddSheet() }
+        floatingActionButton = {
+            QuickAddSheet(
+                defaultDueToday = defaultDueToday,
+                defaultProjectId = currentProjectId
+            )
+        }
     ) { padding ->
         NavHost(
             navController = navController,
@@ -123,7 +133,10 @@ private fun TopBar(navController: NavHostController) {
 private fun BottomBar(navController: NavHostController, items: List<NavRoute>) {
     val currentBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStack?.destination?.route
-    NavigationBar {
+    NavigationBar(
+        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
+        tonalElevation = 0.dp
+    ) {
         items.forEach { item ->
             NavigationBarItem(
                 selected = currentRoute == item.route,

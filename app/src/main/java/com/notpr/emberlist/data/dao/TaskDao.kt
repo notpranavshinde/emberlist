@@ -71,4 +71,7 @@ interface TaskDao {
 
     @Query("UPDATE tasks SET sectionId = NULL WHERE sectionId = :sectionId")
     suspend fun clearSection(sectionId: String)
+
+    @Query("DELETE FROM tasks WHERE projectId = :projectId")
+    suspend fun deleteByProject(projectId: String)
 }

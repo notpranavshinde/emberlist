@@ -18,7 +18,7 @@ enum class TaskStatus { OPEN, COMPLETED, ARCHIVED }
 enum class ReminderType { TIME }
 
 @Serializable
-enum class ActivityType { CREATED, UPDATED, COMPLETED, UNCOMPLETED, ARCHIVED, UNARCHIVED, REMINDER_SCHEDULED }
+enum class ActivityType { CREATED, UPDATED, COMPLETED, UNCOMPLETED, ARCHIVED, UNARCHIVED, DELETED, REMINDER_SCHEDULED }
 
 @Serializable
 enum class ObjectType { TASK, PROJECT, SECTION, REMINDER }

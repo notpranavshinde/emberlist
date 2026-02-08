@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
@@ -19,7 +20,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
@@ -59,8 +58,7 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
                 Column {
                     Text(
                         text = "Browse",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.headlineSmall
                     )
                 }
                 IconButton(onClick = { navController.navigate("settings") }) {
@@ -72,6 +70,7 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
         item(key = "browse_inbox") {
             BrowseRow(
                 title = "Inbox",
+                leadingIcon = { Icon(Icons.Default.Inbox, contentDescription = null) },
                 onClick = { navController.navigate("inbox") }
             )
         }
@@ -81,13 +80,7 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "My Projects",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Text(text = "My Projects", style = MaterialTheme.typography.bodyLarge)
                 IconButton(onClick = { showCreateDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "New Project")
                 }
@@ -95,41 +88,40 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
         }
 
         items(projectRows, key = { it.project.id }) { row ->
-            Surface(
-                tonalElevation = 0.dp
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { navController.navigate("project/${row.project.id}") }
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { navController.navigate("project/${row.project.id}") }
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.padding(start = 28.dp)
                     ) {
-                        Row {
-                            val hashColor = projectColor(row.project.color, MaterialTheme.colorScheme.onSurface)
-                            Text(
-                                text = "#",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = hashColor
-                            )
-                            Text(
-                                text = " ${row.project.name}",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
+                        val hashColor = projectColor(row.project.color, MaterialTheme.colorScheme.onSurface)
                         Text(
-                            text = row.taskCount.toString(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            text = "#",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = hashColor
+                        )
+                        Text(
+                            text = " ${row.project.name}",
+                            style = MaterialTheme.typography.bodyLarge
                         )
                     }
+                    Text(
+                        text = row.taskCount.toString(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
                 }
             }
             Divider()
         }
+
     }
 
     if (showCreateDialog) {
@@ -147,16 +139,38 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
 }
 
 @Composable
-private fun BrowseRow(title: String, onClick: () -> Unit) {
-    Column(
+private fun BrowseRow(
+    title: String,
+    leadingIcon: @Composable (() -> Unit)? = null,
+    onClick: () -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Start
     ) {
+        if (leadingIcon != null) {
+            Row(modifier = Modifier.padding(end = 8.dp)) {
+                leadingIcon()
+            }
+        } else {
+            Row(modifier = Modifier.padding(end = 28.dp)) {}
+        }
         Text(text = title, style = MaterialTheme.typography.bodyLarge)
     }
     Divider()
+}
+
+@Composable
+private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        modifier = modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+    )
 }
 
 private fun projectColor(value: String, fallback: Color): Color {

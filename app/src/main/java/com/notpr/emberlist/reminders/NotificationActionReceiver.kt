@@ -6,6 +6,8 @@ import android.content.Intent
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.TaskRepositoryImpl
 import com.notpr.emberlist.data.model.TaskStatus
+import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.data.model.ActivityType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,7 +31,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
             val task = repository.observeTask(taskId).firstOrNull() ?: return@launch
             when (action) {
                 ACTION_COMPLETE -> {
-                    repository.upsertTask(task.copy(status = TaskStatus.COMPLETED, completedAt = System.currentTimeMillis()))
+                    val updated = task.copy(status = TaskStatus.COMPLETED, completedAt = System.currentTimeMillis())
+                    repository.upsertTask(updated)
+                    logTaskActivity(repository, ActivityType.COMPLETED, updated)
                 }
                 ACTION_SNOOZE -> {
                     val scheduler = ReminderScheduler(context, repository)

@@ -16,6 +16,7 @@ interface TaskRepository {
     fun observeProjectTaskCounts(): Flow<List<com.notpr.emberlist.data.model.ProjectTaskCount>>
     fun observeProject(projectId: String): Flow<ProjectEntity?>
     suspend fun getProjectByName(name: String): ProjectEntity?
+    suspend fun getSectionByName(projectId: String, name: String): SectionEntity?
     fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>>
     fun observeSections(projectId: String): Flow<List<SectionEntity>>
     fun observeAllSections(): Flow<List<SectionEntity>>
@@ -28,6 +29,9 @@ interface TaskRepository {
     suspend fun upsertProject(project: ProjectEntity)
     suspend fun upsertSection(section: SectionEntity)
     suspend fun deleteSection(sectionId: String)
+    suspend fun deleteProject(projectId: String)
+    suspend fun deleteTasksByProject(projectId: String)
+    suspend fun deleteSectionsByProject(projectId: String)
     suspend fun upsertTask(task: TaskEntity)
     suspend fun deleteTask(taskId: String)
     suspend fun clearCompletedTasks()

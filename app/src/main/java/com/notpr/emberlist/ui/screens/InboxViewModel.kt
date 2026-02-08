@@ -6,9 +6,9 @@ import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskWithRecurrence
-import com.notpr.emberlist.domain.logActivity
+import com.notpr.emberlist.domain.deleteTaskWithLog
+import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
-import com.notpr.emberlist.data.model.ObjectType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,7 +51,7 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
                         updatedAt = System.currentTimeMillis()
                     )
                 )
-                logActivity(repository, ActivityType.UNCOMPLETED, ObjectType.TASK, task.id)
+                logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
             }
         }
     }
@@ -65,7 +65,9 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
                 startOfTomorrowMillis(zone)
             }
             val allDay = if (task.dueAt == null) true else task.allDay
-            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
@@ -79,13 +81,15 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             }
             val newDue = LocalDateTime.of(date, time).atZone(zone).toInstant().toEpochMilli()
             val allDay = if (task.dueAt == null) true else task.allDay
-            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
-            repository.deleteTask(task.id)
+            deleteTaskWithLog(repository, task)
         }
     }
 }

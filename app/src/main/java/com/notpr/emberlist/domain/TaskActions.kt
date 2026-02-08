@@ -2,7 +2,6 @@ package com.notpr.emberlist.domain
 
 import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.ActivityType
-import com.notpr.emberlist.data.model.ObjectType
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import java.util.UUID
@@ -16,7 +15,7 @@ suspend fun completeTaskWithRecurrence(repository: TaskRepository, task: TaskEnt
             updatedAt = now
         )
     )
-    logActivity(repository, ActivityType.COMPLETED, ObjectType.TASK, task.id)
+    logTaskActivity(repository, ActivityType.COMPLETED, task)
 
     val rule = task.recurringRule
     val dueAt = task.dueAt
@@ -53,5 +52,6 @@ suspend fun completeTaskWithRecurrence(repository: TaskRepository, task: TaskEnt
             updatedAt = now
         )
         repository.upsertTask(next)
+        logTaskActivity(repository, ActivityType.CREATED, next)
     }
 }

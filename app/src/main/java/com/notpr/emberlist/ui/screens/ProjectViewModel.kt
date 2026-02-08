@@ -8,9 +8,9 @@ import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskWithRecurrence
-import com.notpr.emberlist.domain.logActivity
+import com.notpr.emberlist.domain.deleteTaskWithLog
+import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
-import com.notpr.emberlist.data.model.ObjectType
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -44,13 +44,13 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
 
     fun moveTaskToSection(task: TaskEntity, sectionId: String?, newOrder: Int) {
         viewModelScope.launch {
-            repository.upsertTask(
-                task.copy(
-                    sectionId = sectionId,
-                    order = newOrder,
-                    updatedAt = System.currentTimeMillis()
-                )
+            val updated = task.copy(
+                sectionId = sectionId,
+                order = newOrder,
+                updatedAt = System.currentTimeMillis()
             )
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
@@ -94,7 +94,7 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
                         updatedAt = System.currentTimeMillis()
                     )
                 )
-                logActivity(repository, ActivityType.UNCOMPLETED, ObjectType.TASK, task.id)
+                logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
             }
         }
     }
@@ -108,7 +108,9 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
                 startOfTomorrowMillis(zone)
             }
             val allDay = if (task.dueAt == null) true else task.allDay
-            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
@@ -122,13 +124,23 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
             }
             val newDue = LocalDateTime.of(date, time).atZone(zone).toInstant().toEpochMilli()
             val allDay = if (task.dueAt == null) true else task.allDay
-            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
-            repository.deleteTask(task.id)
+            deleteTaskWithLog(repository, task)
+        }
+    }
+
+    fun deleteProject(projectId: String) {
+        viewModelScope.launch {
+            repository.deleteTasksByProject(projectId)
+            repository.deleteSectionsByProject(projectId)
+            repository.deleteProject(projectId)
         }
     }
 }

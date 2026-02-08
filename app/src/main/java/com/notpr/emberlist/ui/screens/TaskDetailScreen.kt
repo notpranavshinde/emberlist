@@ -9,14 +9,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -29,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.Priority
@@ -46,13 +49,11 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     val container = LocalAppContainer.current
     val viewModel: TaskDetailViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val taskFlow = remember(taskId) { viewModel.observeTask(taskId) }
-    val activityFlow = remember(taskId) { viewModel.observeActivity(taskId) }
     val subtasksFlow = remember(taskId) { viewModel.observeSubtasks(taskId) }
     val remindersFlow = remember(taskId) { viewModel.observeReminders(taskId) }
     val projectsFlow = remember { viewModel.observeProjects() }
 
     val task by taskFlow.collectAsState()
-    val activity by activityFlow.collectAsState()
     val subtasks by subtasksFlow.collectAsState()
     val reminders by remindersFlow.collectAsState()
     val projects by projectsFlow.collectAsState()
@@ -85,23 +86,43 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
             .verticalScroll(rememberScrollState())
             .padding(16.dp)
     ) {
-        Text(text = "Task Detail")
-        OutlinedTextField(
+        TextField(
             value = title,
             onValueChange = { title = it },
-            label = { Text("Title") },
+            placeholder = { Text("Task name") },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.titleLarge,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
             modifier = Modifier.fillMaxWidth()
         )
-        OutlinedTextField(
+        TextField(
             value = description,
             onValueChange = { description = it },
-            label = { Text("Description") },
+            placeholder = { Text("Description") },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodySmall.copy(
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            ),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
             modifier = Modifier.fillMaxWidth()
         )
 
-        SpacerLine()
-        PriorityPicker(priority = priority, onSelect = { priority = it })
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
+        PriorityPicker(priority = priority, onSelect = { priority = it })
         ProjectPicker(
             projectId = projectId,
             projects = projects,
@@ -117,6 +138,8 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                 onSelect = { sectionId = it }
             )
         }
+
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
         DuePicker(
             label = "Due",
@@ -141,43 +164,66 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
             timeFormatter = timeFormatter
         )
 
-        OutlinedTextField(
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+        Text(text = "Recurrence", style = MaterialTheme.typography.titleSmall)
+        TextField(
             value = recurrenceRule,
             onValueChange = { recurrenceRule = it },
-            label = { Text("Recurrence (RRULE)") },
+            placeholder = { Text("Recurrence (RRULE)") },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
             modifier = Modifier.fillMaxWidth()
         )
-
-        OutlinedTextField(
+        TextField(
             value = deadlineRecurrenceRule,
             onValueChange = { deadlineRecurrenceRule = it },
-            label = { Text("Deadline recurrence (RRULE)") },
+            placeholder = { Text("Deadline recurrence (RRULE)") },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
             modifier = Modifier.fillMaxWidth()
         )
 
-        Button(onClick = {
-            task?.let {
-                viewModel.updateTask(
-                    it.copy(
-                        title = title,
-                        description = description,
-                        priority = priority,
-                        dueAt = dueAt,
-                        deadlineAt = deadlineAt,
-                        allDay = allDay,
-                        deadlineAllDay = deadlineAllDay,
-                        recurringRule = recurrenceRule.ifBlank { null },
-                        deadlineRecurringRule = deadlineRecurrenceRule.ifBlank { null },
-                        projectId = projectId,
-                        sectionId = sectionId
+        Button(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            onClick = {
+                task?.let {
+                    viewModel.updateTask(
+                        it.copy(
+                            title = title,
+                            description = description,
+                            priority = priority,
+                            dueAt = dueAt,
+                            deadlineAt = deadlineAt,
+                            allDay = allDay,
+                            deadlineAllDay = deadlineAllDay,
+                            recurringRule = recurrenceRule.ifBlank { null },
+                            deadlineRecurringRule = deadlineRecurrenceRule.ifBlank { null },
+                            projectId = projectId,
+                            sectionId = sectionId
+                        )
                     )
-                )
+                }
             }
-        }) {
+        ) {
             Text(text = "Save")
         }
 
-        Text(text = "Reminders")
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+        Text(text = "Reminders", style = MaterialTheme.typography.titleSmall)
         reminders.forEach { reminder ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -187,19 +233,19 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                     val dt = Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime()
                     "At ${dt.format(dateFormatter)} ${dt.format(timeFormatter)}"
                 } ?: "Offset ${reminder.offsetMinutes}m"
-                Text(text = label)
+                Text(text = label, style = MaterialTheme.typography.bodySmall)
                 Switch(
                     checked = reminder.enabled,
                     onCheckedChange = { task?.let { t -> viewModel.toggleReminder(t, reminder) } }
                 )
             }
-            Button(onClick = { viewModel.deleteReminder(reminder) }) {
+            TextButton(onClick = { viewModel.deleteReminder(reminder) }) {
                 Text("Delete")
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Button(onClick = {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = {
                 task?.let { t ->
                     val now = LocalDateTime.now(zone)
                     val timePicker = TimePickerDialog(
@@ -216,48 +262,59 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                     )
                     timePicker.show()
                 }
-            }) {
+            }, modifier = Modifier.weight(1f)) {
                 Text("Add Reminder At")
             }
-            Button(onClick = {
+            TextButton(onClick = {
                 task?.let { t ->
                     val minutes = reminderOffsetText.toIntOrNull() ?: 30
                     viewModel.addReminderOffset(t, minutes)
                 }
-            }) {
+            }, modifier = Modifier.weight(1f)) {
                 Text("Add Offset")
             }
         }
-        OutlinedTextField(
+        TextField(
             value = reminderOffsetText,
             onValueChange = { reminderOffsetText = it },
-            label = { Text("Offset minutes") },
+            placeholder = { Text("Offset minutes") },
+            singleLine = true,
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            ),
             modifier = Modifier.fillMaxWidth()
         )
 
-        Button(onClick = {
-            task?.let { viewModel.toggleComplete(it) }
-        }) {
-            Text(text = if (task?.status == TaskStatus.COMPLETED) "Uncomplete" else "Complete")
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = { task?.let { viewModel.toggleComplete(it) } }
+            ) {
+                Text(text = if (task?.status == TaskStatus.COMPLETED) "Uncomplete" else "Complete")
+            }
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = { task?.let { viewModel.toggleArchive(it) } }
+            ) {
+                Text(text = if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive")
+            }
         }
-        Button(onClick = {
-            task?.let { viewModel.toggleArchive(it) }
-        }) {
-            Text(text = if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive")
+        TextButton(onClick = { showDeleteDialog = true }) {
+            Text(text = "Delete", color = MaterialTheme.colorScheme.error)
         }
 
-        Button(onClick = { showDeleteDialog = true }) {
-            Text(text = "Delete")
-        }
-
-        Text(text = "Subtasks")
-        subtasks.forEach { subtask ->
-            Text(text = subtask.title)
-        }
-
-        Text(text = "Activity")
-        activity.take(5).forEach { event ->
-            Text(text = "${event.type} at ${event.createdAt}")
+        if (subtasks.isNotEmpty()) {
+            Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Text(text = "Subtasks", style = MaterialTheme.typography.titleSmall)
+            subtasks.forEach { subtask ->
+                Text(text = subtask.title, style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 
@@ -283,13 +340,11 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
 @Composable
 private fun PriorityPicker(priority: Priority, onSelect: (Priority) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = "Priority: ${priority.name}")
-        TextButton(onClick = { open = true }) { Text("Change") }
-    }
+    InlinePickerRow(
+        label = "Priority",
+        value = priority.name,
+        onChange = { open = true }
+    )
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
@@ -318,13 +373,11 @@ private fun ProjectPicker(
 ) {
     var open by remember { mutableStateOf(false) }
     val current = projects.firstOrNull { it.id == projectId }?.name ?: "Inbox"
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = "Project: $current")
-        TextButton(onClick = { open = true }) { Text("Change") }
-    }
+    InlinePickerRow(
+        label = "Project",
+        value = current,
+        onChange = { open = true }
+    )
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
@@ -353,13 +406,11 @@ private fun SectionPicker(
 ) {
     var open by remember { mutableStateOf(false) }
     val current = sections.firstOrNull { it.id == sectionId }?.name ?: "No Section"
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = "Section: $current")
-        TextButton(onClick = { open = true }) { Text("Change") }
-    }
+    InlinePickerRow(
+        label = "Section",
+        value = current,
+        onChange = { open = true }
+    )
     if (open) {
         AlertDialog(
             onDismissRequest = { open = false },
@@ -399,61 +450,72 @@ private fun DuePicker(
         val timeText = if (allDay) "All day" else time?.format(timeFormatter)
         "$dateText · $timeText"
     }
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(text = "$label: $display")
-        Spacer(modifier = Modifier.height(8.dp))
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = {
-                    val base = date ?: LocalDate.now(zone)
-                    DatePickerDialog(
-                        context,
-                        { _, year, month, day ->
-                            val pickedDate = LocalDate.of(year, month + 1, day)
-                            val pickedTime = if (allDay) LocalTime.MIDNIGHT else time ?: LocalTime.of(9, 0)
-                            val instant = LocalDateTime.of(pickedDate, pickedTime).atZone(zone)
-                                .toInstant().toEpochMilli()
-                            onChange(instant)
-                        },
-                        base.year,
-                        base.monthValue - 1,
-                        base.dayOfMonth
-                    ).show()
-                }
-            ) { Text("Pick Date") }
-            if (!allDay) {
-                Button(
-                    modifier = Modifier.weight(1f),
+            Column {
+                Text(text = label, style = MaterialTheme.typography.bodySmall)
+                Text(text = display, style = MaterialTheme.typography.bodyMedium)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(
                     onClick = {
-                        val base = time ?: LocalTime.of(9, 0)
-                        TimePickerDialog(
+                        val base = date ?: LocalDate.now(zone)
+                        DatePickerDialog(
                             context,
-                            { _, hour, minute ->
-                                val pickedDate = date ?: LocalDate.now(zone)
-                                val instant = LocalDateTime.of(pickedDate, LocalTime.of(hour, minute))
-                                    .atZone(zone).toInstant().toEpochMilli()
+                            { _, year, month, day ->
+                                val pickedDate = LocalDate.of(year, month + 1, day)
+                                val pickedTime = if (allDay) LocalTime.MIDNIGHT else time ?: LocalTime.of(9, 0)
+                                val instant = LocalDateTime.of(pickedDate, pickedTime).atZone(zone)
+                                    .toInstant().toEpochMilli()
                                 onChange(instant)
                             },
-                            base.hour,
-                            base.minute,
-                            false
+                            base.year,
+                            base.monthValue - 1,
+                            base.dayOfMonth
                         ).show()
                     }
-                ) { Text("Pick Time") }
+                ) { Text("Pick date") }
+                if (!allDay) {
+                    TextButton(
+                        onClick = {
+                            val base = time ?: LocalTime.of(9, 0)
+                            TimePickerDialog(
+                                context,
+                                { _, hour, minute ->
+                                    val pickedDate = date ?: LocalDate.now(zone)
+                                    val instant = LocalDateTime.of(pickedDate, LocalTime.of(hour, minute))
+                                        .atZone(zone).toInstant().toEpochMilli()
+                                    onChange(instant)
+                                },
+                                base.hour,
+                                base.minute,
+                                false
+                            ).show()
+                        }
+                    ) { Text("Pick time") }
+                }
             }
         }
-    }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(text = "All day")
-        Switch(checked = allDay, onCheckedChange = onAllDayChange)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(text = "All day", style = MaterialTheme.typography.bodySmall)
+            Switch(checked = allDay, onCheckedChange = onAllDayChange)
+        }
     }
 }
 
 @Composable
-private fun SpacerLine() {
-    androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
+private fun InlinePickerRow(label: String, value: String, onChange: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column {
+            Text(text = label, style = MaterialTheme.typography.bodySmall)
+            Text(text = value, style = MaterialTheme.typography.bodyMedium)
+        }
+        TextButton(onClick = onChange) { Text("Change") }
+    }
 }

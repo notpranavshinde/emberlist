@@ -36,4 +36,5 @@ class SettingsViewModel(
     fun clearCompleted() {
         viewModelScope.launch { repository.clearCompletedTasks() }
     }
+
 }

@@ -1,6 +1,7 @@
 package com.notpr.emberlist.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -9,15 +10,22 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,6 +39,8 @@ import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @Composable
 fun SettingsScreen(padding: PaddingValues) {
@@ -43,6 +53,23 @@ fun SettingsScreen(padding: PaddingValues) {
 
     var importModeReplace by remember { mutableStateOf(true) }
     var showClearCompleted by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var showConfirmRestore by remember { mutableStateOf(false) }
+    var selectedBackup by remember { mutableStateOf<File?>(null) }
+    var backups by remember { mutableStateOf<List<File>>(emptyList()) }
+
+    fun refreshBackups() {
+        val dir = File(context.filesDir, "backup")
+        backups = if (dir.exists()) {
+            dir.listFiles()?.filter { it.extension == "json" }?.sortedByDescending { it.lastModified() }.orEmpty()
+        } else {
+            emptyList()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshBackups()
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
@@ -57,8 +84,9 @@ fun SettingsScreen(padding: PaddingValues) {
     }
 
     Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-        Text(text = "Settings")
+        Text(text = "Settings", style = MaterialTheme.typography.headlineSmall)
 
+        SectionHeader(text = "Preferences")
         DropdownRow(
             label = "Week start",
             value = if (settings.weekStart == 1) "Monday" else "Sunday",
@@ -77,20 +105,45 @@ fun SettingsScreen(padding: PaddingValues) {
             modifier = Modifier.fillMaxWidth()
         )
 
-        Text(text = "Data")
+        SectionHeader(text = "Data")
         RowSwitch(
             label = "Replace on import",
             checked = importModeReplace,
             onCheckedChange = { importModeReplace = it }
         )
-        Button(onClick = { exportLauncher.launch("emberlist-backup.json") }) {
-            Text("Export")
+        ActionRow {
+            OutlinedButton(
+                onClick = { exportLauncher.launch("emberlist-backup.json") },
+                modifier = Modifier.weight(1f)
+            ) { Text("Export") }
+            OutlinedButton(
+                onClick = { importLauncher.launch(arrayOf("application/json")) },
+                modifier = Modifier.weight(1f)
+            ) { Text("Import") }
         }
-        Button(onClick = { importLauncher.launch(arrayOf("application/json")) }) {
-            Text("Import")
+        ActionRow {
+            Button(
+                onClick = {
+                    scope.launch {
+                        val file = backupManager.exportToFile(context)
+                        refreshBackups()
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Backup saved: ${file.name}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("Backup now") }
+            OutlinedButton(
+                onClick = {
+                    refreshBackups()
+                    showRestoreDialog = true
+                },
+                modifier = Modifier.weight(1f)
+            ) { Text("Restore backup") }
         }
-        Button(onClick = { showClearCompleted = true }) {
-            Text("Clear completed")
+        TextButton(onClick = { showClearCompleted = true }) {
+            Text("Clear completed", color = MaterialTheme.colorScheme.error)
         }
     }
 
@@ -107,6 +160,59 @@ fun SettingsScreen(padding: PaddingValues) {
             },
             dismissButton = {
                 TextButton(onClick = { showClearCompleted = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false },
+            title = { Text("Restore backup") },
+            text = {
+                Column {
+                    if (backups.isEmpty()) {
+                        Text("No backups found.")
+                    } else {
+                        backups.forEach { file ->
+                            TextButton(onClick = {
+                                selectedBackup = file
+                                showConfirmRestore = true
+                            }) {
+                                Text(file.name)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showRestoreDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showConfirmRestore && selectedBackup != null) {
+        AlertDialog(
+            onDismissRequest = { showConfirmRestore = false },
+            title = { Text("Restore backup") },
+            text = { Text("This will replace your current data. Continue?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val file = selectedBackup
+                    if (file != null) {
+                        scope.launch {
+                            backupManager.importFromFile(file, replace = true)
+                            showConfirmRestore = false
+                            showRestoreDialog = false
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Restored ${file.name}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }) { Text("Restore") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmRestore = false }) { Text("Cancel") }
             }
         )
     }
@@ -158,4 +264,24 @@ private fun DropdownRow(
             }
         )
     }
+}
+
+@Composable
+private fun SectionHeader(text: String) {
+    Spacer(modifier = Modifier.height(16.dp))
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    )
+    Divider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+}
+
+@Composable
+private fun ActionRow(content: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        content = content
+    )
 }

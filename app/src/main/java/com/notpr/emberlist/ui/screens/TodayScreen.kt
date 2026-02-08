@@ -42,6 +42,7 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
+    var rescheduleOverdue by remember { mutableStateOf(false) }
 
     LaunchedEffect(rescheduleTarget) {
         val task = rescheduleTarget ?: return@LaunchedEffect
@@ -59,6 +60,24 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         )
         dialog.setOnCancelListener { rescheduleTarget = null }
         dialog.setOnDismissListener { rescheduleTarget = null }
+        dialog.show()
+    }
+
+    LaunchedEffect(rescheduleOverdue) {
+        if (!rescheduleOverdue) return@LaunchedEffect
+        val baseDate = LocalDate.now(zone)
+        val dialog = DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                viewModel.rescheduleOverdueToDate(LocalDate.of(year, month + 1, day))
+                rescheduleOverdue = false
+            },
+            baseDate.year,
+            baseDate.monthValue - 1,
+            baseDate.dayOfMonth
+        )
+        dialog.setOnCancelListener { rescheduleOverdue = false }
+        dialog.setOnDismissListener { rescheduleOverdue = false }
         dialog.show()
     }
 
@@ -83,8 +102,8 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = "Overdue", style = MaterialTheme.typography.titleSmall)
-                    TextButton(onClick = { /* visual only */ }) {
-                        Text(text = "Reschedule")
+                    TextButton(onClick = { rescheduleOverdue = true }) {
+                        Text(text = "Reschedule overdue tasks")
                     }
                 }
             }

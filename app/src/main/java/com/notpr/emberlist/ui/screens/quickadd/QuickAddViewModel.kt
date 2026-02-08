@@ -13,6 +13,7 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.parsing.QuickAddParser
 import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.domain.logActivity
+import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.ObjectType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,12 +34,20 @@ class QuickAddViewModel(
     private val _parsed = MutableStateFlow(parser.parse(""))
     val parsed = _parsed
 
+    private val _description = MutableStateFlow("")
+    val description: StateFlow<String> = _description
+
     private val dueOverride = MutableStateFlow<Long?>(null)
+    private val dueOverrideForced = MutableStateFlow(false)
+    private val defaultDueOverride = MutableStateFlow<Long?>(null)
     private val deadlineOverride = MutableStateFlow<Long?>(null)
     private val allDayOverride = MutableStateFlow<Boolean?>(null)
     private val deadlineAllDayOverride = MutableStateFlow<Boolean?>(null)
     private val priorityOverride = MutableStateFlow<Priority?>(null)
     private val projectOverride = MutableStateFlow<String?>(null)
+    private val projectOverrideForced = MutableStateFlow(false)
+    private val defaultProjectName = MutableStateFlow<String?>(null)
+    private val sectionOverride = MutableStateFlow<String?>(null)
     private val recurrenceOverride = MutableStateFlow<String?>(null)
     private val deadlineRecurrenceOverride = MutableStateFlow<String?>(null)
     private val remindersOverride = MutableStateFlow<List<ReminderSpec>?>(null)
@@ -46,14 +55,36 @@ class QuickAddViewModel(
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val sections = repository.observeAllSections()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun updateInput(text: String) {
         _input.value = text
         _parsed.value = mergeOverrides(parser.parse(text))
     }
 
+    fun updateDescription(text: String) {
+        _description.value = text
+    }
+
     fun setDueOverride(value: Long?) {
         dueOverride.value = value
         allDayOverride.value = false
+        dueOverrideForced.value = true
+        _parsed.value = mergeOverrides(_parsed.value)
+    }
+
+    fun setDefaultDueToday(epochMillis: Long?) {
+        if (dueOverrideForced.value) return
+        defaultDueOverride.value = epochMillis
+        if (epochMillis == null) {
+            dueOverride.value = null
+            allDayOverride.value = null
+        } else {
+            dueOverride.value = epochMillis
+            allDayOverride.value = true
+        }
+        dueOverrideForced.value = false
         _parsed.value = mergeOverrides(_parsed.value)
     }
 
@@ -70,6 +101,20 @@ class QuickAddViewModel(
 
     fun setProjectOverride(value: String?) {
         projectOverride.value = value
+        projectOverrideForced.value = true
+        _parsed.value = mergeOverrides(_parsed.value)
+    }
+
+    fun setSectionOverride(value: String?) {
+        sectionOverride.value = value
+        _parsed.value = mergeOverrides(_parsed.value)
+    }
+
+    fun setDefaultProjectName(value: String?) {
+        if (projectOverrideForced.value) return
+        projectOverride.value = value
+        projectOverrideForced.value = false
+        defaultProjectName.value = value
         _parsed.value = mergeOverrides(_parsed.value)
     }
 
@@ -124,12 +169,32 @@ class QuickAddViewModel(
                     newProject.id
                 }
             }
+            val sectionName = result.sectionName
+            val sectionId = if (!sectionName.isNullOrBlank() && projectId != null) {
+                val existing = repository.getSectionByName(projectId, sectionName)
+                if (existing != null) {
+                    existing.id
+                } else {
+                    val newSection = com.notpr.emberlist.data.model.SectionEntity(
+                        id = UUID.randomUUID().toString(),
+                        projectId = projectId,
+                        name = sectionName,
+                        order = 0,
+                        createdAt = now,
+                        updatedAt = now
+                    )
+                    repository.upsertSection(newSection)
+                    newSection.id
+                }
+            } else {
+                null
+            }
             val task = TaskEntity(
                 id = taskId,
                 title = result.title,
-                description = "",
+                description = _description.value.trim(),
                 projectId = projectId,
-                sectionId = null,
+                sectionId = sectionId,
                 priority = result.priority,
                 dueAt = result.dueAt,
                 allDay = result.allDay,
@@ -145,7 +210,7 @@ class QuickAddViewModel(
                 updatedAt = now
             )
             repository.upsertTask(task)
-            logActivity(repository, ActivityType.CREATED, ObjectType.TASK, taskId)
+            logTaskActivity(repository, ActivityType.CREATED, task)
 
             val reminderEntities = result.reminders.map { spec ->
                 val reminder = ReminderEntity(
@@ -161,18 +226,55 @@ class QuickAddViewModel(
                 reminder
             }
             reminderScheduler.scheduleForTask(task, reminderEntities)
+            resetInput()
             onSaved()
         }
     }
 
+    private fun resetInput() {
+        _input.value = ""
+        _parsed.value = parser.parse("")
+        _description.value = ""
+        dueOverride.value = null
+        dueOverrideForced.value = false
+        deadlineOverride.value = null
+        allDayOverride.value = null
+        deadlineAllDayOverride.value = null
+        priorityOverride.value = null
+        projectOverride.value = null
+        projectOverrideForced.value = false
+        sectionOverride.value = null
+        recurrenceOverride.value = null
+        deadlineRecurrenceOverride.value = null
+        remindersOverride.value = null
+        defaultDueOverride.value?.let { value ->
+            dueOverride.value = value
+            allDayOverride.value = true
+            dueOverrideForced.value = false
+        } ?: run {
+            dueOverride.value = null
+            allDayOverride.value = null
+        }
+        defaultProjectName.value?.let { value ->
+            projectOverride.value = value
+            projectOverrideForced.value = false
+        } ?: run {
+            projectOverride.value = null
+        }
+        _parsed.value = mergeOverrides(_parsed.value)
+    }
+
     private fun mergeOverrides(base: com.notpr.emberlist.parsing.QuickAddResult): com.notpr.emberlist.parsing.QuickAddResult {
+        val applyDueOverride = dueOverrideForced.value || base.dueAt == null
+        val applyProjectOverride = projectOverrideForced.value || base.projectName == null
         return base.copy(
-            dueAt = dueOverride.value ?: base.dueAt,
+            dueAt = if (applyDueOverride) dueOverride.value ?: base.dueAt else base.dueAt,
             deadlineAt = deadlineOverride.value ?: base.deadlineAt,
-            allDay = allDayOverride.value ?: base.allDay,
+            allDay = if (applyDueOverride) allDayOverride.value ?: base.allDay else base.allDay,
             deadlineAllDay = deadlineAllDayOverride.value ?: base.deadlineAllDay,
             priority = priorityOverride.value ?: base.priority,
-            projectName = projectOverride.value ?: base.projectName,
+            projectName = if (applyProjectOverride) projectOverride.value ?: base.projectName else base.projectName,
+            sectionName = sectionOverride.value ?: base.sectionName,
             recurrenceRule = recurrenceOverride.value ?: base.recurrenceRule,
             deadlineRecurringRule = deadlineRecurrenceOverride.value ?: base.deadlineRecurringRule,
             reminders = remindersOverride.value ?: base.reminders

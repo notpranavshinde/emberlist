@@ -2,7 +2,7 @@ package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
@@ -114,7 +114,7 @@ private fun DraggableTaskRow(
     val threshold = 80f
     androidx.compose.foundation.layout.Box(
         modifier = Modifier.pointerInput(taskTitle) {
-            detectDragGestures(
+            detectDragGesturesAfterLongPress(
                 onDrag = { change, dragAmount ->
                     change.consume()
                     dragY += dragAmount.y

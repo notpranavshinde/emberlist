@@ -3,7 +3,10 @@ package com.notpr.emberlist.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.notpr.emberlist.data.TaskRepository
+import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.TaskEntity
+import com.notpr.emberlist.domain.deleteTaskWithLog
+import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,7 +54,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
                 startOfTomorrowMillis(zone)
             }
             val allDay = if (task.dueAt == null) true else task.allDay
-            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
@@ -65,13 +70,15 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
             }
             val newDue = LocalDateTime.of(date, time).atZone(zone).toInstant().toEpochMilli()
             val allDay = if (task.dueAt == null) true else task.allDay
-            repository.upsertTask(task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis()))
+            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
+            repository.upsertTask(updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 
     fun deleteTask(task: TaskEntity) {
         viewModelScope.launch {
-            repository.deleteTask(task.id)
+            deleteTaskWithLog(repository, task)
         }
     }
 }

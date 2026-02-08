@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -44,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.ViewPreference
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
@@ -67,10 +70,9 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     var dragWindowOffset by remember { mutableStateOf<Offset?>(null) }
     val columnBounds = remember { mutableStateOf<Map<String?, Rect>>(emptyMap()) }
     var showCreateSection by remember { mutableStateOf(false) }
-    var renameSectionTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.SectionEntity?>(null) }
-    var deleteSectionTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.SectionEntity?>(null) }
     var showProjectMenu by remember { mutableStateOf(false) }
     var showRenameProject by remember { mutableStateOf(false) }
+    var showDeleteProject by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
@@ -101,11 +103,14 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
         ) {
             Text(text = project?.name ?: "Project")
             Row {
-                Button(onClick = {
+                IconButton(onClick = {
                     val newPref = if (viewPref == ViewPreference.LIST) ViewPreference.BOARD else ViewPreference.LIST
                     project?.let { viewModel.updateProject(it.copy(viewPreference = newPref)) }
                 }) {
-                    Text(text = if (viewPref == ViewPreference.LIST) "Board" else "List")
+                    Icon(
+                        imageVector = if (viewPref == ViewPreference.LIST) Icons.Default.Dashboard else Icons.Default.List,
+                        contentDescription = if (viewPref == ViewPreference.LIST) "Board view" else "List view"
+                    )
                 }
                 IconButton(onClick = { showProjectMenu = true }) {
                     Icon(Icons.Default.MoreVert, contentDescription = "Project menu")
@@ -125,45 +130,81 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                             project?.let { viewModel.updateProject(it.copy(archived = !it.archived)) }
                         }
                     )
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = "Sections")
-            Button(onClick = { showCreateSection = true }) { Text("New Section") }
-        }
-        sections.forEach { section ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = section.name)
-                Row {
-                    TextButton(onClick = { renameSectionTarget = section }) { Text("Rename") }
-                    TextButton(onClick = { deleteSectionTarget = section }) { Text("Delete") }
+                    DropdownMenuItem(
+                        text = { Text("New Section") },
+                        onClick = {
+                            showProjectMenu = false
+                            showCreateSection = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        onClick = {
+                            showProjectMenu = false
+                            showDeleteProject = true
+                        }
+                    )
                 }
             }
         }
 
         if (viewPref == ViewPreference.LIST) {
+            val grouped = tasks.groupBy { it.sectionId }
             LazyColumn {
-                items(tasks, key = { it.id }) { task ->
-                    val item = buildTaskListItem(
-                        task = task,
-                        projectById = projectById,
-                        sectionById = sectionById
-                    )
-                    TaskRow(
-                        item = item,
-                        onToggle = viewModel::toggleComplete,
-                        onReschedule = { rescheduleTarget = it },
-                        onDelete = viewModel::deleteTask,
-                        onClick = { navController.navigate("task/${task.id}") }
-                    )
+                sections.forEach { section ->
+                    val sectionTasks = grouped[section.id].orEmpty()
+                    item(key = "section-${section.id}") {
+                        Text(
+                            text = section.name,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        )
+                    }
+                    if (sectionTasks.isEmpty()) {
+                        item(key = "section-${section.id}-empty") {
+                            Text(
+                                text = "No tasks in this section",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                            )
+                        }
+                    } else {
+                        items(sectionTasks, key = { it.id }) { task ->
+                            val item = TaskListItem(
+                                task = task,
+                                projectName = section.name,
+                                sectionName = null
+                            )
+                            TaskRow(
+                                item = item,
+                                onToggle = viewModel::toggleComplete,
+                                onReschedule = { rescheduleTarget = it },
+                                onDelete = viewModel::deleteTask,
+                                onClick = { navController.navigate("task/${task.id}") }
+                            )
+                        }
+                    }
+                }
+                val unsectioned = grouped[null].orEmpty()
+                if (unsectioned.isNotEmpty()) {
+                    item(key = "section-null") {
+                        Text(
+                            text = "No Section",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        )
+                    }
+                    items(unsectioned, key = { it.id }) { task ->
+                        val item = TaskListItem(
+                            task = task,
+                            projectName = "No Section",
+                            sectionName = null
+                        )
+                        TaskRow(
+                            item = item,
+                            onToggle = viewModel::toggleComplete,
+                            onReschedule = { rescheduleTarget = it },
+                            onDelete = viewModel::deleteTask,
+                            onClick = { navController.navigate("task/${task.id}") }
+                        )
+                    }
                 }
             }
         } else {
@@ -236,34 +277,20 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
         )
     }
 
-    renameSectionTarget?.let { target ->
-        SectionDialog(
-            title = "Rename Section",
-            initial = target.name,
-            onDismiss = { renameSectionTarget = null },
-            onSave = {
-                val name = it.trim()
-                if (name.isNotBlank()) {
-                    viewModel.renameSection(target, name)
-                }
-                renameSectionTarget = null
-            }
-        )
-    }
-
-    deleteSectionTarget?.let { target ->
+    if (showDeleteProject) {
         AlertDialog(
-            onDismissRequest = { deleteSectionTarget = null },
-            title = { Text("Delete Section") },
-            text = { Text("Delete section \"${target.name}\"? Tasks will remain but become unsectioned.") },
+            onDismissRequest = { showDeleteProject = false },
+            title = { Text("Delete project") },
+            text = { Text("Delete \"${project?.name ?: "Project"}\" and its tasks?") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.deleteSection(target)
-                    deleteSectionTarget = null
+                    viewModel.deleteProject(projectId)
+                    showDeleteProject = false
+                    navController.popBackStack()
                 }) { Text("Delete") }
             },
             dismissButton = {
-                TextButton(onClick = { deleteSectionTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { showDeleteProject = false }) { Text("Cancel") }
             }
         )
     }
