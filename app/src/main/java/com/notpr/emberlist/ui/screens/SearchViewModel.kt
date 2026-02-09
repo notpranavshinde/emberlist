@@ -10,6 +10,7 @@ import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
+import com.notpr.emberlist.ui.startOfTodayMillis
 import com.notpr.emberlist.ui.UndoBus
 import com.notpr.emberlist.ui.UndoEvent
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,11 +37,14 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
     ) { tasks, projects, sections ->
         val projectById = projects.associateBy { it.id }
         val sectionById = sections.associateBy { it.id }
+        val startOfToday = startOfTodayMillis()
         tasks.map { task ->
+            val isOverdue = task.dueAt?.let { it < startOfToday } ?: false
             buildTaskListItem(
                 task = task,
                 projectById = projectById,
-                sectionById = sectionById
+                sectionById = sectionById,
+                isOverdue = isOverdue
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

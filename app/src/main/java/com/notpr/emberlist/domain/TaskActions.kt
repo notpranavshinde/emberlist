@@ -4,6 +4,7 @@ import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
+import java.time.Instant
 import java.util.UUID
 
 suspend fun completeTaskWithRecurrence(repository: TaskRepository, task: TaskEntity) {
@@ -24,13 +25,27 @@ suspend fun completeTaskWithRecurrence(repository: TaskRepository, task: TaskEnt
 
     val zone = java.time.ZoneId.systemDefault()
     val nextDue = if (rule != null && dueAt != null) {
-        RecurrenceEngine.nextAt(dueAt, rule, zone, keepTime = !task.allDay)
+        val baseAt = if (now > dueAt) {
+            val baseTime = if (task.allDay) java.time.LocalTime.MIDNIGHT else Instant.ofEpochMilli(dueAt).atZone(zone).toLocalTime()
+            val baseDate = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+            java.time.LocalDateTime.of(baseDate, baseTime).atZone(zone).toInstant().toEpochMilli()
+        } else {
+            dueAt
+        }
+        RecurrenceEngine.nextAt(baseAt, rule, zone, keepTime = !task.allDay)
     } else {
         null
     }
 
     val nextDeadlineFromRule = if (deadlineRule != null && deadlineAt != null) {
-        RecurrenceEngine.nextAt(deadlineAt, deadlineRule, zone, keepTime = !task.deadlineAllDay)
+        val baseAt = if (now > deadlineAt) {
+            val baseTime = if (task.deadlineAllDay) java.time.LocalTime.MIDNIGHT else Instant.ofEpochMilli(deadlineAt).atZone(zone).toLocalTime()
+            val baseDate = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+            java.time.LocalDateTime.of(baseDate, baseTime).atZone(zone).toInstant().toEpochMilli()
+        } else {
+            deadlineAt
+        }
+        RecurrenceEngine.nextAt(baseAt, deadlineRule, zone, keepTime = !task.deadlineAllDay)
     } else {
         null
     }

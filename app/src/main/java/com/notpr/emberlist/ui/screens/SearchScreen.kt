@@ -26,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -178,8 +179,14 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
         ) {
             items(SmartFilter.values()) { filter ->
+                val selected = filter == activeFilter
                 AssistChip(
                     onClick = { activeFilter = filter },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        labelColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                    ),
                     label = { Text(filter.label) }
                 )
             }

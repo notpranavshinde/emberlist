@@ -36,6 +36,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.backup.BackupManager
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.data.backup.BackupScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -70,6 +71,13 @@ fun SettingsScreen(padding: PaddingValues) {
     LaunchedEffect(Unit) {
         refreshBackups()
     }
+    LaunchedEffect(settings.autoBackupDaily) {
+        if (settings.autoBackupDaily) {
+            BackupScheduler.schedule(context.applicationContext)
+        } else {
+            BackupScheduler.cancel(context.applicationContext)
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
@@ -97,6 +105,11 @@ fun SettingsScreen(padding: PaddingValues) {
         )
 
         RowSwitch(label = "Use 24h time", checked = settings.use24h, onCheckedChange = viewModel::updateUse24h)
+        RowSwitch(
+            label = "Auto backup daily",
+            checked = settings.autoBackupDaily,
+            onCheckedChange = viewModel::updateAutoBackupDaily
+        )
 
         OutlinedTextField(
             value = settings.defaultReminderOffset.toString(),

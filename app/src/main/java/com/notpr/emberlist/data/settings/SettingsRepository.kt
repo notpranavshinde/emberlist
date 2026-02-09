@@ -15,6 +15,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val KEY_24H = booleanPreferencesKey("use_24h")
         val KEY_ACCENT = stringPreferencesKey("accent")
         val KEY_DEFAULT_REMINDER = intPreferencesKey("default_reminder_offset")
+        val KEY_AUTO_BACKUP = booleanPreferencesKey("auto_backup_daily")
     }
 
     val settings: Flow<SettingsState> = dataStore.data.map { prefs ->
@@ -22,7 +23,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             weekStart = prefs[KEY_WEEK_START] ?: 1,
             use24h = prefs[KEY_24H] ?: false,
             accent = prefs[KEY_ACCENT] ?: "Ember",
-            defaultReminderOffset = prefs[KEY_DEFAULT_REMINDER] ?: 30
+            defaultReminderOffset = prefs[KEY_DEFAULT_REMINDER] ?: 30,
+            autoBackupDaily = prefs[KEY_AUTO_BACKUP] ?: false
         )
     }
 
@@ -41,11 +43,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun updateDefaultReminderOffset(value: Int) {
         dataStore.edit { it[KEY_DEFAULT_REMINDER] = value }
     }
+
+    suspend fun updateAutoBackupDaily(value: Boolean) {
+        dataStore.edit { it[KEY_AUTO_BACKUP] = value }
+    }
 }
 
 data class SettingsState(
     val weekStart: Int,
     val use24h: Boolean,
     val accent: String,
-    val defaultReminderOffset: Int
+    val defaultReminderOffset: Int,
+    val autoBackupDaily: Boolean
 )

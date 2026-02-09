@@ -1,6 +1,11 @@
 package com.notpr.emberlist.ui
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.Snackbar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -16,15 +21,21 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -45,6 +56,8 @@ import com.notpr.emberlist.ui.screens.UpcomingScreen
 import com.notpr.emberlist.ui.screens.ActivityScreen
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddSheet
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 sealed class NavRoute(val route: String, val labelRes: Int, val icon: @Composable () -> Unit) {
     object Inbox : NavRoute("inbox", R.string.inbox, { Icon(Icons.Default.Inbox, null) })
@@ -76,7 +89,8 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
         UndoBus.events.collect { event ->
             val result = snackbarHostState.showSnackbar(
                 message = event.message,
-                actionLabel = event.actionLabel
+                actionLabel = event.actionLabel,
+                duration = SnackbarDuration.Short
             )
             if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
                 scope.launch { event.undo() }
@@ -87,7 +101,42 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     Scaffold(
         topBar = { TopBar(navController) },
         bottomBar = { BottomBar(navController, navItems) },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        snackbarHost = {
+            val density = LocalDensity.current
+            SnackbarHost(
+                hostState = snackbarHostState
+            ) { data ->
+                var offsetX by remember(data) { mutableStateOf(0f) }
+                val threshold = with(density) { 120.dp.toPx() }
+                Snackbar(
+                    modifier = Modifier
+                        .offset { IntOffset(offsetX.roundToInt(), 0) }
+                        .draggable(
+                            orientation = Orientation.Horizontal,
+                            state = rememberDraggableState { delta ->
+                                offsetX += delta
+                            },
+                            onDragStopped = {
+                                if (abs(offsetX) > threshold) {
+                                    data.dismiss()
+                                } else {
+                                    offsetX = 0f
+                                }
+                            }
+                        ),
+                    action = {
+                        val label = data.visuals.actionLabel
+                        if (label != null) {
+                            TextButton(onClick = { data.performAction() }) {
+                                Text(label)
+                            }
+                        }
+                    }
+                ) {
+                    Text(data.visuals.message)
+                }
+            }
+        },
         floatingActionButton = {
             QuickAddSheet(
                 defaultDueToday = defaultDueToday,
