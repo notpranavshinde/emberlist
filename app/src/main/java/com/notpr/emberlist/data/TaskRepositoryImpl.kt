@@ -51,6 +51,9 @@ class TaskRepositoryImpl(
 
     override fun observeSubtasks(parentId: String): Flow<List<TaskEntity>> = taskDao.observeSubtasks(parentId)
 
+    override fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>> =
+        taskDao.observeSubtasksForParents(parentIds)
+
     override fun observeReminders(taskId: String): Flow<List<ReminderEntity>> = reminderDao.observeForTask(taskId)
 
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = activityDao.observeForObject(objectId)
@@ -90,6 +93,8 @@ class TaskRepositoryImpl(
     override suspend fun deleteTask(taskId: String) {
         taskDao.delete(taskId)
     }
+
+    override suspend fun getSubtasks(parentId: String): List<TaskEntity> = taskDao.getSubtasks(parentId)
 
     override suspend fun clearCompletedTasks() {
         taskDao.deleteCompleted()

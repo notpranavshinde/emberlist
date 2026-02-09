@@ -30,8 +30,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -63,6 +65,9 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val project by projectFlow.collectAsState()
     val tasks by tasksFlow.collectAsState()
     val sections by sectionsFlow.collectAsState()
+    val subtasksFlow = remember(projectId, tasks) { viewModel.observeSubtasksForParents(tasks.map { it.id }) }
+    val subtasks by subtasksFlow.collectAsState(initial = emptyList())
+    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
     val projectById = project?.let { mapOf(it.id to it) }.orEmpty()
     val sectionById = sections.associateBy { it.id }
     var projectTitle by remember(projectId) { mutableStateOf<String?>(null) }
@@ -158,9 +163,33 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
 
         if (viewPref == ViewPreference.LIST) {
             val grouped = tasks.groupBy { it.sectionId }
+            val subtaskItems = subtasks.map { task ->
+                buildTaskListItem(
+                    task = task,
+                    projectById = projectById,
+                    sectionById = sectionById
+                ).copy(
+                    isSubtask = true,
+                    indentLevel = 1,
+                    sectionName = sectionById[task.sectionId]?.name ?: "No Section"
+                )
+            }
             LazyColumn {
                 sections.forEach { section ->
                     val sectionTasks = grouped[section.id].orEmpty()
+                    val parentItems = sectionTasks.map { task ->
+                        buildTaskListItem(
+                            task = task,
+                            projectById = projectById,
+                            sectionById = sectionById
+                        )
+                    }
+                    val flatItems = flattenTaskItemsWithSubtasks(
+                        parents = parentItems,
+                        subtasks = subtaskItems,
+                        expandedState = expanded,
+                        defaultExpanded = true
+                    )
                     item(key = "section-${section.id}") {
                         Text(
                             text = section.name,
@@ -175,18 +204,18 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                             )
                         }
                     } else {
-                        items(sectionTasks, key = { it.id }) { task ->
-                            val item = TaskListItem(
-                                task = task,
-                                projectName = projectTitle ?: "Project",
-                                sectionName = section.name
-                            )
+                        items(flatItems, key = { it.task.id }) { item ->
                             TaskRow(
                                 item = item,
+                                showExpand = item.hasSubtasks,
+                                expanded = item.isExpanded,
+                                onToggleExpand = {
+                                    expanded[item.task.id] = !(expanded[item.task.id] ?: true)
+                                },
                                 onToggle = viewModel::toggleComplete,
                                 onReschedule = { rescheduleTarget = it },
                                 onDelete = viewModel::deleteTask,
-                                onClick = { navController.navigate("task/${task.id}") }
+                                onClick = { navController.navigate("task/${item.task.id}") }
                             )
                         }
                     }
@@ -199,18 +228,31 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
                         )
                     }
-                    items(unsectioned, key = { it.id }) { task ->
-                        val item = TaskListItem(
+                    val unsectionedItems = unsectioned.map { task ->
+                        buildTaskListItem(
                             task = task,
-                            projectName = projectTitle ?: "Project",
-                            sectionName = "No Section"
-                        )
+                            projectById = projectById,
+                            sectionById = sectionById
+                        ).copy(sectionName = "No Section")
+                    }
+                    val flatUnsectioned = flattenTaskItemsWithSubtasks(
+                        parents = unsectionedItems,
+                        subtasks = subtaskItems,
+                        expandedState = expanded,
+                        defaultExpanded = true
+                    )
+                    items(flatUnsectioned, key = { it.task.id }) { item ->
                         TaskRow(
                             item = item,
+                            showExpand = item.hasSubtasks,
+                            expanded = item.isExpanded,
+                            onToggleExpand = {
+                                expanded[item.task.id] = !(expanded[item.task.id] ?: true)
+                            },
                             onToggle = viewModel::toggleComplete,
                             onReschedule = { rescheduleTarget = it },
                             onDelete = viewModel::deleteTask,
-                            onClick = { navController.navigate("task/${task.id}") }
+                            onClick = { navController.navigate("task/${item.task.id}") }
                         )
                     }
                 }

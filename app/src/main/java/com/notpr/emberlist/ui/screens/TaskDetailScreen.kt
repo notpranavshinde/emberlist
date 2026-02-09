@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -39,6 +40,7 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.data.model.ObjectType
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -80,6 +82,8 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     val sectionsFlow = remember(projectId) { viewModel.observeSections(projectId ?: "") }
     val sections by sectionsFlow.collectAsState()
+    val projectById = projects.associateBy { it.id }
+    val sectionById = sections.associateBy { it.id }
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -318,12 +322,51 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
             Text(text = "Delete", color = MaterialTheme.colorScheme.error)
         }
 
-        if (subtasks.isNotEmpty()) {
-            Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-            Text(text = "Subtasks", style = MaterialTheme.typography.titleSmall)
-            subtasks.forEach { subtask ->
-                Text(text = subtask.title, style = MaterialTheme.typography.bodySmall)
-            }
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+        Text(text = "Subtasks", style = MaterialTheme.typography.titleSmall)
+        val parent = task
+        var newSubtask by remember(task?.id) { mutableStateOf("") }
+        subtasks.forEach { subtask ->
+            val item = buildTaskListItem(
+                task = subtask,
+                projectById = projectById,
+                sectionById = sectionById
+            ).copy(isSubtask = true, indentLevel = 1)
+            TaskRow(
+                item = item,
+                onToggle = viewModel::toggleComplete,
+                onDelete = { viewModel.deleteTask(it.id) },
+                onClick = null
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = newSubtask,
+                onValueChange = { newSubtask = it },
+                placeholder = { Text("Add subtask") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent
+                )
+            )
+            Button(
+                onClick = {
+                    val titleText = newSubtask.trim()
+                    if (titleText.isNotEmpty() && parent != null) {
+                        viewModel.addSubtask(parent, titleText)
+                        newSubtask = ""
+                    }
+                },
+                modifier = Modifier.padding(start = 8.dp)
+            ) { Text("Add") }
         }
 
         if (activity.isNotEmpty()) {

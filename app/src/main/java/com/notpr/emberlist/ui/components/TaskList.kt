@@ -11,11 +11,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
@@ -49,7 +52,11 @@ data class TaskListItem(
     val sectionName: String?,
     val displayDueAt: Long? = task.dueAt,
     val isOverdue: Boolean = false,
-    val isPreview: Boolean = false
+    val isPreview: Boolean = false,
+    val isSubtask: Boolean = false,
+    val indentLevel: Int = 0,
+    val hasSubtasks: Boolean = false,
+    val isExpanded: Boolean = false
 )
 
 @Composable
@@ -58,7 +65,10 @@ fun TaskRow(
     onToggle: (TaskEntity) -> Unit,
     onClick: (() -> Unit)? = null,
     onReschedule: ((TaskEntity) -> Unit)? = null,
-    onDelete: ((TaskEntity) -> Unit)? = null
+    onDelete: ((TaskEntity) -> Unit)? = null,
+    showExpand: Boolean = false,
+    expanded: Boolean = false,
+    onToggleExpand: (() -> Unit)? = null
 ) {
     val thresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
     var dragX by remember { mutableStateOf(0f) }
@@ -71,6 +81,7 @@ fun TaskRow(
         Modifier.fillMaxWidth()
     }
 
+    val indentPadding = if (item.isSubtask) 24.dp * (item.indentLevel.coerceAtLeast(1)) else 0.dp
     Column(
         modifier = rowModifier
             .pointerInput(item.task.id, onReschedule, onDelete) {
@@ -93,9 +104,22 @@ fun TaskRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(start = 16.dp + indentPadding, end = 16.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (showExpand) {
+                val icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
+                Icon(
+                    imageVector = icon,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable { onToggleExpand?.invoke() },
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            } else {
+                Spacer(modifier = Modifier.size(20.dp))
+            }
             TaskToggle(
                 task = item.task,
                 onToggle = onToggle

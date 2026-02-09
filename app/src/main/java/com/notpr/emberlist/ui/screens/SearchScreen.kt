@@ -31,8 +31,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -59,6 +61,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: SearchViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val results by viewModel.results.collectAsState()
+    val subtaskItems by viewModel.subtasks.collectAsState()
     val projects by viewModel.projects.collectAsState()
     var query by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
@@ -77,6 +80,16 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
     val filteredResults = remember(results, activeFilter) {
         results.filter { activeFilter.matches(it, zone) }
     }
+    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val parentResults = filteredResults.filter { it.task.parentTaskId == null }
+    val parentIds = parentResults.map { it.task.id }.toSet()
+    val orphanSubtasks = filteredResults.filter { it.task.parentTaskId != null && it.task.parentTaskId !in parentIds }
+    val flattenedResults = flattenTaskItemsWithSubtasks(
+        parents = parentResults,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        defaultExpanded = false
+    ) + orphanSubtasks.map { it.copy(isSubtask = true, indentLevel = 1) }
 
     LaunchedEffect(searchActive) {
         if (searchActive) {
@@ -164,7 +177,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                 Column {
                     Text(text = "Search", style = MaterialTheme.typography.headlineSmall)
                     Text(
-                        text = "${filteredResults.size} tasks",
+                        text = "${parentResults.size} tasks",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -237,7 +250,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
             }
         }
         LazyColumn {
-            items(filteredResults, key = { it.task.id }) { item ->
+            items(flattenedResults, key = { it.task.id }) { item ->
                 SearchTaskRowSelectable(
                     item = item,
                     selectionMode = selectionMode,
@@ -251,7 +264,12 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                     },
                     onOpen = { navController.navigate("task/${item.task.id}") },
                     onReschedule = { rescheduleTarget = it },
-                    onDelete = viewModel::deleteTask
+                    onDelete = viewModel::deleteTask,
+                    showExpand = item.hasSubtasks,
+                    expanded = item.isExpanded,
+                    onToggleExpand = {
+                        expanded[item.task.id] = !(expanded[item.task.id] ?: false)
+                    }
                 )
             }
         }
@@ -367,7 +385,10 @@ private fun SearchTaskRowSelectable(
     onEnterSelection: () -> Unit,
     onOpen: () -> Unit,
     onReschedule: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
-    onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit
+    onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
+    showExpand: Boolean,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit
 ) {
     val modifier = Modifier
         .fillMaxWidth()
@@ -390,7 +411,10 @@ private fun SearchTaskRowSelectable(
                 onToggle = { _: com.notpr.emberlist.data.model.TaskEntity -> },
                 onReschedule = if (selectionMode) null else onReschedule,
                 onDelete = if (selectionMode) null else onDelete,
-                onClick = null
+                onClick = null,
+                showExpand = showExpand,
+                expanded = expanded,
+                onToggleExpand = onToggleExpand
             )
         }
     }

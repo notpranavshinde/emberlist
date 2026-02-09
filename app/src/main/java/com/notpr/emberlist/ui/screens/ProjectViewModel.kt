@@ -7,7 +7,7 @@ import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
-import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
@@ -16,6 +16,7 @@ import com.notpr.emberlist.ui.UndoEvent
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.time.Instant
@@ -40,6 +41,10 @@ class ProjectViewModel(
     fun observeSections(projectId: String): StateFlow<List<SectionEntity>> =
         repository.observeSections(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>> =
+        if (parentIds.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
+        else repository.observeSubtasksForParents(parentIds)
 
     fun updateProject(project: ProjectEntity) {
         viewModelScope.launch {
@@ -101,12 +106,14 @@ class ProjectViewModel(
         viewModelScope.launch {
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
-                completeTaskWithRecurrence(repository, task)
+                val beforeSubtasks = repository.getSubtasks(task.id)
+                completeTaskAndSubtasks(repository, task)
                 undoController.post(
                     UndoEvent(
                         message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            beforeSubtasks.forEach { repository.upsertTask(it) }
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )

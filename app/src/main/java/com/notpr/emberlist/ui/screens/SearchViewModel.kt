@@ -13,12 +13,16 @@ import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.ui.startOfTodayMillis
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -54,6 +58,30 @@ class SearchViewModel(
 
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val subtaskEntities = results
+        .map { list -> list.map { it.task.id } }
+        .distinctUntilChanged()
+        .flatMapLatest { ids ->
+            if (ids.isEmpty()) flowOf(emptyList()) else repository.observeSubtasksForParents(ids)
+        }
+
+    val subtasks: StateFlow<List<TaskListItem>> = combine(
+        subtaskEntities,
+        repository.observeProjects(),
+        repository.observeAllSections()
+    ) { subtaskEntities, projects, sections ->
+        val projectById = projects.associateBy { it.id }
+        val sectionById = sections.associateBy { it.id }
+        subtaskEntities.map { task ->
+            buildTaskListItem(
+                task = task,
+                projectById = projectById,
+                sectionById = sectionById
+            ).copy(isSubtask = true, indentLevel = 1)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun updateQuery(value: String) {
         query.value = value

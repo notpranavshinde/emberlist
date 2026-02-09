@@ -10,7 +10,7 @@ import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.ObjectType
-import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
@@ -60,16 +60,48 @@ class TaskDetailViewModel(
         }
     }
 
+    fun addSubtask(parent: TaskEntity, title: String) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val siblings = repository.observeSubtasks(parent.id).first()
+            val nextOrder = (siblings.maxOfOrNull { it.order } ?: 0) + 1
+            val subtask = TaskEntity(
+                id = UUID.randomUUID().toString(),
+                title = title,
+                description = "",
+                projectId = parent.projectId,
+                sectionId = parent.sectionId,
+                priority = com.notpr.emberlist.data.model.Priority.P4,
+                dueAt = null,
+                allDay = false,
+                deadlineAt = null,
+                deadlineAllDay = false,
+                recurringRule = null,
+                deadlineRecurringRule = null,
+                status = TaskStatus.OPEN,
+                completedAt = null,
+                parentTaskId = parent.id,
+                order = nextOrder,
+                createdAt = now,
+                updatedAt = now
+            )
+            repository.upsertTask(subtask)
+            logTaskActivity(repository, ActivityType.CREATED, subtask)
+        }
+    }
+
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
-                completeTaskWithRecurrence(repository, task)
+                val beforeSubtasks = repository.getSubtasks(task.id)
+                completeTaskAndSubtasks(repository, task)
                 undoController.post(
                     UndoEvent(
                         message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            beforeSubtasks.forEach { repository.upsertTask(it) }
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )

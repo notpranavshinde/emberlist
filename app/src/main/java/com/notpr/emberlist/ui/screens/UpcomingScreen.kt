@@ -33,8 +33,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -55,8 +57,16 @@ import kotlin.math.abs
 fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: UpcomingViewModel = viewModel(factory = EmberlistViewModelFactory(container))
-    val items by viewModel.tasks.collectAsState()
+    val parentItems by viewModel.tasks.collectAsState()
+    val subtaskItems by viewModel.subtasks.collectAsState()
     val projects by viewModel.projects.collectAsState()
+    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val items = flattenUpcomingItemsWithSubtasks(
+        parents = parentItems,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        defaultExpanded = false
+    )
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
@@ -120,7 +130,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text(text = "Upcoming", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    text = "${items.size} tasks",
+                    text = "${parentItems.size} tasks",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -200,6 +210,11 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
                 ) {
                     TaskRow(
                         item = item.item,
+                        showExpand = item.item.hasSubtasks,
+                        expanded = item.item.isExpanded,
+                        onToggleExpand = {
+                            expanded[item.item.task.id] = !(expanded[item.item.task.id] ?: false)
+                        },
                         onToggle = if (selectionMode) ({ _: com.notpr.emberlist.data.model.TaskEntity -> }) else viewModel::toggleComplete,
                         onReschedule = if (selectionMode) null else ({ task -> rescheduleTarget = task }),
                         onDelete = if (selectionMode) null else viewModel::deleteTask,

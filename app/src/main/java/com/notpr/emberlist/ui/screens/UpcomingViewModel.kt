@@ -7,7 +7,7 @@ import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.ui.startOfTomorrowMillis
-import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.domain.RecurrenceEngine
@@ -15,12 +15,17 @@ import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -77,16 +82,42 @@ class UpcomingViewModel(
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val subtaskEntities = tasks
+        .map { list -> list.map { it.item.task.id } }
+        .distinctUntilChanged()
+        .flatMapLatest { ids ->
+            if (ids.isEmpty()) flowOf(emptyList()) else repository.observeSubtasksForParents(ids)
+        }
+
+    val subtasks: StateFlow<List<TaskListItem>> = combine(
+        subtaskEntities,
+        repository.observeProjects(),
+        repository.observeAllSections()
+    ) { subtaskEntities, projects, sections ->
+        val projectById = projects.associateBy { it.id }
+        val sectionById = sections.associateBy { it.id }
+        subtaskEntities.map { task ->
+            buildTaskListItem(
+                task = task,
+                projectById = projectById,
+                sectionById = sectionById
+            ).copy(isSubtask = true, indentLevel = 1)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
-                completeTaskWithRecurrence(repository, task)
+                val beforeSubtasks = repository.getSubtasks(task.id)
+                completeTaskAndSubtasks(repository, task)
                 undoController.post(
                     UndoEvent(
                         message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            beforeSubtasks.forEach { repository.upsertTask(it) }
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )
