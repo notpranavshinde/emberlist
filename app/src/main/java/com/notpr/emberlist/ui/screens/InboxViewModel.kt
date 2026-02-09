@@ -8,8 +8,8 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskWithRecurrence
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
-import com.notpr.emberlist.ui.UndoBus
 import com.notpr.emberlist.ui.UndoEvent
+import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
@@ -24,7 +24,10 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 
-class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
+class InboxViewModel(
+    private val repository: TaskRepository,
+    private val undoController: UndoController
+) : ViewModel() {
     val tasks: StateFlow<List<TaskListItem>> = combine(
         repository.observeInbox(),
         repository.observeProjects(),
@@ -46,9 +49,9 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
                 completeTaskWithRecurrence(repository, task)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task completed",
+                        message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
@@ -64,9 +67,9 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
                     )
                 )
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task marked open",
+                        message = "Undo reopen: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
                             logTaskActivity(repository, ActivityType.COMPLETED, before)
@@ -90,9 +93,9 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -116,9 +119,9 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -132,9 +135,9 @@ class InboxViewModel(private val repository: TaskRepository) : ViewModel() {
         viewModelScope.launch {
             val before = task
             deleteTaskWithLog(repository, task)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task deleted",
+                    message = "Undo delete: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)

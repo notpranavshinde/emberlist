@@ -1,6 +1,7 @@
 package com.notpr.emberlist.ui
 
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 data class UndoEvent(
     val message: String,
@@ -8,10 +9,11 @@ data class UndoEvent(
     val undo: suspend () -> Unit
 )
 
-object UndoBus {
-    val events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 64)
+class UndoController {
+    private val _events = MutableSharedFlow<UndoEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<UndoEvent> = _events
 
     fun post(event: UndoEvent) {
-        events.tryEmit(event)
+        _events.tryEmit(event)
     }
 }

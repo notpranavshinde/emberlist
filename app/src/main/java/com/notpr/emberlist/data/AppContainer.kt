@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.data.settings.SettingsRepository
+import com.notpr.emberlist.ui.UndoController
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -26,4 +27,6 @@ class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(settingsStore)
 
     val reminderScheduler = ReminderScheduler(appContext, repository)
+
+    val undoController = UndoController()
 }

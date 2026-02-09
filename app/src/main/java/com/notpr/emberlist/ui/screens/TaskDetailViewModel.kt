@@ -15,7 +15,7 @@ import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
-import com.notpr.emberlist.ui.UndoBus
+import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.reminders.ReminderScheduler
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +27,8 @@ import java.util.UUID
 
 class TaskDetailViewModel(
     private val repository: TaskRepository,
-    private val reminderScheduler: ReminderScheduler
+    private val reminderScheduler: ReminderScheduler,
+    private val undoController: UndoController
 ) : ViewModel() {
     fun observeTask(taskId: String): StateFlow<TaskEntity?> = repository.observeTask(taskId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -64,9 +65,9 @@ class TaskDetailViewModel(
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
                 completeTaskWithRecurrence(repository, task)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task completed",
+                        message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
@@ -81,9 +82,9 @@ class TaskDetailViewModel(
                 )
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, updated)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task marked open",
+                        message = "Undo reopen: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
                             logTaskActivity(repository, ActivityType.COMPLETED, before)
@@ -104,9 +105,9 @@ class TaskDetailViewModel(
             )
             repository.upsertTask(updated)
             logTaskActivity(repository, if (archived) ActivityType.ARCHIVED else ActivityType.UNARCHIVED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = if (archived) "Task archived" else "Task unarchived",
+                    message = if (archived) "Undo archive: ${task.title}" else "Undo unarchive: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -174,9 +175,9 @@ class TaskDetailViewModel(
             val task = repository.observeTask(taskId).first()
             if (task != null) {
                 deleteTaskWithLog(repository, task)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task deleted",
+                        message = "Undo delete: ${task.title}",
                         undo = {
                             repository.upsertTask(task)
                             logTaskActivity(repository, ActivityType.UPDATED, task)

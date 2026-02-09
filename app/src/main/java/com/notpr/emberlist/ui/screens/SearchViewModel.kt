@@ -11,7 +11,7 @@ import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.ui.startOfTodayMillis
-import com.notpr.emberlist.ui.UndoBus
+import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,7 +27,10 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 
-class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
+class SearchViewModel(
+    private val repository: TaskRepository,
+    private val undoController: UndoController
+) : ViewModel() {
     private val query = MutableStateFlow("")
 
     val results: StateFlow<List<TaskListItem>> = combine(
@@ -69,9 +72,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -95,9 +98,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -124,9 +127,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Tasks rescheduled",
+                    message = "Undo reschedule ${before.size} tasks",
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
@@ -137,9 +140,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
         viewModelScope.launch {
             val before = task
             deleteTaskWithLog(repository, task)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task deleted",
+                    message = "Undo delete: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -157,9 +160,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
                 val task = tasks.firstOrNull { it.id == id } ?: return@forEach
                 deleteTaskWithLog(repository, task)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Tasks deleted",
+                    message = "Undo delete ${tasks.size} tasks",
                     undo = { tasks.forEach { repository.upsertTask(it) } }
                 )
             )
@@ -176,9 +179,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Tasks moved",
+                    message = "Undo move ${before.size} tasks",
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
@@ -195,9 +198,9 @@ class SearchViewModel(private val repository: TaskRepository) : ViewModel() {
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Priority updated",
+                    message = "Undo priority change",
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )

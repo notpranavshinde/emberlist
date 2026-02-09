@@ -65,6 +65,14 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val sections by sectionsFlow.collectAsState()
     val projectById = project?.let { mapOf(it.id to it) }.orEmpty()
     val sectionById = sections.associateBy { it.id }
+    var projectTitle by remember(projectId) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(project?.name) {
+        val name = project?.name
+        if (!name.isNullOrBlank()) {
+            projectTitle = name
+        }
+    }
 
     val viewPref = project?.viewPreference ?: ViewPreference.LIST
     var dragWindowOffset by remember { mutableStateOf<Offset?>(null) }
@@ -101,7 +109,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = project?.name ?: "Project")
+            Text(text = projectTitle ?: "Project")
             Row {
                 IconButton(onClick = {
                     val newPref = if (viewPref == ViewPreference.LIST) ViewPreference.BOARD else ViewPreference.LIST
@@ -170,8 +178,8 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                         items(sectionTasks, key = { it.id }) { task ->
                             val item = TaskListItem(
                                 task = task,
-                                projectName = section.name,
-                                sectionName = null
+                                projectName = projectTitle ?: "Project",
+                                sectionName = section.name
                             )
                             TaskRow(
                                 item = item,
@@ -194,8 +202,8 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     items(unsectioned, key = { it.id }) { task ->
                         val item = TaskListItem(
                             task = task,
-                            projectName = "No Section",
-                            sectionName = null
+                            projectName = projectTitle ?: "Project",
+                            sectionName = "No Section"
                         )
                         TaskRow(
                             item = item,
@@ -281,7 +289,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
         AlertDialog(
             onDismissRequest = { showDeleteProject = false },
             title = { Text("Delete project") },
-            text = { Text("Delete \"${project?.name ?: "Project"}\" and its tasks?") },
+            text = { Text("Delete \"${projectTitle ?: "Project"}\" and its tasks?") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteProject(projectId)
