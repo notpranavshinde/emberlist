@@ -18,14 +18,19 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
-            modelClass.isAssignableFrom(InboxViewModel::class.java) -> InboxViewModel(container.repository)
-            modelClass.isAssignableFrom(TodayViewModel::class.java) -> TodayViewModel(container.repository)
-            modelClass.isAssignableFrom(UpcomingViewModel::class.java) -> UpcomingViewModel(container.repository)
+            modelClass.isAssignableFrom(InboxViewModel::class.java) ->
+                InboxViewModel(container.repository, container.undoController)
+            modelClass.isAssignableFrom(TodayViewModel::class.java) ->
+                TodayViewModel(container.repository, container.undoController)
+            modelClass.isAssignableFrom(UpcomingViewModel::class.java) ->
+                UpcomingViewModel(container.repository, container.undoController)
             modelClass.isAssignableFrom(BrowseViewModel::class.java) -> BrowseViewModel(container.repository)
-            modelClass.isAssignableFrom(ProjectViewModel::class.java) -> ProjectViewModel(container.repository)
+            modelClass.isAssignableFrom(ProjectViewModel::class.java) ->
+                ProjectViewModel(container.repository, container.undoController)
             modelClass.isAssignableFrom(TaskDetailViewModel::class.java) ->
-                TaskDetailViewModel(container.repository, container.reminderScheduler)
-            modelClass.isAssignableFrom(SearchViewModel::class.java) -> SearchViewModel(container.repository)
+                TaskDetailViewModel(container.repository, container.reminderScheduler, container.undoController)
+            modelClass.isAssignableFrom(SearchViewModel::class.java) ->
+                SearchViewModel(container.repository, container.undoController)
             modelClass.isAssignableFrom(QuickAddViewModel::class.java) ->
                 QuickAddViewModel(container.repository, container.reminderScheduler)
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->

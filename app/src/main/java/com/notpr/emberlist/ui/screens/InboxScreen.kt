@@ -13,8 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,7 +34,15 @@ import java.time.ZoneId
 fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: InboxViewModel = viewModel(factory = EmberlistViewModelFactory(container))
-    val tasks by viewModel.tasks.collectAsState()
+    val parentItems by viewModel.tasks.collectAsState()
+    val subtaskItems by viewModel.subtasks.collectAsState()
+    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val tasks = flattenTaskItemsWithSubtasks(
+        parents = parentItems,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        defaultExpanded = false
+    )
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
@@ -64,7 +74,7 @@ fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text(text = "Inbox", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    text = "${tasks.size} tasks",
+                    text = "${parentItems.size} tasks",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -73,6 +83,11 @@ fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
         items(tasks, key = { it.task.id }) { item ->
             TaskRow(
                 item = item,
+                showExpand = item.hasSubtasks,
+                expanded = item.isExpanded,
+                onToggleExpand = {
+                    expanded[item.task.id] = !(expanded[item.task.id] ?: false)
+                },
                 onToggle = viewModel::toggleComplete,
                 onReschedule = { rescheduleTarget = it },
                 onDelete = viewModel::deleteTask,

@@ -22,6 +22,7 @@ interface TaskRepository {
     fun observeAllSections(): Flow<List<SectionEntity>>
     fun observeTask(taskId: String): Flow<TaskEntity?>
     fun observeSubtasks(parentId: String): Flow<List<TaskEntity>>
+    fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>>
     fun observeReminders(taskId: String): Flow<List<ReminderEntity>>
     fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>>
     fun observeAllActivity(): Flow<List<ActivityEventEntity>>
@@ -35,6 +36,7 @@ interface TaskRepository {
     suspend fun deleteSectionsByProject(projectId: String)
     suspend fun upsertTask(task: TaskEntity)
     suspend fun deleteTask(taskId: String)
+    suspend fun getSubtasks(parentId: String): List<TaskEntity>
     suspend fun clearCompletedTasks()
     suspend fun clearTasksInSection(sectionId: String)
     suspend fun upsertReminder(reminder: ReminderEntity)

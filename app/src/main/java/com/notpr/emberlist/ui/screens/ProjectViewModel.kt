@@ -7,15 +7,16 @@ import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
-import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
-import com.notpr.emberlist.ui.UndoBus
+import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import java.util.UUID
 import java.time.Instant
@@ -25,7 +26,10 @@ import java.time.LocalTime
 import java.time.ZoneId
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 
-class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
+class ProjectViewModel(
+    private val repository: TaskRepository,
+    private val undoController: UndoController
+) : ViewModel() {
     fun observeProject(projectId: String): StateFlow<ProjectEntity?> =
         repository.observeProject(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -37,6 +41,10 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
     fun observeSections(projectId: String): StateFlow<List<SectionEntity>> =
         repository.observeSections(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>> =
+        if (parentIds.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
+        else repository.observeSubtasksForParents(parentIds)
 
     fun updateProject(project: ProjectEntity) {
         viewModelScope.launch {
@@ -54,9 +62,9 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
             )
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task moved",
+                    message = "Undo move: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -98,12 +106,14 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
         viewModelScope.launch {
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
-                completeTaskWithRecurrence(repository, task)
-                UndoBus.post(
+                val beforeSubtasks = repository.getSubtasks(task.id)
+                completeTaskAndSubtasks(repository, task)
+                undoController.post(
                     UndoEvent(
-                        message = "Task completed",
+                        message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            beforeSubtasks.forEach { repository.upsertTask(it) }
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )
@@ -117,9 +127,9 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
                     )
                 )
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task marked open",
+                        message = "Undo reopen: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
                             logTaskActivity(repository, ActivityType.COMPLETED, before)
@@ -143,9 +153,9 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -169,9 +179,9 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -185,9 +195,9 @@ class ProjectViewModel(private val repository: TaskRepository) : ViewModel() {
         viewModelScope.launch {
             val before = task
             deleteTaskWithLog(repository, task)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task deleted",
+                    message = "Undo delete: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)

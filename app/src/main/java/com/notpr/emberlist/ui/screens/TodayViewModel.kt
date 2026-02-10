@@ -8,17 +8,22 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.ui.endOfTodayMillis
 import com.notpr.emberlist.ui.startOfTodayMillis
-import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
-import com.notpr.emberlist.ui.UndoBus
 import com.notpr.emberlist.ui.UndoEvent
+import com.notpr.emberlist.ui.UndoController
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -28,7 +33,10 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 
-class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
+class TodayViewModel(
+    private val repository: TaskRepository,
+    private val undoController: UndoController
+) : ViewModel() {
     val tasks: StateFlow<List<TaskListItem>> = combine(
         repository.observeToday(endOfTodayMillis()),
         repository.observeProjects(),
@@ -51,16 +59,42 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val subtaskEntities = tasks
+        .map { list -> list.map { it.task.id } }
+        .distinctUntilChanged()
+        .flatMapLatest { ids ->
+            if (ids.isEmpty()) flowOf(emptyList()) else repository.observeSubtasksForParents(ids)
+        }
+
+    val subtasks: StateFlow<List<TaskListItem>> = combine(
+        subtaskEntities,
+        repository.observeProjects(),
+        repository.observeAllSections()
+    ) { subtaskEntities, projects, sections ->
+        val projectById = projects.associateBy { it.id }
+        val sectionById = sections.associateBy { it.id }
+        subtaskEntities.map { task ->
+            buildTaskListItem(
+                task = task,
+                projectById = projectById,
+                sectionById = sectionById
+            ).copy(isSubtask = true, indentLevel = 1)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task
             if (task.status != TaskStatus.COMPLETED) {
-                completeTaskWithRecurrence(repository, task)
-                UndoBus.post(
+                val beforeSubtasks = repository.getSubtasks(task.id)
+                completeTaskAndSubtasks(repository, task)
+                undoController.post(
                     UndoEvent(
-                        message = "Task completed",
+                        message = "Undo complete: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            beforeSubtasks.forEach { repository.upsertTask(it) }
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )
@@ -74,9 +108,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
                     )
                 )
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Task marked open",
+                        message = "Undo reopen: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
                             logTaskActivity(repository, ActivityType.COMPLETED, before)
@@ -100,9 +134,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -126,9 +160,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
             logTaskActivity(repository, ActivityType.UPDATED, updated)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task rescheduled",
+                    message = "Undo reschedule: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -159,9 +193,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
             if (before.isNotEmpty()) {
-                UndoBus.post(
+                undoController.post(
                     UndoEvent(
-                        message = "Overdue tasks rescheduled",
+                        message = "Undo reschedule ${before.size} overdue tasks",
                         undo = { before.forEach { repository.upsertTask(it) } }
                     )
                 )
@@ -186,9 +220,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Tasks rescheduled",
+                    message = "Undo reschedule ${before.size} tasks",
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
@@ -199,9 +233,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
         viewModelScope.launch {
             val before = task
             deleteTaskWithLog(repository, task)
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Task deleted",
+                    message = "Undo delete: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         logTaskActivity(repository, ActivityType.UPDATED, before)
@@ -219,9 +253,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
                 val task = tasks.firstOrNull { it.id == id } ?: return@forEach
                 deleteTaskWithLog(repository, task)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Tasks deleted",
+                    message = "Undo delete ${tasks.size} tasks",
                     undo = {
                         tasks.forEach { repository.upsertTask(it) }
                     }
@@ -240,9 +274,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Tasks moved",
+                    message = "Undo move ${before.size} tasks",
                     undo = {
                         before.forEach { repository.upsertTask(it) }
                     }
@@ -261,9 +295,9 @@ class TodayViewModel(private val repository: TaskRepository) : ViewModel() {
                 repository.upsertTask(updated)
                 logTaskActivity(repository, ActivityType.UPDATED, updated)
             }
-            UndoBus.post(
+            undoController.post(
                 UndoEvent(
-                    message = "Priority updated",
+                    message = "Undo priority change",
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )

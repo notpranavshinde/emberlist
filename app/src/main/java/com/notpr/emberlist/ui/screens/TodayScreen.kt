@@ -29,8 +29,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -48,9 +50,23 @@ import java.time.ZoneId
 fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: TodayViewModel = viewModel(factory = EmberlistViewModelFactory(container))
-    val tasks by viewModel.tasks.collectAsState()
-    val overdue = tasks.filter { it.isOverdue }
-    val today = tasks.filterNot { it.isOverdue }
+    val parentItems by viewModel.tasks.collectAsState()
+    val subtaskItems by viewModel.subtasks.collectAsState()
+    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val overdueParents = parentItems.filter { it.isOverdue }
+    val todayParents = parentItems.filterNot { it.isOverdue }
+    val overdue = flattenTaskItemsWithSubtasks(
+        parents = overdueParents,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        defaultExpanded = false
+    )
+    val today = flattenTaskItemsWithSubtasks(
+        parents = todayParents,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        defaultExpanded = false
+    )
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
@@ -128,7 +144,7 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text(text = "Today", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    text = "${tasks.size} tasks",
+                    text = "${parentItems.size} tasks",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -203,6 +219,11 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                     },
                     onOpen = { navController.navigate("task/${item.task.id}") },
                     onToggle = viewModel::toggleComplete,
+                    showExpand = item.hasSubtasks,
+                    expanded = item.isExpanded,
+                    onToggleExpand = {
+                        expanded[item.task.id] = !(expanded[item.task.id] ?: false)
+                    },
                     onReschedule = { rescheduleTarget = it },
                     onDelete = viewModel::deleteTask
                 )
@@ -222,6 +243,11 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 },
                 onOpen = { navController.navigate("task/${item.task.id}") },
                 onToggle = viewModel::toggleComplete,
+                showExpand = item.hasSubtasks,
+                expanded = item.isExpanded,
+                onToggleExpand = {
+                    expanded[item.task.id] = !(expanded[item.task.id] ?: false)
+                },
                 onReschedule = { rescheduleTarget = it },
                 onDelete = viewModel::deleteTask
             )
@@ -305,7 +331,10 @@ private fun TaskRowSelectable(
     onOpen: () -> Unit,
     onToggle: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
     onReschedule: ((com.notpr.emberlist.data.model.TaskEntity) -> Unit)?,
-    onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit
+    onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
+    showExpand: Boolean,
+    expanded: Boolean,
+    onToggleExpand: () -> Unit
 ) {
     val modifier = Modifier
         .fillMaxWidth()
@@ -328,7 +357,10 @@ private fun TaskRowSelectable(
                 onToggle = if (selectionMode) ({ _: com.notpr.emberlist.data.model.TaskEntity -> }) else onToggle,
                 onReschedule = if (selectionMode) null else onReschedule,
                 onDelete = if (selectionMode) null else onDelete,
-                onClick = null
+                onClick = null,
+                showExpand = showExpand,
+                expanded = expanded,
+                onToggleExpand = onToggleExpand
             )
         }
     }

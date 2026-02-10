@@ -12,18 +12,19 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TaskDao {
-    @Query("SELECT * FROM tasks WHERE projectId IS NULL AND status = :status ORDER BY `order` ASC")
+    @Query("SELECT * FROM tasks WHERE projectId IS NULL AND parentTaskId IS NULL AND status = :status ORDER BY `order` ASC")
     fun observeInbox(status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE status = :status AND dueAt IS NOT NULL AND dueAt <= :endOfDay ORDER BY dueAt ASC")
+    @Query("SELECT * FROM tasks WHERE parentTaskId IS NULL AND status = :status AND dueAt IS NOT NULL AND dueAt <= :endOfDay ORDER BY dueAt ASC")
     fun observeToday(status: TaskStatus = TaskStatus.OPEN, endOfDay: Long): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE status = :status AND dueAt IS NOT NULL AND dueAt >= :startOfTomorrow ORDER BY dueAt ASC")
+    @Query("SELECT * FROM tasks WHERE parentTaskId IS NULL AND status = :status AND dueAt IS NOT NULL AND dueAt >= :startOfTomorrow ORDER BY dueAt ASC")
     fun observeUpcoming(status: TaskStatus = TaskStatus.OPEN, startOfTomorrow: Long): Flow<List<TaskEntity>>
 
     @Query("""
         SELECT * FROM tasks
-        WHERE status = :status
+        WHERE parentTaskId IS NULL
+          AND status = :status
           AND recurringRule IS NOT NULL
           AND dueAt IS NOT NULL
           AND dueAt < :startOfTomorrow
@@ -34,7 +35,7 @@ interface TaskDao {
         startOfTomorrow: Long
     ): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE projectId = :projectId AND status = :status ORDER BY `order` ASC")
+    @Query("SELECT * FROM tasks WHERE projectId = :projectId AND parentTaskId IS NULL AND status = :status ORDER BY `order` ASC")
     fun observeProjectTasks(projectId: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
     @Query("SELECT * FROM tasks WHERE id = :id")
@@ -46,6 +47,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId ORDER BY `order` ASC")
     fun observeSubtasks(parentId: String): Flow<List<TaskEntity>>
 
+    @Query("SELECT * FROM tasks WHERE parentTaskId IN (:parentIds) ORDER BY parentTaskId, `order` ASC")
+    fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>>
+
+    @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId ORDER BY `order` ASC")
+    suspend fun getSubtasks(parentId: String): List<TaskEntity>
+
     @Query("SELECT * FROM tasks WHERE title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
     fun search(query: String): Flow<List<TaskEntity>>
 
@@ -53,6 +60,7 @@ interface TaskDao {
         SELECT projectId as projectId, COUNT(*) as count
         FROM tasks
         WHERE status = :status
+          AND parentTaskId IS NULL
         GROUP BY projectId
     """)
     fun observeProjectTaskCounts(status: TaskStatus = TaskStatus.OPEN): Flow<List<ProjectTaskCount>>
