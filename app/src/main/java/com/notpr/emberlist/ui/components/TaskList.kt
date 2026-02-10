@@ -117,8 +117,6 @@ fun TaskRow(
                         .clickable { onToggleExpand?.invoke() },
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
-            } else {
-                Spacer(modifier = Modifier.size(20.dp))
             }
             TaskToggle(
                 task = item.task,

@@ -24,6 +24,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -91,6 +92,39 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
     val activityFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
     val json = remember { Json { ignoreUnknownKeys = true } }
+
+    LaunchedEffect(
+        task?.id,
+        title,
+        description,
+        priority,
+        dueAt,
+        deadlineAt,
+        allDay,
+        deadlineAllDay,
+        recurrenceRule,
+        deadlineRecurrenceRule,
+        projectId,
+        sectionId
+    ) {
+        val current = task ?: return@LaunchedEffect
+        val updated = current.copy(
+            title = title,
+            description = description,
+            priority = priority,
+            dueAt = dueAt,
+            deadlineAt = deadlineAt,
+            allDay = allDay,
+            deadlineAllDay = deadlineAllDay,
+            recurringRule = recurrenceRule.ifBlank { null },
+            deadlineRecurringRule = deadlineRecurrenceRule.ifBlank { null },
+            projectId = projectId,
+            sectionId = sectionId
+        )
+        if (updated != current) {
+            viewModel.updateTask(updated)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -208,31 +242,6 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
             ),
             modifier = Modifier.fillMaxWidth()
         )
-
-        Button(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            onClick = {
-                task?.let {
-                    viewModel.updateTask(
-                        it.copy(
-                            title = title,
-                            description = description,
-                            priority = priority,
-                            dueAt = dueAt,
-                            deadlineAt = deadlineAt,
-                            allDay = allDay,
-                            deadlineAllDay = deadlineAllDay,
-                            recurringRule = recurrenceRule.ifBlank { null },
-                            deadlineRecurringRule = deadlineRecurrenceRule.ifBlank { null },
-                            projectId = projectId,
-                            sectionId = sectionId
-                        )
-                    )
-                }
-            }
-        ) {
-            Text(text = "Save")
-        }
 
         Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
