@@ -33,7 +33,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -67,7 +66,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val sections by sectionsFlow.collectAsState()
     val subtasksFlow = remember(projectId, tasks) { viewModel.observeSubtasksForParents(tasks.map { it.id }) }
     val subtasks by subtasksFlow.collectAsState(initial = emptyList())
-    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val projectById = project?.let { mapOf(it.id to it) }.orEmpty()
     val sectionById = sections.associateBy { it.id }
     var projectTitle by remember(projectId) { mutableStateOf<String?>(null) }

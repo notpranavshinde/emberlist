@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -60,7 +59,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
     val parentItems by viewModel.tasks.collectAsState()
     val subtaskItems by viewModel.subtasks.collectAsState()
     val projects by viewModel.projects.collectAsState()
-    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val items = flattenUpcomingItemsWithSubtasks(
         parents = parentItems,
         subtasks = subtaskItems,

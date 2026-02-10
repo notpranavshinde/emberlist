@@ -34,7 +34,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -80,7 +79,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
     val filteredResults = remember(results, activeFilter) {
         results.filter { activeFilter.matches(it, zone) }
     }
-    val expanded = rememberSaveable { mutableStateMapOf<String, Boolean>() }
+    val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val parentResults = filteredResults.filter { it.task.parentTaskId == null }
     val parentIds = parentResults.map { it.task.id }.toSet()
     val orphanSubtasks = filteredResults.filter { it.task.parentTaskId != null && it.task.parentTaskId !in parentIds }
