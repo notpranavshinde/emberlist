@@ -22,6 +22,12 @@ class Converters {
     fun fromReminderType(value: ReminderType?): String? = value?.name
 
     @TypeConverter
+    fun toLocationTriggerType(value: String?): LocationTriggerType? = value?.let { LocationTriggerType.valueOf(it) }
+
+    @TypeConverter
+    fun fromLocationTriggerType(value: LocationTriggerType?): String? = value?.name
+
+    @TypeConverter
     fun toViewPreference(value: String?): ViewPreference? = value?.let { ViewPreference.valueOf(it) }
 
     @TypeConverter

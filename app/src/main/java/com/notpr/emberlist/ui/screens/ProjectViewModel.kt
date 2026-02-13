@@ -13,6 +13,7 @@ import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
+import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -28,7 +29,8 @@ import com.notpr.emberlist.ui.startOfTomorrowMillis
 
 class ProjectViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController
+    private val undoController: UndoController,
+    private val geofenceScheduler: GeofenceScheduler
 ) : ViewModel() {
     fun observeProject(projectId: String): StateFlow<ProjectEntity?> =
         repository.observeProject(projectId)
@@ -41,6 +43,10 @@ class ProjectViewModel(
     fun observeSections(projectId: String): StateFlow<List<SectionEntity>> =
         repository.observeSections(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private fun refreshGeofences() {
+        viewModelScope.launch { geofenceScheduler.refresh() }
+    }
 
     fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>> =
         if (parentIds.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
@@ -71,6 +77,7 @@ class ProjectViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -118,6 +125,7 @@ class ProjectViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -136,6 +144,7 @@ class ProjectViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             }
         }
     }
@@ -162,6 +171,7 @@ class ProjectViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -188,6 +198,7 @@ class ProjectViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -204,6 +215,7 @@ class ProjectViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -212,6 +224,7 @@ class ProjectViewModel(
             repository.deleteTasksByProject(projectId)
             repository.deleteSectionsByProject(projectId)
             repository.deleteProject(projectId)
+            refreshGeofences()
         }
     }
 }

@@ -2,7 +2,12 @@ package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,12 +39,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.data.model.ObjectType
+import com.notpr.emberlist.data.model.LocationTriggerType
+import com.notpr.emberlist.data.model.LocationEntity
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
@@ -51,9 +60,10 @@ import java.time.format.DateTimeFormatter
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.coroutines.flow.flowOf
 
 @Composable
-fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
+fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: TaskDetailViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val taskFlow = remember(taskId) { viewModel.observeTask(taskId) }
@@ -92,6 +102,49 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
     val timeFormatter = DateTimeFormatter.ofPattern("h:mm a")
     val activityFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
     val json = remember { Json { ignoreUnknownKeys = true } }
+    val fineLocationGranted = ContextCompat.checkSelfPermission(
+        context,
+        android.Manifest.permission.ACCESS_FINE_LOCATION
+    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    val backgroundLocationGranted = if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+        true
+    } else {
+        ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+    val locationEnabled = fineLocationGranted && backgroundLocationGranted
+    val canRequestFine = !fineLocationGranted
+    var showBackgroundDialog by remember { mutableStateOf(false) }
+    val requestFineLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && !backgroundLocationGranted) {
+            showBackgroundDialog = true
+        }
+    }
+    val openAppSettings = {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null)
+        )
+        context.startActivity(intent)
+    }
+    val locationFlow = remember(task?.locationId) {
+        task?.locationId?.let { viewModel.observeLocation(it) } ?: flowOf(null)
+    }
+    val location by locationFlow.collectAsState(initial = null)
+    var reminderLocations by remember { mutableStateOf<Map<String, LocationEntity>>(emptyMap()) }
+
+    LaunchedEffect(reminders) {
+        val ids = reminders.mapNotNull { it.locationId }.distinct()
+        reminderLocations = if (ids.isEmpty()) {
+            emptyMap()
+        } else {
+            viewModel.getLocationsByIds(ids).associateBy { it.id }
+        }
+    }
 
     LaunchedEffect(
         task?.id,
@@ -245,16 +298,68 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
 
         Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
 
+        Text(text = "Location", style = MaterialTheme.typography.titleSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val label = location?.label ?: "No location"
+            val triggerLabel = task?.locationTriggerType?.name?.lowercase()?.replaceFirstChar { it.titlecase() }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium)
+                if (triggerLabel != null) {
+                    Text(
+                        text = triggerLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            TextButton(
+                enabled = locationEnabled || canRequestFine,
+                onClick = {
+                    if (!fineLocationGranted) {
+                        requestFineLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    } else if (!backgroundLocationGranted) {
+                        showBackgroundDialog = true
+                    } else {
+                        navController.navigate("locationPicker/${taskId}/task")
+                    }
+                }
+            ) { Text(if (location == null) "Set" else "Change") }
+        }
+        if (location != null) {
+            TextButton(onClick = { task?.let { viewModel.clearTaskLocation(it) } }) {
+                Text("Clear location")
+            }
+        }
+        if (!locationEnabled) {
+            Text(
+                text = "Enable \"Allow all the time\" location access to use this feature.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+
+        Divider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
         Text(text = "Reminders", style = MaterialTheme.typography.titleSmall)
         reminders.forEach { reminder ->
             Row(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                val label = reminder.timeAt?.let {
-                    val dt = Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime()
-                    "At ${dt.format(dateFormatter)} ${dt.format(timeFormatter)}"
-                } ?: "Offset ${reminder.offsetMinutes}m"
+                val label = if (reminder.type == com.notpr.emberlist.data.model.ReminderType.LOCATION) {
+                    val loc = reminder.locationId?.let { reminderLocations[it] }
+                    val triggerLabel = reminder.locationTriggerType?.name?.lowercase()?.replaceFirstChar { it.titlecase() } ?: "Arrive"
+                    "$triggerLabel ${loc?.label ?: "location"}"
+                } else {
+                    reminder.timeAt?.let {
+                        val dt = Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime()
+                        "At ${dt.format(dateFormatter)} ${dt.format(timeFormatter)}"
+                    } ?: "Offset ${reminder.offsetMinutes}m"
+                }
                 Text(text = label, style = MaterialTheme.typography.bodySmall)
                 Switch(
                     checked = reminder.enabled,
@@ -294,6 +399,21 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                 }
             }, modifier = Modifier.weight(1f)) {
                 Text("Add Offset")
+            }
+            TextButton(
+                enabled = locationEnabled || canRequestFine,
+                onClick = {
+                    if (!fineLocationGranted) {
+                        requestFineLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    } else if (!backgroundLocationGranted) {
+                        showBackgroundDialog = true
+                    } else {
+                        navController.navigate("locationPicker/${taskId}/reminder")
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Add Location")
             }
         }
         TextField(
@@ -394,6 +514,23 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String) {
                 }
             }
         }
+    }
+
+    if (showBackgroundDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackgroundDialog = false },
+            title = { Text("Enable background location") },
+            text = { Text("To trigger location reminders when the app is closed, enable \"Allow all the time\" in app settings.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showBackgroundDialog = false
+                    openAppSettings()
+                }) { Text("Open settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackgroundDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 
     if (showDeleteDialog) {

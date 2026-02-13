@@ -205,6 +205,8 @@ class QuickAddViewModel(
                 status = TaskStatus.OPEN,
                 completedAt = null,
                 parentTaskId = null,
+                locationId = null,
+                locationTriggerType = null,
                 order = 0,
                 createdAt = now,
                 updatedAt = now
@@ -219,6 +221,8 @@ class QuickAddViewModel(
                     type = ReminderType.TIME,
                     timeAt = (spec as? ReminderSpec.Absolute)?.timeAtMillis,
                     offsetMinutes = (spec as? ReminderSpec.Offset)?.minutes,
+                    locationId = null,
+                    locationTriggerType = null,
                     enabled = true,
                     createdAt = now
                 )

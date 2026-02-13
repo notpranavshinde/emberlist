@@ -21,6 +21,7 @@ class AlarmReceiver : BroadcastReceiver() {
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
+            db.locationDao(),
             db.activityDao()
         )
 

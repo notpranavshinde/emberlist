@@ -16,6 +16,7 @@ import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.ui.UndoController
+import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +36,8 @@ import java.time.ZoneId
 
 class TodayViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController
+    private val undoController: UndoController,
+    private val geofenceScheduler: GeofenceScheduler
 ) : ViewModel() {
     val tasks: StateFlow<List<TaskListItem>> = combine(
         repository.observeToday(endOfTodayMillis()),
@@ -58,6 +60,10 @@ class TodayViewModel(
 
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private fun refreshGeofences() {
+        viewModelScope.launch { geofenceScheduler.refresh() }
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val subtaskEntities = tasks
@@ -99,6 +105,7 @@ class TodayViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -117,6 +124,7 @@ class TodayViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             }
         }
     }
@@ -143,6 +151,7 @@ class TodayViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -169,6 +178,7 @@ class TodayViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -200,6 +210,7 @@ class TodayViewModel(
                     )
                 )
             }
+            refreshGeofences()
         }
     }
 
@@ -226,6 +237,7 @@ class TodayViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -242,6 +254,7 @@ class TodayViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -261,6 +274,7 @@ class TodayViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -282,6 +296,7 @@ class TodayViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -301,6 +316,7 @@ class TodayViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 }

@@ -51,6 +51,29 @@ object NotificationHelper {
             openTaskIntent(context, taskId)
         )
 
+    fun buildLocationNotification(
+        context: Context,
+        taskId: String,
+        reminderId: String,
+        title: String,
+        message: String
+    ) = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setContentTitle(title)
+        .setContentText(message)
+        .setContentIntent(openTaskIntent(context, taskId))
+        .setAutoCancel(true)
+        .addAction(
+            0,
+            "Complete",
+            NotificationActionReceiver.intentFor(context, NotificationActionReceiver.ACTION_COMPLETE, taskId, reminderId)
+        )
+        .addAction(
+            0,
+            "Open",
+            openTaskIntent(context, taskId)
+        )
+
     private fun openTaskIntent(context: Context, taskId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .setAction(Intent.ACTION_VIEW)

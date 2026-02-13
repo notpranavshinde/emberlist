@@ -13,6 +13,7 @@ import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
+import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +32,8 @@ import java.time.ZoneId
 
 class InboxViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController
+    private val undoController: UndoController,
+    private val geofenceScheduler: GeofenceScheduler
 ) : ViewModel() {
     val tasks: StateFlow<List<TaskListItem>> = combine(
         repository.observeInbox(),
@@ -73,6 +75,10 @@ class InboxViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private fun refreshGeofences() {
+        viewModelScope.launch { geofenceScheduler.refresh() }
+    }
+
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task
@@ -89,6 +95,7 @@ class InboxViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -107,6 +114,7 @@ class InboxViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             }
         }
     }
@@ -133,6 +141,7 @@ class InboxViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -159,6 +168,7 @@ class InboxViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -175,6 +185,7 @@ class InboxViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 }

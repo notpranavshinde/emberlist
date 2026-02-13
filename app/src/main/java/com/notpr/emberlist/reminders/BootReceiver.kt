@@ -17,11 +17,13 @@ class BootReceiver : BroadcastReceiver() {
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
+            db.locationDao(),
             db.activityDao()
         )
         val scheduler = ReminderScheduler(context, repository)
         CoroutineScope(Dispatchers.IO).launch {
             scheduler.rescheduleAll()
+            com.notpr.emberlist.location.GeofenceScheduler(context, repository).refresh()
         }
     }
 }

@@ -15,6 +15,7 @@ import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
+import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.time.Instant
 import java.time.LocalDate
@@ -40,7 +41,8 @@ data class UpcomingItem(
 
 class UpcomingViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController
+    private val undoController: UndoController,
+    private val geofenceScheduler: GeofenceScheduler
 ) : ViewModel() {
     private val startOfTomorrow = startOfTomorrowMillis()
 
@@ -82,6 +84,10 @@ class UpcomingViewModel(
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private fun refreshGeofences() {
+        viewModelScope.launch { geofenceScheduler.refresh() }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private val subtaskEntities = tasks
         .map { list -> list.map { it.item.task.id } }
@@ -122,6 +128,7 @@ class UpcomingViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -140,6 +147,7 @@ class UpcomingViewModel(
                         }
                     )
                 )
+                refreshGeofences()
             }
         }
     }
@@ -163,6 +171,7 @@ class UpcomingViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -193,6 +202,7 @@ class UpcomingViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -219,6 +229,7 @@ class UpcomingViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -235,6 +246,7 @@ class UpcomingViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -252,6 +264,7 @@ class UpcomingViewModel(
                     undo = { tasks.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -271,6 +284,7 @@ class UpcomingViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -290,6 +304,7 @@ class UpcomingViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 

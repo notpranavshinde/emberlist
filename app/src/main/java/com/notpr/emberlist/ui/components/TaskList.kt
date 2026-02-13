@@ -81,7 +81,11 @@ fun TaskRow(
         Modifier.fillMaxWidth()
     }
 
-    val indentPadding = if (item.isSubtask) 24.dp * (item.indentLevel.coerceAtLeast(1)) else 0.dp
+    val indentPadding = if (item.isSubtask && item.task.parentTaskId != null) {
+        24.dp * (item.indentLevel.coerceAtLeast(1))
+    } else {
+        0.dp
+    }
     Column(
         modifier = rowModifier
             .pointerInput(item.task.id, onReschedule, onDelete) {

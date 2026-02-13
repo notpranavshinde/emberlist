@@ -6,6 +6,7 @@ import android.net.Uri
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.data.model.ProjectEntity
+import com.notpr.emberlist.data.model.LocationEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
@@ -24,6 +25,7 @@ data class BackupPayload(
     val sections: List<SectionEntity>,
     val tasks: List<TaskEntity>,
     val reminders: List<ReminderEntity>,
+    val locations: List<LocationEntity>,
     val activity: List<ActivityEventEntity>
 )
 
@@ -36,6 +38,7 @@ class BackupManager(private val database: EmberlistDatabase) {
             sections = database.sectionDao().getAll(),
             tasks = database.taskDao().getAll(),
             reminders = database.reminderDao().getAll(),
+            locations = database.locationDao().getAll(),
             activity = database.activityDao().getAll()
         )
         val output = json.encodeToString(payload)
@@ -56,6 +59,7 @@ class BackupManager(private val database: EmberlistDatabase) {
         payload.sections.forEach { database.sectionDao().upsert(it) }
         payload.tasks.forEach { database.taskDao().upsert(it) }
         payload.reminders.forEach { database.reminderDao().upsert(it) }
+        payload.locations.forEach { database.locationDao().upsert(it) }
         payload.activity.forEach { database.activityDao().insert(it) }
     }
 
@@ -65,6 +69,7 @@ class BackupManager(private val database: EmberlistDatabase) {
             sections = database.sectionDao().getAll(),
             tasks = database.taskDao().getAll(),
             reminders = database.reminderDao().getAll(),
+            locations = database.locationDao().getAll(),
             activity = database.activityDao().getAll()
         )
         val output = json.encodeToString(payload)
@@ -87,6 +92,7 @@ class BackupManager(private val database: EmberlistDatabase) {
         payload.sections.forEach { database.sectionDao().upsert(it) }
         payload.tasks.forEach { database.taskDao().upsert(it) }
         payload.reminders.forEach { database.reminderDao().upsert(it) }
+        payload.locations.forEach { database.locationDao().upsert(it) }
         payload.activity.forEach { database.activityDao().insert(it) }
     }
 }

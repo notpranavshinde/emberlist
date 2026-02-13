@@ -62,6 +62,7 @@ class ReminderScheduler(
     }
 
     private fun computeTriggerAt(task: TaskEntity, reminder: ReminderEntity): Long? {
+        if (reminder.type != com.notpr.emberlist.data.model.ReminderType.TIME) return null
         return reminder.timeAt
             ?: reminder.offsetMinutes?.let { offset ->
                 task.dueAt?.minus(TimeUnit.MINUTES.toMillis(offset.toLong()))

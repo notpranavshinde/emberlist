@@ -17,6 +17,7 @@ class AppContainer(context: Context) {
         database.sectionDao(),
         database.taskDao(),
         database.reminderDao(),
+        database.locationDao(),
         database.activityDao()
     )
 
@@ -27,6 +28,8 @@ class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(settingsStore)
 
     val reminderScheduler = ReminderScheduler(appContext, repository)
+
+    val geofenceScheduler = com.notpr.emberlist.location.GeofenceScheduler(appContext, repository)
 
     val undoController = UndoController()
 }

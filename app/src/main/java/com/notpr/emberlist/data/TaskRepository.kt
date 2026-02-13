@@ -1,6 +1,7 @@
 package com.notpr.emberlist.data
 
 import com.notpr.emberlist.data.model.ActivityEventEntity
+import com.notpr.emberlist.data.model.LocationEntity
 import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
@@ -21,12 +22,15 @@ interface TaskRepository {
     fun observeSections(projectId: String): Flow<List<SectionEntity>>
     fun observeAllSections(): Flow<List<SectionEntity>>
     fun observeTask(taskId: String): Flow<TaskEntity?>
+    suspend fun getTask(taskId: String): TaskEntity?
     fun observeSubtasks(parentId: String): Flow<List<TaskEntity>>
     fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>>
     fun observeReminders(taskId: String): Flow<List<ReminderEntity>>
+    suspend fun getReminder(reminderId: String): ReminderEntity?
     fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>>
     fun observeAllActivity(): Flow<List<ActivityEventEntity>>
     fun search(query: String): Flow<List<TaskEntity>>
+    fun observeLocation(locationId: String): Flow<LocationEntity?>
 
     suspend fun upsertProject(project: ProjectEntity)
     suspend fun upsertSection(section: SectionEntity)
@@ -42,6 +46,12 @@ interface TaskRepository {
     suspend fun upsertReminder(reminder: ReminderEntity)
     suspend fun deleteReminder(reminderId: String)
     suspend fun insertActivity(event: ActivityEventEntity)
+    suspend fun upsertLocation(location: LocationEntity)
+    suspend fun deleteLocation(locationId: String)
+    suspend fun getLocation(locationId: String): LocationEntity?
+    suspend fun getLocationsByIds(ids: List<String>): List<LocationEntity>
 
     suspend fun getEnabledReminders(): List<ReminderEntity>
+    suspend fun getEnabledLocationReminders(): List<ReminderEntity>
+    suspend fun getOpenTasksWithLocation(): List<TaskEntity>
 }

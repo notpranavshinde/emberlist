@@ -13,6 +13,7 @@ import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.ui.startOfTodayMillis
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
+import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +34,8 @@ import java.time.ZoneId
 
 class SearchViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController
+    private val undoController: UndoController,
+    private val geofenceScheduler: GeofenceScheduler
 ) : ViewModel() {
     private val query = MutableStateFlow("")
 
@@ -58,6 +60,10 @@ class SearchViewModel(
 
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private fun refreshGeofences() {
+        viewModelScope.launch { geofenceScheduler.refresh() }
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private val subtaskEntities = results
@@ -109,6 +115,7 @@ class SearchViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -135,6 +142,7 @@ class SearchViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -161,6 +169,7 @@ class SearchViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -177,6 +186,7 @@ class SearchViewModel(
                     }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -194,6 +204,7 @@ class SearchViewModel(
                     undo = { tasks.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -213,6 +224,7 @@ class SearchViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 
@@ -232,6 +244,7 @@ class SearchViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
+            refreshGeofences()
         }
     }
 }

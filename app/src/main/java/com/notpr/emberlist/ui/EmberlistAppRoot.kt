@@ -48,6 +48,8 @@ import com.notpr.emberlist.ui.screens.SettingsScreen
 import com.notpr.emberlist.ui.screens.TaskDetailScreen
 import com.notpr.emberlist.ui.screens.TodayScreen
 import com.notpr.emberlist.ui.screens.UpcomingScreen
+import com.notpr.emberlist.ui.screens.LocationPickerScreen
+import com.notpr.emberlist.ui.screens.LocationPickerMode
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddSheet
 
 sealed class NavRoute(val route: String, val labelRes: Int, val icon: @Composable () -> Unit) {
@@ -141,7 +143,13 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
             }
             composable("task/{taskId}") { backStack ->
                 val taskId = backStack.arguments?.getString("taskId") ?: return@composable
-                TaskDetailScreen(padding, taskId)
+                TaskDetailScreen(padding, taskId, navController)
+            }
+            composable("locationPicker/{taskId}/{mode}") { backStack ->
+                val taskId = backStack.arguments?.getString("taskId") ?: return@composable
+                val modeArg = backStack.arguments?.getString("mode") ?: "task"
+                val mode = if (modeArg == "reminder") LocationPickerMode.REMINDER else LocationPickerMode.TASK
+                LocationPickerScreen(padding, navController, taskId, mode)
             }
             composable("activity") { ActivityScreen(padding, navController) }
             composable("settings") { SettingsScreen(padding) }

@@ -15,7 +15,10 @@ enum class Priority { P1, P2, P3, P4 }
 enum class TaskStatus { OPEN, COMPLETED, ARCHIVED }
 
 @Serializable
-enum class ReminderType { TIME }
+enum class ReminderType { TIME, LOCATION }
+
+@Serializable
+enum class LocationTriggerType { ARRIVE, LEAVE }
 
 @Serializable
 enum class ActivityType { CREATED, UPDATED, COMPLETED, UNCOMPLETED, ARCHIVED, UNARCHIVED, DELETED, REMINDER_SCHEDULED }
@@ -84,7 +87,22 @@ data class TaskEntity(
     val status: TaskStatus,
     val completedAt: Long?,
     val parentTaskId: String?,
+    val locationId: String?,
+    val locationTriggerType: LocationTriggerType?,
     val `order`: Int,
+    val createdAt: Long,
+    val updatedAt: Long
+)
+
+@Entity(tableName = "locations")
+@Serializable
+data class LocationEntity(
+    @PrimaryKey val id: String,
+    val label: String,
+    val address: String,
+    val lat: Double,
+    val lng: Double,
+    val radiusMeters: Int,
     val createdAt: Long,
     val updatedAt: Long
 )
@@ -104,6 +122,8 @@ data class ReminderEntity(
     val type: ReminderType,
     val timeAt: Long?,
     val offsetMinutes: Int?,
+    val locationId: String?,
+    val locationTriggerType: LocationTriggerType?,
     val enabled: Boolean,
     val createdAt: Long
 )

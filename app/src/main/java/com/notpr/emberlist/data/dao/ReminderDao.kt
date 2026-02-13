@@ -16,8 +16,14 @@ interface ReminderDao {
     @Query("SELECT * FROM reminders WHERE enabled = 1")
     suspend fun getEnabled(): List<ReminderEntity>
 
+    @Query("SELECT * FROM reminders WHERE enabled = 1 AND type = 'LOCATION'")
+    suspend fun getEnabledLocationReminders(): List<ReminderEntity>
+
     @Query("SELECT * FROM reminders")
     suspend fun getAll(): List<ReminderEntity>
+
+    @Query("SELECT * FROM reminders WHERE id = :id")
+    suspend fun getById(id: String): ReminderEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(reminder: ReminderEntity)

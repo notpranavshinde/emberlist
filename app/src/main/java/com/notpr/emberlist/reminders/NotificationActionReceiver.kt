@@ -24,6 +24,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
+            db.locationDao(),
             db.activityDao()
         )
 
@@ -34,6 +35,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                     val updated = task.copy(status = TaskStatus.COMPLETED, completedAt = System.currentTimeMillis())
                     repository.upsertTask(updated)
                     logTaskActivity(repository, ActivityType.COMPLETED, updated)
+                    com.notpr.emberlist.location.GeofenceScheduler(context, repository).refresh()
                 }
                 ACTION_SNOOZE -> {
                     val scheduler = ReminderScheduler(context, repository)
@@ -44,6 +46,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         type = com.notpr.emberlist.data.model.ReminderType.TIME,
                         timeAt = System.currentTimeMillis() + 10 * 60 * 1000,
                         offsetMinutes = null,
+                        locationId = null,
+                        locationTriggerType = null,
                         enabled = true,
                         createdAt = System.currentTimeMillis()
                     )
