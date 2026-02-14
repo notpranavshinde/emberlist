@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import androidx.annotation.VisibleForTesting
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -61,7 +62,8 @@ class ReminderScheduler(
         }
     }
 
-    private fun computeTriggerAt(task: TaskEntity, reminder: ReminderEntity): Long? {
+    @VisibleForTesting
+    internal fun computeTriggerAt(task: TaskEntity, reminder: ReminderEntity): Long? {
         if (reminder.type != com.notpr.emberlist.data.model.ReminderType.TIME) return null
         return reminder.timeAt
             ?: reminder.offsetMinutes?.let { offset ->

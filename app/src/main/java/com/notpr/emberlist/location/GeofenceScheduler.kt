@@ -161,43 +161,6 @@ class GeofenceScheduler(
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
-    private fun rankTriggers(
-        triggers: List<LocationTrigger>,
-        lastLocation: Location?
-    ): List<LocationTrigger> {
-        return triggers.sortedWith(compareBy<LocationTrigger> { trigger ->
-            priorityGroup(trigger, lastLocation)
-        }.thenBy { trigger ->
-            trigger.dueAt ?: Long.MAX_VALUE
-        }.thenBy { trigger ->
-            distanceMeters(lastLocation, trigger) ?: Double.MAX_VALUE
-        })
-    }
-
-    private fun priorityGroup(trigger: LocationTrigger, lastLocation: Location?): Int {
-        val hasDue = trigger.dueAt != null
-        val hasDistance = distanceMeters(lastLocation, trigger) != null
-        return when {
-            hasDue && hasDistance -> 0
-            hasDue -> 1
-            hasDistance -> 2
-            else -> 3
-        }
-    }
-
-    private fun distanceMeters(lastLocation: Location?, trigger: LocationTrigger): Double? {
-        if (lastLocation == null) return null
-        val results = FloatArray(1)
-        Location.distanceBetween(
-            lastLocation.latitude,
-            lastLocation.longitude,
-            trigger.lat,
-            trigger.lng,
-            results
-        )
-        return results.first().toDouble()
-    }
-
     @SuppressLint("MissingPermission")
     private fun getLastLocation(): Location? {
         return try {
@@ -207,7 +170,7 @@ class GeofenceScheduler(
         }
     }
 
-    private data class LocationTrigger(
+    internal data class LocationTrigger(
         val id: String,
         val taskId: String,
         val reminderId: String?,
@@ -221,4 +184,47 @@ class GeofenceScheduler(
     companion object {
         private const val MAX_GEOFENCES = 100
     }
+}
+
+internal fun rankTriggers(
+    triggers: List<GeofenceScheduler.LocationTrigger>,
+    lastLocation: Location?
+): List<GeofenceScheduler.LocationTrigger> {
+    return triggers.sortedWith(compareBy<GeofenceScheduler.LocationTrigger> { trigger ->
+        priorityGroup(trigger, lastLocation)
+    }.thenBy { trigger ->
+        trigger.dueAt ?: Long.MAX_VALUE
+    }.thenBy { trigger ->
+        distanceMeters(lastLocation, trigger) ?: Double.MAX_VALUE
+    })
+}
+
+internal fun priorityGroup(
+    trigger: GeofenceScheduler.LocationTrigger,
+    lastLocation: Location?
+): Int {
+    val hasDue = trigger.dueAt != null
+    val hasDistance = distanceMeters(lastLocation, trigger) != null
+    return when {
+        hasDue && hasDistance -> 0
+        hasDue -> 1
+        hasDistance -> 2
+        else -> 3
+    }
+}
+
+internal fun distanceMeters(
+    lastLocation: Location?,
+    trigger: GeofenceScheduler.LocationTrigger
+): Double? {
+    if (lastLocation == null) return null
+    val results = FloatArray(1)
+    Location.distanceBetween(
+        lastLocation.latitude,
+        lastLocation.longitude,
+        trigger.lat,
+        trigger.lng,
+        results
+    )
+    return results.first().toDouble()
 }

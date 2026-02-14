@@ -7,9 +7,13 @@ import com.notpr.emberlist.data.model.TaskStatus
 import java.time.Instant
 import java.util.UUID
 
-suspend fun completeTaskAndSubtasks(repository: TaskRepository, task: TaskEntity) {
-    completeTaskWithRecurrence(repository, task)
-    val now = System.currentTimeMillis()
+suspend fun completeTaskAndSubtasks(
+    repository: TaskRepository,
+    task: TaskEntity,
+    nowProvider: () -> Long = System::currentTimeMillis
+) {
+    completeTaskWithRecurrence(repository, task, nowProvider)
+    val now = nowProvider()
     val subtasks = repository.getSubtasks(task.id)
     if (subtasks.isEmpty()) return
     subtasks.forEach { subtask ->
@@ -26,8 +30,12 @@ suspend fun completeTaskAndSubtasks(repository: TaskRepository, task: TaskEntity
     }
 }
 
-suspend fun completeTaskWithRecurrence(repository: TaskRepository, task: TaskEntity) {
-    val now = System.currentTimeMillis()
+suspend fun completeTaskWithRecurrence(
+    repository: TaskRepository,
+    task: TaskEntity,
+    nowProvider: () -> Long = System::currentTimeMillis
+) {
+    val now = nowProvider()
     repository.upsertTask(
         task.copy(
             status = TaskStatus.COMPLETED,
