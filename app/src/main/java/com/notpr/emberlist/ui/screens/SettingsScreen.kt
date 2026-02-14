@@ -145,14 +145,6 @@ fun SettingsScreen(padding: PaddingValues) {
         }) {
             Text("Manage in Settings")
         }
-
-        OutlinedTextField(
-            value = settings.defaultReminderOffset.toString(),
-            onValueChange = { value -> value.toIntOrNull()?.let(viewModel::updateDefaultReminderOffset) },
-            label = { Text("Default reminder offset (minutes)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
         SectionHeader(text = "Data")
         RowSwitch(
             label = "Replace on import",

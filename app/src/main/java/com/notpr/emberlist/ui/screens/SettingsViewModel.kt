@@ -15,7 +15,7 @@ class SettingsViewModel(
     private val repository: TaskRepository
 ) : ViewModel() {
     val settings: StateFlow<SettingsState> = settingsRepository.settings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState(1, false, "Ember", 30, false))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState(1, false, "Ember", false))
 
     fun updateWeekStart(value: Int) {
         viewModelScope.launch { settingsRepository.updateWeekStart(value) }
@@ -27,10 +27,6 @@ class SettingsViewModel(
 
     fun updateAccent(value: String) {
         viewModelScope.launch { settingsRepository.updateAccent(value) }
-    }
-
-    fun updateDefaultReminderOffset(value: Int) {
-        viewModelScope.launch { settingsRepository.updateDefaultReminderOffset(value) }
     }
 
     fun updateAutoBackupDaily(value: Boolean) {
