@@ -678,7 +678,7 @@ private fun DuePicker(
                 TextButton(
                     onClick = {
                         val base = date ?: LocalDate.now(zone)
-                        DatePickerDialog(
+                        val dialog = DatePickerDialog(
                             context,
                             { _, year, month, day ->
                                 val pickedDate = LocalDate.of(year, month + 1, day)
@@ -690,7 +690,15 @@ private fun DuePicker(
                             base.year,
                             base.monthValue - 1,
                             base.dayOfMonth
-                        ).show()
+                        )
+                        dialog.setButton(
+                            android.content.DialogInterface.BUTTON_NEUTRAL,
+                            "None"
+                        ) { _, _ ->
+                            onChange(null)
+                            onAllDayChange(false)
+                        }
+                        dialog.show()
                     }
                 ) { Text("Pick date") }
                 if (!allDay) {

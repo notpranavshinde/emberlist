@@ -208,6 +208,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
     private fun parseRecurrence(input: String): String? {
         val everyDay = Regex("every\\s*day|everyday", RegexOption.IGNORE_CASE)
         val everyWeekday = Regex("every\\s+weekday", RegexOption.IGNORE_CASE)
+        val everyOther = Regex("every\\s+other\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
         val everyInterval = Regex("every\\s+(\\d+)\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
         val monthlyOn = Regex("every\\s+month\\s+on\\s+the\\s+(\\d+)(st|nd|rd|th)?", RegexOption.IGNORE_CASE)
         val monthlyEveryNth = Regex("every\\s+(\\d+)(st|nd|rd|th)\\b", RegexOption.IGNORE_CASE)
@@ -246,6 +247,17 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
                     else -> "MO"
                 }
                 "FREQ=WEEKLY;BYDAY=$byDay"
+            }
+            everyOther.containsMatchIn(input) -> {
+                val unit = (everyOther.find(input) ?: return null).groupValues[1].lowercase()
+                val freq = when (unit) {
+                    "day" -> "DAILY"
+                    "week" -> "WEEKLY"
+                    "month" -> "MONTHLY"
+                    "year" -> "YEARLY"
+                    else -> return null
+                }
+                "FREQ=$freq;INTERVAL=2"
             }
             everyInterval.containsMatchIn(input) -> {
                 val match = everyInterval.find(input) ?: return null

@@ -50,14 +50,14 @@ interface TaskDao {
     @Query("SELECT * FROM tasks")
     suspend fun getAll(): List<TaskEntity>
 
-    @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId ORDER BY `order` ASC")
-    fun observeSubtasks(parentId: String): Flow<List<TaskEntity>>
+    @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId AND status = :status ORDER BY `order` ASC")
+    fun observeSubtasks(parentId: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE parentTaskId IN (:parentIds) ORDER BY parentTaskId, `order` ASC")
-    fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>>
+    @Query("SELECT * FROM tasks WHERE parentTaskId IN (:parentIds) AND status = :status ORDER BY parentTaskId, `order` ASC")
+    fun observeSubtasksForParents(parentIds: List<String>, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId ORDER BY `order` ASC")
-    suspend fun getSubtasks(parentId: String): List<TaskEntity>
+    @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId AND status = :status ORDER BY `order` ASC")
+    suspend fun getSubtasks(parentId: String, status: TaskStatus = TaskStatus.OPEN): List<TaskEntity>
 
     @Query("SELECT * FROM tasks WHERE title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
     fun search(query: String): Flow<List<TaskEntity>>

@@ -86,4 +86,40 @@ class QuickAddParserTest {
         assertEquals("FREQ=YEARLY", result.recurrenceRule)
         assertNotNull(result.dueAt)
     }
+
+    @Test
+    fun parseEveryOtherDay() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Take meds every other day", now)
+        assertEquals("FREQ=DAILY;INTERVAL=2", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherWeek() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Grocery run every other week", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherMonth() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Pay rent every other month", now)
+        assertEquals("FREQ=MONTHLY;INTERVAL=2", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherYear() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Review plan every other year", now)
+        assertEquals("FREQ=YEARLY;INTERVAL=2", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
 }
