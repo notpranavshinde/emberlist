@@ -63,6 +63,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
     val results by viewModel.results.collectAsState()
     val subtaskItems by viewModel.subtasks.collectAsState()
     val projects by viewModel.projects.collectAsState()
+    val reminderTaskIds by viewModel.reminderTaskIds.collectAsState()
     var query by remember { mutableStateOf("") }
     var searchActive by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
@@ -76,9 +77,17 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
     var showPriorityPicker by remember { mutableStateOf(false) }
     var showProjectPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var activeFilter by remember { mutableStateOf(SmartFilter.ALL) }
-    val filteredResults = remember(results, activeFilter) {
-        results.filter { activeFilter.matches(it, zone) }
+    var activeFilters by remember { mutableStateOf(setOf(SmartFilter.ALL)) }
+    val filteredResults = remember(results, activeFilters, reminderTaskIds) {
+        if (activeFilters.isEmpty() || activeFilters.contains(SmartFilter.ALL)) {
+            results
+        } else {
+            results.filter { item ->
+                activeFilters.all { filter ->
+                    filter.matches(item, zone, reminderTaskIds)
+                }
+            }
+        }
     }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val dragState = remember { DragToSubtaskState() }
@@ -193,9 +202,20 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
         ) {
             items(SmartFilter.values()) { filter ->
-                val selected = filter == activeFilter
+                val selected = activeFilters.contains(filter)
                 AssistChip(
-                    onClick = { activeFilter = filter },
+                    onClick = {
+                        activeFilters = if (filter == SmartFilter.ALL) {
+                            setOf(SmartFilter.ALL)
+                        } else {
+                            val next = if (activeFilters.contains(filter)) {
+                                activeFilters - filter
+                            } else {
+                                activeFilters - SmartFilter.ALL + filter
+                            }
+                            if (next.isEmpty()) setOf(SmartFilter.ALL) else next
+                        }
+                    },
                     colors = AssistChipDefaults.assistChipColors(
                         containerColor = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                         else MaterialTheme.colorScheme.surfaceVariant,
@@ -345,10 +365,13 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
 
 }
 
-private enum class SmartFilter(val label: String, val matches: (com.notpr.emberlist.ui.components.TaskListItem, ZoneId) -> Boolean) {
-    ALL("All", { _, _ -> true }),
-    OVERDUE("Overdue", { item, _ -> item.isOverdue }),
-    TODAY("Today", { item, zone ->
+private enum class SmartFilter(
+    val label: String,
+    val matches: (com.notpr.emberlist.ui.components.TaskListItem, ZoneId, Set<String>) -> Boolean
+) {
+    ALL("All", { _, _, _ -> true }),
+    OVERDUE("Overdue", { item, _, _ -> item.isOverdue }),
+    TODAY("Today", { item, zone, _, _ ->
         val dueAt = item.task.dueAt
         if (dueAt == null) {
             false
@@ -359,7 +382,7 @@ private enum class SmartFilter(val label: String, val matches: (com.notpr.emberl
             dueAt in start..end
         }
     }),
-    THIS_WEEK("This Week", { item, zone ->
+    THIS_WEEK("This Week", { item, zone, _, _ ->
         val dueAt = item.task.dueAt
         if (dueAt == null) {
             false
@@ -371,11 +394,19 @@ private enum class SmartFilter(val label: String, val matches: (com.notpr.emberl
             dueAt in start..end
         }
     }),
-    HIGH_PRIORITY("High", { item, _ ->
+    HIGH_PRIORITY("High", { item, _, _ ->
         item.task.priority == com.notpr.emberlist.data.model.Priority.P1 ||
             item.task.priority == com.notpr.emberlist.data.model.Priority.P2
     }),
-    INBOX("Inbox", { item, _ -> item.task.projectId == null });
+    INBOX("Inbox", { item, _, _ -> item.task.projectId == null }),
+    NO_DUE("No Due", { item, _, _ -> item.task.dueAt == null }),
+    HAS_DEADLINE("Has Deadline", { item, _, _ -> item.task.deadlineAt != null }),
+    NO_DEADLINE("No Deadline", { item, _, _ -> item.task.deadlineAt == null }),
+    RECURRING(
+        "Recurring",
+        { item, _, _ -> item.task.recurringRule != null || item.task.deadlineRecurringRule != null }
+    ),
+    HAS_REMINDER("Has Reminder", { item, _, reminderTaskIds -> reminderTaskIds.contains(item.task.id) });
 }
 
 @OptIn(ExperimentalFoundationApi::class)

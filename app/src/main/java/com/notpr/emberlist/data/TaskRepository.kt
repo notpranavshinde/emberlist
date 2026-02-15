@@ -26,6 +26,7 @@ interface TaskRepository {
     fun observeSubtasks(parentId: String): Flow<List<TaskEntity>>
     fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>>
     fun observeReminders(taskId: String): Flow<List<ReminderEntity>>
+    fun observeEnabledReminders(): Flow<List<ReminderEntity>>
     suspend fun getReminder(reminderId: String): ReminderEntity?
     fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>>
     fun observeAllActivity(): Flow<List<ActivityEventEntity>>

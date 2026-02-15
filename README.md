@@ -21,6 +21,7 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Notification actions (complete, snooze)
 - Swipe actions on tasks (reschedule via date picker, delete with confirmation)
 - Search
+- Search smart filters (multi-select)
 - Backup export/import (JSON)
 - Clear completed tasks
 

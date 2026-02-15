@@ -36,10 +36,16 @@ object RecurrenceEngine {
             "DAILY" -> currentDate.plusDays(interval.toLong())
             "WEEKLY" -> {
                 if (!byDay.isNullOrEmpty()) {
-                    val next = byDay
-                        .map { currentDate.with(TemporalAdjusters.next(it)) }
-                        .minOrNull()
-                    next ?: currentDate.plusWeeks(interval.toLong())
+                    val sortedDays = byDay.distinct().sortedBy { it.value }
+                    val currentDow = currentDate.dayOfWeek
+                    val laterDay = sortedDays.firstOrNull { it.value > currentDow.value }
+                    if (laterDay != null) {
+                        currentDate.with(TemporalAdjusters.next(laterDay))
+                    } else {
+                        val firstDay = sortedDays.first()
+                        val baseNext = currentDate.with(TemporalAdjusters.next(firstDay))
+                        if (interval > 1) baseNext.plusWeeks((interval - 1).toLong()) else baseNext
+                    }
                 } else {
                     currentDate.plusWeeks(interval.toLong())
                 }

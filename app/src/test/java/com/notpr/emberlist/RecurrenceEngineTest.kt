@@ -24,4 +24,31 @@ class RecurrenceEngineTest {
         val expected = LocalDate.of(2026, 2, 9).atStartOfDay(zone).toInstant().toEpochMilli()
         assertEquals(expected, next)
     }
+
+    @Test
+    fun everyOtherMonday() {
+        val zone = ZoneId.of("UTC")
+        val base = LocalDate.of(2026, 2, 2).atStartOfDay(zone).toInstant().toEpochMilli() // Monday
+        val next = RecurrenceEngine.nextDue(base, "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", zone)
+        val expected = LocalDate.of(2026, 2, 16).atStartOfDay(zone).toInstant().toEpochMilli()
+        assertEquals(expected, next)
+    }
+
+    @Test
+    fun everyOtherWeekMultipleDays() {
+        val zone = ZoneId.of("UTC")
+        val base = LocalDate.of(2026, 2, 3).atStartOfDay(zone).toInstant().toEpochMilli() // Tuesday
+        val next = RecurrenceEngine.nextDue(base, "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH", zone)
+        val expected = LocalDate.of(2026, 2, 5).atStartOfDay(zone).toInstant().toEpochMilli() // Thursday same week
+        assertEquals(expected, next)
+    }
+
+    @Test
+    fun everyOtherWeekWrapsToNextIntervalWeek() {
+        val zone = ZoneId.of("UTC")
+        val base = LocalDate.of(2026, 2, 5).atStartOfDay(zone).toInstant().toEpochMilli() // Thursday
+        val next = RecurrenceEngine.nextDue(base, "FREQ=WEEKLY;INTERVAL=2;BYDAY=TU,TH", zone)
+        val expected = LocalDate.of(2026, 2, 17).atStartOfDay(zone).toInstant().toEpochMilli() // Tuesday two weeks later
+        assertEquals(expected, next)
+    }
 }

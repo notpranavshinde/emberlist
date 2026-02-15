@@ -14,6 +14,9 @@ interface ReminderDao {
     fun observeForTask(taskId: String): Flow<List<ReminderEntity>>
 
     @Query("SELECT * FROM reminders WHERE enabled = 1")
+    fun observeEnabled(): Flow<List<ReminderEntity>>
+
+    @Query("SELECT * FROM reminders WHERE enabled = 1")
     suspend fun getEnabled(): List<ReminderEntity>
 
     @Query("SELECT * FROM reminders WHERE enabled = 1 AND type = 'LOCATION'")

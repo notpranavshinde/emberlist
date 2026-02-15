@@ -61,6 +61,8 @@ class TaskRepositoryImpl(
 
     override fun observeReminders(taskId: String): Flow<List<ReminderEntity>> = reminderDao.observeForTask(taskId)
 
+    override fun observeEnabledReminders(): Flow<List<ReminderEntity>> = reminderDao.observeEnabled()
+
     override suspend fun getReminder(reminderId: String): ReminderEntity? = reminderDao.getById(reminderId)
 
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = activityDao.observeForObject(objectId)

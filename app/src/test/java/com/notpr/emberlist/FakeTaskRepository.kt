@@ -36,6 +36,8 @@ class FakeTaskRepository : TaskRepository {
         flowOf(tasks.values.filter { it.parentTaskId in parentIds })
     override fun observeReminders(taskId: String): Flow<List<ReminderEntity>> =
         flowOf(reminders.values.filter { it.taskId == taskId })
+    override fun observeEnabledReminders(): Flow<List<ReminderEntity>> =
+        flowOf(reminders.values.filter { it.enabled })
     override suspend fun getReminder(reminderId: String): ReminderEntity? = reminders[reminderId]
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = flowOf(activities)
