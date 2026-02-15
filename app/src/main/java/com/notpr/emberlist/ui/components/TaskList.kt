@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.notpr.emberlist.data.model.Priority
@@ -165,10 +166,17 @@ fun TaskRow(
                 onToggle = onToggle
             )
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                val isCompleted = item.task.status == TaskStatus.COMPLETED
                 Text(
                     text = item.task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        textDecoration = if (isCompleted) TextDecoration.LineThrough else null
+                    ),
+                    color = if (isCompleted) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
                 )
                 TaskMetaLine(item = item)
             }

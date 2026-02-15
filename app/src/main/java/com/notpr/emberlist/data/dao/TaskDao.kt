@@ -18,6 +18,20 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE parentTaskId IS NULL AND status = :status AND dueAt IS NOT NULL AND dueAt <= :endOfDay ORDER BY dueAt ASC")
     fun observeToday(status: TaskStatus = TaskStatus.OPEN, endOfDay: Long): Flow<List<TaskEntity>>
 
+    @Query(
+        "SELECT * FROM tasks " +
+            "WHERE parentTaskId IS NULL " +
+            "AND status = :status " +
+            "AND completedAt IS NOT NULL " +
+            "AND completedAt BETWEEN :startOfDay AND :endOfDay " +
+            "ORDER BY completedAt DESC"
+    )
+    fun observeCompletedToday(
+        startOfDay: Long,
+        endOfDay: Long,
+        status: TaskStatus = TaskStatus.COMPLETED
+    ): Flow<List<TaskEntity>>
+
     @Query("SELECT * FROM tasks WHERE parentTaskId IS NULL AND status = :status AND dueAt IS NOT NULL AND dueAt >= :startOfTomorrow ORDER BY dueAt ASC")
     fun observeUpcoming(status: TaskStatus = TaskStatus.OPEN, startOfTomorrow: Long): Flow<List<TaskEntity>>
 

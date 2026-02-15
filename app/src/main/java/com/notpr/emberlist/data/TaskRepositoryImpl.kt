@@ -26,6 +26,9 @@ class TaskRepositoryImpl(
 
     override fun observeToday(endOfDay: Long): Flow<List<TaskEntity>> = taskDao.observeToday(endOfDay = endOfDay)
 
+    override fun observeCompletedToday(startOfDay: Long, endOfDay: Long): Flow<List<TaskEntity>> =
+        taskDao.observeCompletedToday(startOfDay = startOfDay, endOfDay = endOfDay)
+
     override fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>> =
         taskDao.observeUpcoming(startOfTomorrow = startOfTomorrow)
 

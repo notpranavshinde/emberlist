@@ -15,6 +15,7 @@
 - `.\gradlew.bat connectedAndroidTest` / `./gradlew connectedAndroidTest`  
   Runs instrumentation tests on a connected device/emulator.
 
+
 ## Coding Style & Naming Conventions
 - Kotlin + Jetpack Compose; 4‑space indentation.
 - Use `PascalCase` for classes, `camelCase` for functions/variables, `UPPER_SNAKE_CASE` for constants.

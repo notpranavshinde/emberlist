@@ -111,6 +111,11 @@ fun SettingsScreen(padding: PaddingValues) {
             checked = settings.autoBackupDaily,
             onCheckedChange = viewModel::updateAutoBackupDaily
         )
+        RowSwitch(
+            label = "Show completed in Today",
+            checked = settings.showCompletedToday,
+            onCheckedChange = viewModel::updateShowCompletedToday
+        )
 
         val fineGranted = ContextCompat.checkSelfPermission(
             context,

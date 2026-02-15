@@ -18,6 +18,8 @@ class FakeTaskRepository : TaskRepository {
 
     override fun observeInbox(): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
     override fun observeToday(endOfDay: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
+    override fun observeCompletedToday(startOfDay: Long, endOfDay: Long): Flow<List<TaskEntity>> =
+        flowOf(tasks.values.toList())
     override fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
     override fun observeOverdueRecurring(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(emptyList())
     override fun observeProjects(): Flow<List<ProjectEntity>> = flowOf(emptyList())

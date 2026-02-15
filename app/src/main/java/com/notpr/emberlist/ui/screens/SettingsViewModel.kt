@@ -15,7 +15,11 @@ class SettingsViewModel(
     private val repository: TaskRepository
 ) : ViewModel() {
     val settings: StateFlow<SettingsState> = settingsRepository.settings
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsState(1, false, "Ember", false))
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            SettingsState(1, false, "Ember", false, false)
+        )
 
     fun updateWeekStart(value: Int) {
         viewModelScope.launch { settingsRepository.updateWeekStart(value) }
@@ -31,6 +35,10 @@ class SettingsViewModel(
 
     fun updateAutoBackupDaily(value: Boolean) {
         viewModelScope.launch { settingsRepository.updateAutoBackupDaily(value) }
+    }
+
+    fun updateShowCompletedToday(value: Boolean) {
+        viewModelScope.launch { settingsRepository.updateShowCompletedToday(value) }
     }
 
     fun clearCompleted() {

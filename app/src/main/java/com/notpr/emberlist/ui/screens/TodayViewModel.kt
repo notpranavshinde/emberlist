@@ -108,6 +108,22 @@ class TodayViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val completedToday: StateFlow<List<TaskListItem>> = combine(
+        repository.observeCompletedToday(startOfTodayMillis(), endOfTodayMillis()),
+        repository.observeProjects(),
+        repository.observeAllSections()
+    ) { tasks, projects, sections ->
+        val projectById = projects.associateBy { it.id }
+        val sectionById = sections.associateBy { it.id }
+        tasks.map { task ->
+            buildTaskListItem(
+                task = task,
+                projectById = projectById,
+                sectionById = sectionById
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task

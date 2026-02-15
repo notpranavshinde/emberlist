@@ -2,29 +2,31 @@ package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Flag
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,6 +36,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -50,8 +53,11 @@ import java.time.ZoneId
 fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: TodayViewModel = viewModel(factory = EmberlistViewModelFactory(container))
+    val settingsViewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val parentItems by viewModel.tasks.collectAsState()
     val subtaskItems by viewModel.subtasks.collectAsState()
+    val completedItems by viewModel.completedToday.collectAsState()
+    val settings by settingsViewModel.settings.collectAsState()
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val overdueParents = parentItems.filter { it.isOverdue }
     val todayParents = parentItems.filterNot { it.isOverdue }
@@ -67,6 +73,12 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         expandedState = expanded,
         defaultExpanded = false
     )
+    val completedToday = flattenTaskItemsWithSubtasks(
+        parents = completedItems,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        defaultExpanded = false
+    )
     val dragState = remember { DragToSubtaskState() }
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
@@ -78,6 +90,7 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     var showPriorityPicker by remember { mutableStateOf(false) }
     var showProjectPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var completedExpanded by remember { mutableStateOf(false) }
     val projects by viewModel.projects.collectAsState()
 
     LaunchedEffect(rescheduleTarget) {
@@ -257,6 +270,54 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 onDropAsSubtask = viewModel::makeSubtask
             )
         }
+        if (settings.showCompletedToday && completedToday.isNotEmpty()) {
+            item(key = "completed_header") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable { completedExpanded = !completedExpanded },
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Completed today (${completedToday.size})",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Icon(
+                        imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                        contentDescription = if (completedExpanded) "Collapse" else "Expand"
+                    )
+                }
+            }
+            if (completedExpanded) {
+                items(completedToday, key = { it.task.id }) { item ->
+                    TaskRowSelectable(
+                        item = item,
+                        selectionMode = selectionMode,
+                        selected = selectedIds.value.contains(item.task.id),
+                        onSelectToggle = { checked ->
+                            selectedIds.value =
+                                if (checked) selectedIds.value + item.task.id else selectedIds.value - item.task.id
+                        },
+                        onEnterSelection = {
+                            selectionMode = true
+                            selectedIds.value = selectedIds.value + item.task.id
+                        },
+                        onOpen = { navController.navigate("task/${item.task.id}") },
+                        onToggle = viewModel::toggleComplete,
+                        showExpand = item.hasSubtasks,
+                        expanded = item.isExpanded,
+                        onToggleExpand = {
+                            expanded[item.task.id] = !(expanded[item.task.id] ?: false)
+                        },
+                        onReschedule = { rescheduleTarget = it },
+                        onDelete = viewModel::deleteTask,
+                        dragState = dragState,
+                        onDropAsSubtask = viewModel::makeSubtask
+                    )
+                }
+            }
+        }
     }
 
     if (showPriorityPicker) {
@@ -325,7 +386,6 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun TaskRowSelectable(
     item: com.notpr.emberlist.ui.components.TaskListItem,
@@ -346,14 +406,16 @@ private fun TaskRowSelectable(
     val modifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = 16.dp, vertical = 6.dp)
-        .combinedClickable(
-            onClick = {
-                if (selectionMode) onSelectToggle(!selected) else onOpen()
-            },
-            onLongClick = {
-                if (!selectionMode) onEnterSelection()
-            }
-        )
+        .pointerInput(selectionMode, selected, item.task.id) {
+            detectTapGestures(
+                onTap = {
+                    if (selectionMode) onSelectToggle(!selected) else onOpen()
+                },
+                onLongPress = {
+                    if (!selectionMode) onEnterSelection()
+                }
+            )
+        }
     Row(modifier = modifier) {
         if (selectionMode) {
             androidx.compose.material3.Checkbox(checked = selected, onCheckedChange = null)
