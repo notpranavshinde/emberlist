@@ -47,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.ViewPreference
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.components.DragToSubtaskState
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
@@ -67,6 +68,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val subtasksFlow = remember(projectId, tasks) { viewModel.observeSubtasksForParents(tasks.map { it.id }) }
     val subtasks by subtasksFlow.collectAsState(initial = emptyList())
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val dragState = remember { DragToSubtaskState() }
     val projectById = project?.let { mapOf(it.id to it) }.orEmpty()
     val sectionById = sections.associateBy { it.id }
     var projectTitle by remember(projectId) { mutableStateOf<String?>(null) }
@@ -214,6 +216,8 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                                 onToggle = viewModel::toggleComplete,
                                 onReschedule = { rescheduleTarget = it },
                                 onDelete = viewModel::deleteTask,
+                                dragState = dragState,
+                                onDropAsSubtask = viewModel::makeSubtask,
                                 onClick = { navController.navigate("task/${item.task.id}") }
                             )
                         }
@@ -251,6 +255,8 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                             onToggle = viewModel::toggleComplete,
                             onReschedule = { rescheduleTarget = it },
                             onDelete = viewModel::deleteTask,
+                            dragState = dragState,
+                            onDropAsSubtask = viewModel::makeSubtask,
                             onClick = { navController.navigate("task/${item.task.id}") }
                         )
                     }
@@ -280,7 +286,9 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                                 val newOrder = (grouped[target]?.maxOfOrNull { it.order } ?: 0) + 1
                                 viewModel.moveTaskToSection(task, target, newOrder)
                             }
-                        }
+                        },
+                        dragState = dragState,
+                        onDropAsSubtask = viewModel::makeSubtask
                     )
                 }
                 item {
@@ -304,7 +312,9 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                                 val newOrder = (grouped[target]?.maxOfOrNull { it.order } ?: 0) + 1
                                 viewModel.moveTaskToSection(task, target, newOrder)
                             }
-                        }
+                        },
+                        dragState = dragState,
+                        onDropAsSubtask = viewModel::makeSubtask
                     )
                 }
             }
@@ -373,7 +383,9 @@ private fun BoardColumn(
     onNavigate: (String) -> Unit,
     onColumnBounds: (Rect) -> Unit,
     onDragLocation: (Offset) -> Unit,
-    onDrop: (com.notpr.emberlist.data.model.TaskEntity) -> Unit
+    onDrop: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
+    dragState: DragToSubtaskState,
+    onDropAsSubtask: (com.notpr.emberlist.data.model.TaskEntity, com.notpr.emberlist.data.model.TaskEntity) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -392,7 +404,9 @@ private fun BoardColumn(
                 onDelete = onDelete,
                 onClick = { onNavigate(task.id) },
                 onDragLocation = onDragLocation,
-                onDrop = onDrop
+                onDrop = onDrop,
+                dragState = dragState,
+                onDropAsSubtask = onDropAsSubtask
             )
         }
     }
@@ -408,7 +422,9 @@ private fun DraggableTask(
     onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
     onClick: () -> Unit,
     onDragLocation: (Offset) -> Unit,
-    onDrop: (com.notpr.emberlist.data.model.TaskEntity) -> Unit
+    onDrop: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
+    dragState: DragToSubtaskState,
+    onDropAsSubtask: (com.notpr.emberlist.data.model.TaskEntity, com.notpr.emberlist.data.model.TaskEntity) -> Unit
 ) {
     var coords: LayoutCoordinates? by remember { mutableStateOf(null) }
     Box(
@@ -436,7 +452,9 @@ private fun DraggableTask(
             onToggle = onToggle,
             onReschedule = onReschedule,
             onDelete = onDelete,
-            onClick = onClick
+            onClick = onClick,
+            dragState = dragState,
+            onDropAsSubtask = onDropAsSubtask
         )
     }
 }

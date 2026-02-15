@@ -48,6 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.components.DragToSubtaskState
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
@@ -80,6 +81,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
         results.filter { activeFilter.matches(it, zone) }
     }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val dragState = remember { DragToSubtaskState() }
     val parentResults = filteredResults.filter { it.task.parentTaskId == null }
     val parentIds = parentResults.map { it.task.id }.toSet()
     val orphanSubtasks = filteredResults.filter { it.task.parentTaskId != null && it.task.parentTaskId !in parentIds }
@@ -268,7 +270,9 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                     expanded = item.isExpanded,
                     onToggleExpand = {
                         expanded[item.task.id] = !(expanded[item.task.id] ?: false)
-                    }
+                    },
+                    dragState = dragState,
+                    onDropAsSubtask = viewModel::makeSubtask
                 )
             }
         }
@@ -387,7 +391,9 @@ private fun SearchTaskRowSelectable(
     onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
     showExpand: Boolean,
     expanded: Boolean,
-    onToggleExpand: () -> Unit
+    onToggleExpand: () -> Unit,
+    dragState: DragToSubtaskState,
+    onDropAsSubtask: (com.notpr.emberlist.data.model.TaskEntity, com.notpr.emberlist.data.model.TaskEntity) -> Unit
 ) {
     val modifier = Modifier
         .fillMaxWidth()
@@ -413,7 +419,9 @@ private fun SearchTaskRowSelectable(
                 onClick = null,
                 showExpand = showExpand,
                 expanded = expanded,
-                onToggleExpand = onToggleExpand
+                onToggleExpand = onToggleExpand,
+                dragState = dragState,
+                onDropAsSubtask = onDropAsSubtask
             )
         }
     }

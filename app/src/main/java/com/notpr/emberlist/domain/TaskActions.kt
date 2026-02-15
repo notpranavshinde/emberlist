@@ -97,3 +97,25 @@ suspend fun completeTaskWithRecurrence(
         logTaskActivity(repository, ActivityType.CREATED, next)
     }
 }
+
+suspend fun reparentAsSubtask(
+    repository: TaskRepository,
+    dragged: TaskEntity,
+    parent: TaskEntity
+): TaskEntity? {
+    if (dragged.id == parent.id) return null
+    if (parent.parentTaskId != null) return null
+    if (dragged.parentTaskId == parent.id) return null
+    val now = System.currentTimeMillis()
+    val siblings = repository.getSubtasks(parent.id)
+    val nextOrder = (siblings.maxOfOrNull { it.order } ?: -1) + 1
+    val updated = dragged.copy(
+        parentTaskId = parent.id,
+        projectId = parent.projectId,
+        sectionId = parent.sectionId,
+        order = nextOrder,
+        updatedAt = now
+    )
+    repository.upsertTask(updated)
+    return updated
+}

@@ -34,7 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -68,11 +72,14 @@ fun TaskRow(
     onDelete: ((TaskEntity) -> Unit)? = null,
     showExpand: Boolean = false,
     expanded: Boolean = false,
-    onToggleExpand: (() -> Unit)? = null
+    onToggleExpand: (() -> Unit)? = null,
+    dragState: DragToSubtaskState? = null,
+    onDropAsSubtask: ((TaskEntity, TaskEntity) -> Unit)? = null
 ) {
     val thresholdPx = with(LocalDensity.current) { 80.dp.toPx() }
     var dragX by remember { mutableStateOf(0f) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var coords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val rowModifier = if (onClick != null) {
         Modifier
             .fillMaxWidth()
@@ -85,6 +92,36 @@ fun TaskRow(
         24.dp * (item.indentLevel.coerceAtLeast(1))
     } else {
         0.dp
+    }
+    val isHoverTarget = dragState?.hoverTargetId == item.task.id && dragState.draggingTaskId != item.task.id
+    val hoverIndent = if (isHoverTarget) 16.dp else 0.dp
+    val dragModifier = if (dragState != null && onDropAsSubtask != null) {
+        Modifier
+            .onGloballyPositioned { layout ->
+                coords = layout
+                dragState.registerTask(item.task)
+                dragState.updateBounds(item.task.id, layout.boundsInWindow())
+            }
+            .pointerInput(item.task.id) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        val layout = coords ?: return@detectDragGesturesAfterLongPress
+                        val start = layout.localToWindow(offset)
+                        dragState.startDrag(item.task, start)
+                    },
+                    onDragEnd = {
+                        val drop = dragState.endDrag()
+                        if (drop != null) onDropAsSubtask(drop.first, drop.second)
+                    },
+                    onDragCancel = { dragState.cancelDrag() },
+                    onDrag = { change, dragAmount ->
+                        dragState.updateDrag(dragAmount)
+                        change.consume()
+                    }
+                )
+            }
+    } else {
+        Modifier
     }
     Column(
         modifier = rowModifier
@@ -104,11 +141,12 @@ fun TaskRow(
                 )
             }
             .offset { IntOffset(dragX.roundToInt(), 0) }
+            .then(dragModifier)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp + indentPadding, end = 16.dp, top = 10.dp, bottom = 10.dp),
+                .padding(start = 16.dp + indentPadding + hoverIndent, end = 16.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (showExpand) {

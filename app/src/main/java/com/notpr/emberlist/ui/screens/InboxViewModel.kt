@@ -8,6 +8,7 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.domain.reparentAsSubtask
 import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.data.model.ActivityType
@@ -77,6 +78,24 @@ class InboxViewModel(
 
     private fun refreshGeofences() {
         viewModelScope.launch { geofenceScheduler.refresh() }
+    }
+
+    fun makeSubtask(dragged: TaskEntity, parent: TaskEntity) {
+        viewModelScope.launch {
+            val before = dragged
+            val updated = reparentAsSubtask(repository, dragged, parent) ?: return@launch
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
+            undoController.post(
+                UndoEvent(
+                    message = "Undo subtask: ${dragged.title}",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
+            refreshGeofences()
+        }
     }
 
     fun toggleComplete(task: TaskEntity) {

@@ -24,6 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.components.DragToSubtaskState
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
@@ -42,6 +43,7 @@ fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
         expandedState = expanded,
         defaultExpanded = false
     )
+    val dragState = remember { DragToSubtaskState() }
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
@@ -90,6 +92,8 @@ fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
                 onToggle = viewModel::toggleComplete,
                 onReschedule = { rescheduleTarget = it },
                 onDelete = viewModel::deleteTask,
+                dragState = dragState,
+                onDropAsSubtask = viewModel::makeSubtask,
                 onClick = { navController.navigate("task/${item.task.id}") }
             )
         }

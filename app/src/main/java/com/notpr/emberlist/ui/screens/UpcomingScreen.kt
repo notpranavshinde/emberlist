@@ -45,6 +45,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.components.DragToSubtaskState
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
@@ -60,6 +61,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
     val subtaskItems by viewModel.subtasks.collectAsState()
     val projects by viewModel.projects.collectAsState()
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    val dragState = remember { DragToSubtaskState() }
     val items = flattenUpcomingItemsWithSubtasks(
         parents = parentItems,
         subtasks = subtaskItems,
@@ -217,7 +219,9 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
                         onToggle = if (selectionMode) ({ _: com.notpr.emberlist.data.model.TaskEntity -> }) else viewModel::toggleComplete,
                         onReschedule = if (selectionMode) null else ({ task -> rescheduleTarget = task }),
                         onDelete = if (selectionMode) null else viewModel::deleteTask,
-                        onClick = null
+                        onClick = null,
+                        dragState = dragState,
+                        onDropAsSubtask = viewModel::makeSubtask
                     )
                 }
             }
