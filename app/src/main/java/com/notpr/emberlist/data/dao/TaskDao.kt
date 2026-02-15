@@ -59,8 +59,14 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId AND status = :status ORDER BY `order` ASC")
     suspend fun getSubtasks(parentId: String, status: TaskStatus = TaskStatus.OPEN): List<TaskEntity>
 
-    @Query("SELECT * FROM tasks WHERE title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' ORDER BY updatedAt DESC")
-    fun search(query: String): Flow<List<TaskEntity>>
+    @Query("""
+        SELECT * FROM tasks
+        WHERE parentTaskId IS NULL
+          AND status = :status
+          AND (title LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%')
+        ORDER BY updatedAt DESC
+    """)
+    fun search(query: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
     @Query("""
         SELECT projectId as projectId, COUNT(*) as count

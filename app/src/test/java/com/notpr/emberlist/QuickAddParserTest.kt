@@ -122,4 +122,85 @@ class QuickAddParserTest {
         assertEquals("FREQ=YEARLY;INTERVAL=2", result.recurrenceRule)
         assertNotNull(result.dueAt)
     }
+
+    @Test
+    fun parseEveryOtherMonday() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Laundry every other monday", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherMonAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Workout every other mon", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=MO", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherSunday() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Plan week every other sunday", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=SU", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherTueAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Meetings every other tue", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=TU", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherWedAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Report every other wed", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=WE", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherThuAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Review every other thu", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=TH", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherFriAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Prep every other fri", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=FR", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherSatAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Clean every other sat", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=SA", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
+
+    @Test
+    fun parseEveryOtherSunAbbrev() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Reset every other sun", now)
+        assertEquals("FREQ=WEEKLY;INTERVAL=2;BYDAY=SU", result.recurrenceRule)
+        assertNotNull(result.dueAt)
+    }
 }

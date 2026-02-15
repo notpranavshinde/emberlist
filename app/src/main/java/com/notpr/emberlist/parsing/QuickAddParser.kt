@@ -209,6 +209,10 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val everyDay = Regex("every\\s*day|everyday", RegexOption.IGNORE_CASE)
         val everyWeekday = Regex("every\\s+weekday", RegexOption.IGNORE_CASE)
         val everyOther = Regex("every\\s+other\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
+        val everyOtherNamedDay = Regex(
+            "every\\s+other\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday|\\bmon\\b|\\btue\\b|\\bwed\\b|\\bthu\\b|\\bfri\\b|\\bsat\\b|\\bsun\\b)",
+            RegexOption.IGNORE_CASE
+        )
         val everyInterval = Regex("every\\s+(\\d+)\\s+(day|week|month|year)s?", RegexOption.IGNORE_CASE)
         val monthlyOn = Regex("every\\s+month\\s+on\\s+the\\s+(\\d+)(st|nd|rd|th)?", RegexOption.IGNORE_CASE)
         val monthlyEveryNth = Regex("every\\s+(\\d+)(st|nd|rd|th)\\b", RegexOption.IGNORE_CASE)
@@ -233,6 +237,20 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             monthlyOrdinal.containsMatchIn(input) -> {
                 val day = monthlyOrdinal.find(input)?.groupValues?.get(1)?.toInt() ?: 1
                 "FREQ=MONTHLY;BYMONTHDAY=$day"
+            }
+            everyOtherNamedDay.containsMatchIn(input) -> {
+                val dayName = (everyOtherNamedDay.find(input) ?: return null).groupValues[1].uppercase()
+                val byDay = when {
+                    dayName.startsWith("MON") -> "MO"
+                    dayName.startsWith("TUE") -> "TU"
+                    dayName.startsWith("WED") -> "WE"
+                    dayName.startsWith("THU") -> "TH"
+                    dayName.startsWith("FRI") -> "FR"
+                    dayName.startsWith("SAT") -> "SA"
+                    dayName.startsWith("SUN") -> "SU"
+                    else -> "MO"
+                }
+                "FREQ=WEEKLY;INTERVAL=2;BYDAY=$byDay"
             }
             everyNamedDay.containsMatchIn(input) -> {
                 val dayName = (everyNamedDay.find(input) ?: return null).groupValues[1].uppercase()
