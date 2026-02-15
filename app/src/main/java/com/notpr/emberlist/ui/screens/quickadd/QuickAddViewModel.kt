@@ -214,7 +214,14 @@ class QuickAddViewModel(
             repository.upsertTask(task)
             logTaskActivity(repository, ActivityType.CREATED, task)
 
-            val reminderEntities = result.reminders.map { spec ->
+            val baseReminders = if (result.reminders.isEmpty() && result.dueAt != null && !result.allDay) {
+                val dueAt = result.dueAt
+                if (dueAt != null) listOf(ReminderSpec.Absolute(dueAt)) else emptyList()
+            } else {
+                result.reminders
+            }
+
+            val reminderEntities = baseReminders.map { spec ->
                 val reminder = ReminderEntity(
                     id = UUID.randomUUID().toString(),
                     taskId = taskId,

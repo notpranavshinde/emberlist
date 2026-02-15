@@ -440,6 +440,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             .replace(Regex("everyday", RegexOption.IGNORE_CASE), "")
             .replace(Regex("every\\s+day", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\d+(st|nd|rd|th)?\\s+of\\s+every\\s+month", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\bat\\s+\\d{1,2}(:\\d{2})?\\s?(am|pm)\\b", RegexOption.IGNORE_CASE), "")
             .replace(Regex("\\d{4}-\\d{1,2}-\\d{1,2}"), "")
             .replace(Regex("\\d{1,2}/\\d{1,2}(/\\d{2,4})?"), "")
             .replace(monthNameRegex, "")
