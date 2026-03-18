@@ -1,7 +1,5 @@
 package com.notpr.emberlist.ui.screens
 
-import android.app.DatePickerDialog
-import android.app.TimePickerDialog
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,30 +8,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -52,7 +39,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -62,7 +48,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -70,19 +55,14 @@ import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.data.model.ObjectType
 import com.notpr.emberlist.data.model.Priority
-import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.parsing.QuickAddParser
-import com.notpr.emberlist.parsing.QuickAddResult
-import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.serialization.json.Json
@@ -101,7 +81,6 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     val activity by remember(taskId) { viewModel.observeActivity(taskId) }.collectAsState()
 
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
-    val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val parser = remember { QuickAddParser(zone) }
     val json = remember { Json { ignoreUnknownKeys = true } }
@@ -112,35 +91,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     var inputState by remember(taskId) { mutableStateOf(TextFieldValue("")) }
     var seededTaskId by remember(taskId) { mutableStateOf<String?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
-    var showPriorityDialog by remember { mutableStateOf(false) }
-    var showProjectDialog by remember { mutableStateOf(false) }
-    var showRecurrenceDialog by remember { mutableStateOf(false) }
-    var showDeadlineRecurrenceDialog by remember { mutableStateOf(false) }
-    var showReminderDialog by remember { mutableStateOf(false) }
-    var moreMenuOpen by remember { mutableStateOf(false) }
     var projectMenuOpen by remember { mutableStateOf(false) }
     var sectionMenuOpen by remember { mutableStateOf(false) }
     var activityExpanded by remember(taskId) { mutableStateOf(false) }
     val parserFocusRequester = remember { FocusRequester() }
-
-    var dueOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var dueOverride by remember(taskId) { mutableStateOf<Long?>(null) }
-    var dueAllDayOverride by remember(taskId) { mutableStateOf<Boolean?>(null) }
-    var deadlineOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var deadlineOverride by remember(taskId) { mutableStateOf<Long?>(null) }
-    var deadlineAllDayOverride by remember(taskId) { mutableStateOf<Boolean?>(null) }
-    var priorityOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var priorityOverride by remember(taskId) { mutableStateOf<Priority?>(null) }
-    var projectOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var projectOverride by remember(taskId) { mutableStateOf<String?>(null) }
-    var sectionOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var sectionOverride by remember(taskId) { mutableStateOf<String?>(null) }
-    var recurrenceOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var recurrenceOverride by remember(taskId) { mutableStateOf<String?>(null) }
-    var deadlineRecurrenceOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var deadlineRecurrenceOverride by remember(taskId) { mutableStateOf<String?>(null) }
-    var remindersOverrideEnabled by remember(taskId) { mutableStateOf(false) }
-    var remindersOverride by remember(taskId) { mutableStateOf<List<ReminderSpec>>(emptyList()) }
 
     val hashToken = remember(inputState.text) {
         val hashIndex = inputState.text.lastIndexOf('#')
@@ -204,72 +158,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 ).length
             )
         )
-        dueOverrideEnabled = false
-        dueOverride = null
-        dueAllDayOverride = null
-        deadlineOverrideEnabled = false
-        deadlineOverride = null
-        deadlineAllDayOverride = null
-        priorityOverrideEnabled = false
-        priorityOverride = null
-        projectOverrideEnabled = false
-        projectOverride = null
-        sectionOverrideEnabled = false
-        sectionOverride = null
-        recurrenceOverrideEnabled = false
-        recurrenceOverride = null
-        deadlineRecurrenceOverrideEnabled = false
-        deadlineRecurrenceOverride = null
-        remindersOverrideEnabled = reminders.size > 1
-        remindersOverride = reminders.mapNotNull { it.toReminderSpec() }
         seededTaskId = current.id
     }
 
-    val parsed by remember(
-        inputState.text,
-        dueOverrideEnabled,
-        dueOverride,
-        dueAllDayOverride,
-        deadlineOverrideEnabled,
-        deadlineOverride,
-        deadlineAllDayOverride,
-        priorityOverrideEnabled,
-        priorityOverride,
-        projectOverrideEnabled,
-        projectOverride,
-        sectionOverrideEnabled,
-        sectionOverride,
-        recurrenceOverrideEnabled,
-        recurrenceOverride,
-        deadlineRecurrenceOverrideEnabled,
-        deadlineRecurrenceOverride,
-        remindersOverrideEnabled,
-        remindersOverride
-    ) {
-        derivedStateOf {
-            mergeParsedTaskDetailResult(
-                base = parser.parse(inputState.text),
-                dueOverrideEnabled = dueOverrideEnabled,
-                dueOverride = dueOverride,
-                dueAllDayOverride = dueAllDayOverride,
-                deadlineOverrideEnabled = deadlineOverrideEnabled,
-                deadlineOverride = deadlineOverride,
-                deadlineAllDayOverride = deadlineAllDayOverride,
-                priorityOverrideEnabled = priorityOverrideEnabled,
-                priorityOverride = priorityOverride,
-                projectOverrideEnabled = projectOverrideEnabled,
-                projectOverride = projectOverride,
-                sectionOverrideEnabled = sectionOverrideEnabled,
-                sectionOverride = sectionOverride,
-                recurrenceOverrideEnabled = recurrenceOverrideEnabled,
-                recurrenceOverride = recurrenceOverride,
-                deadlineRecurrenceOverrideEnabled = deadlineRecurrenceOverrideEnabled,
-                deadlineRecurrenceOverride = deadlineRecurrenceOverride,
-                remindersOverrideEnabled = remindersOverrideEnabled,
-                remindersOverride = remindersOverride
-            )
-        }
-    }
+    val parsed by remember(inputState.text) { derivedStateOf { parser.parse(inputState.text) } }
 
     LaunchedEffect(task?.id, inputState.text, description, parsed, reminders) {
         val current = task ?: return@LaunchedEffect
@@ -366,6 +258,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 visualTransformation = rememberTaskDetailTokenHighlighter(),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { }),
+                textStyle = MaterialTheme.typography.headlineSmall,
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -386,8 +279,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 onValueChange = { description = it },
                 placeholder = { Text("Description") },
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 ),
                 colors = TextFieldDefaults.colors(
@@ -399,70 +291,14 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
-            )
-            TaskDetailParsedChips(
-                parsed = parsed,
-                onDueClick = {
-                    pickTaskDetailDateTime(context, zone) { epoch ->
-                        dueOverrideEnabled = true
-                        dueOverride = epoch
-                        dueAllDayOverride = false
-                    }
-                },
-                onPriorityClick = { showPriorityDialog = true },
-                onProjectClick = { showProjectDialog = true },
-                onReminderClick = { showReminderDialog = true },
-                onMoreClick = { moreMenuOpen = true }
-            )
-        }
-
-        DropdownMenu(
-            expanded = moreMenuOpen,
-            onDismissRequest = { moreMenuOpen = false },
-            properties = PopupProperties(focusable = false),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            DropdownMenuItem(
-                text = { Text("Set deadline") },
-                onClick = {
-                    moreMenuOpen = false
-                    pickTaskDetailDateTime(context, zone) { epoch ->
-                        deadlineOverrideEnabled = true
-                        deadlineOverride = epoch
-                        deadlineAllDayOverride = false
-                    }
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Clear deadline") },
-                onClick = {
-                    moreMenuOpen = false
-                    deadlineOverrideEnabled = true
-                    deadlineOverride = null
-                    deadlineAllDayOverride = false
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Add repeat") },
-                onClick = {
-                    moreMenuOpen = false
-                    showRecurrenceDialog = true
-                }
-            )
-            DropdownMenuItem(
-                text = { Text("Add deadline repeat") },
-                onClick = {
-                    moreMenuOpen = false
-                    showDeadlineRecurrenceDialog = true
-                }
+                    .padding(top = 12.dp)
             )
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
@@ -587,78 +423,6 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
         }
     }
 
-    if (showPriorityDialog) {
-        TaskDetailPriorityDialog(
-            current = parsed.priority,
-            onDismiss = { showPriorityDialog = false },
-            onSelect = {
-                priorityOverrideEnabled = true
-                priorityOverride = it
-                showPriorityDialog = false
-            }
-        )
-    }
-
-    if (showProjectDialog) {
-        TaskDetailProjectDialog(
-            current = parsed.projectName,
-            projects = projects,
-            onDismiss = { showProjectDialog = false },
-            onSelect = { name ->
-                projectOverrideEnabled = true
-                projectOverride = name
-                sectionOverrideEnabled = true
-                sectionOverride = null
-                showProjectDialog = false
-            }
-        )
-    }
-
-    if (showRecurrenceDialog) {
-        TaskDetailRecurrenceDialog(
-            current = parsed.recurrenceRule.orEmpty(),
-            onDismiss = { showRecurrenceDialog = false },
-            onSave = { value ->
-                recurrenceOverrideEnabled = true
-                recurrenceOverride = value.ifBlank { null }
-                showRecurrenceDialog = false
-            }
-        )
-    }
-
-    if (showDeadlineRecurrenceDialog) {
-        TaskDetailRecurrenceDialog(
-            current = parsed.deadlineRecurringRule.orEmpty(),
-            onDismiss = { showDeadlineRecurrenceDialog = false },
-            onSave = { value ->
-                deadlineRecurrenceOverrideEnabled = true
-                deadlineRecurrenceOverride = value.ifBlank { null }
-                showDeadlineRecurrenceDialog = false
-            }
-        )
-    }
-
-    if (showReminderDialog) {
-        TaskDetailReminderDialog(
-            onDismiss = { showReminderDialog = false },
-            onSetAbsolute = {
-                remindersOverrideEnabled = true
-                remindersOverride = listOf(ReminderSpec.Absolute(it))
-                showReminderDialog = false
-            },
-            onSetOffset = {
-                remindersOverrideEnabled = true
-                remindersOverride = listOf(ReminderSpec.Offset(it))
-                showReminderDialog = false
-            },
-            onClear = {
-                remindersOverrideEnabled = true
-                remindersOverride = emptyList()
-                showReminderDialog = false
-            }
-        )
-    }
-
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
@@ -682,216 +446,6 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
             }
         )
     }
-}
-
-@Composable
-private fun TaskDetailParsedChips(
-    parsed: QuickAddResult,
-    onDueClick: () -> Unit,
-    onPriorityClick: () -> Unit,
-    onProjectClick: () -> Unit,
-    onReminderClick: () -> Unit,
-    onMoreClick: () -> Unit
-) {
-    val zone = ZoneId.systemDefault()
-    val dueLabel = parsed.dueAt?.let {
-        val dt = Instant.ofEpochMilli(it).atZone(zone).toLocalDateTime()
-        if (parsed.allDay) {
-            dt.toLocalDate().format(DateTimeFormatter.ofPattern("MMM d"))
-        } else {
-            dt.format(DateTimeFormatter.ofPattern("MMM d, h:mm a"))
-        }
-    } ?: "Date"
-    val reminderLabel = when {
-        parsed.reminders.isNotEmpty() -> {
-            if (parsed.reminders.size > 1) {
-                "${parsed.reminders.size} reminders"
-            } else {
-                when (val spec = parsed.reminders.first()) {
-                    is ReminderSpec.Absolute -> {
-                        val dt = Instant.ofEpochMilli(spec.timeAtMillis).atZone(zone).toLocalDateTime()
-                        "At ${dt.format(DateTimeFormatter.ofPattern("h:mm a"))}"
-                    }
-                    is ReminderSpec.Offset -> "${spec.minutes}m before"
-                }
-            }
-        }
-        parsed.dueAt != null && !parsed.allDay -> {
-            val dt = Instant.ofEpochMilli(parsed.dueAt).atZone(zone).toLocalDateTime()
-            "At ${dt.format(DateTimeFormatter.ofPattern("h:mm a"))}"
-        }
-        else -> "Reminders"
-    }
-
-    Column(modifier = Modifier.padding(top = 8.dp)) {
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(
-                listOf(
-                    Triple(Icons.Default.CalendarMonth, dueLabel, onDueClick),
-                    Triple(Icons.Default.Flag, parsed.priority.name, onPriorityClick),
-                    Triple(Icons.Default.Notifications, reminderLabel, onReminderClick)
-                )
-            ) { chip ->
-                AssistChip(
-                    onClick = chip.third,
-                    label = { Text(chip.second) },
-                    leadingIcon = { Icon(chip.first, contentDescription = null) }
-                )
-            }
-            item {
-                AssistChip(
-                    onClick = onMoreClick,
-                    label = { Icon(Icons.Default.MoreHoriz, contentDescription = "More") }
-                )
-            }
-        }
-        Row(
-            modifier = Modifier.padding(top = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AssistChip(
-                onClick = onProjectClick,
-                label = { Text(parsed.projectName?.let { "#$it" } ?: "#Inbox") },
-                leadingIcon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun TaskDetailPriorityDialog(
-    current: Priority,
-    onDismiss: () -> Unit,
-    onSelect: (Priority) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Priority") },
-        text = {
-            Column {
-                Priority.values().forEach { item ->
-                    TextButton(onClick = { onSelect(item) }) {
-                        Text(if (item == current) "${item.name} ✓" else item.name)
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        }
-    )
-}
-
-@Composable
-private fun TaskDetailProjectDialog(
-    current: String?,
-    projects: List<ProjectEntity>,
-    onDismiss: () -> Unit,
-    onSelect: (String?) -> Unit
-) {
-    var newProject by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Project") },
-        text = {
-            Column {
-                TextButton(onClick = { onSelect(null) }) {
-                    Text(if (current == null) "Inbox ✓" else "Inbox")
-                }
-                projects.forEach { project ->
-                    TextButton(onClick = { onSelect(project.name) }) {
-                        Text(if (project.name == current) "${project.name} ✓" else project.name)
-                    }
-                }
-                OutlinedTextField(
-                    value = newProject,
-                    onValueChange = { newProject = it },
-                    label = { Text("Create project") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (newProject.isNotBlank()) {
-                    TextButton(onClick = { onSelect(newProject.trim()) }) {
-                        Text("Create \"${newProject.trim()}\"")
-                    }
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        }
-    )
-}
-
-@Composable
-private fun TaskDetailRecurrenceDialog(
-    current: String,
-    onDismiss: () -> Unit,
-    onSave: (String) -> Unit
-) {
-    var text by remember { mutableStateOf(current) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Recurrence") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text("RRULE subset") },
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(text) }) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        }
-    )
-}
-
-@Composable
-private fun TaskDetailReminderDialog(
-    onDismiss: () -> Unit,
-    onSetAbsolute: (Long) -> Unit,
-    onSetOffset: (Int) -> Unit,
-    onClear: () -> Unit
-) {
-    var offsetText by remember { mutableStateOf("30") }
-    val context = LocalContext.current
-    val zone = ZoneId.systemDefault()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Reminder") },
-        text = {
-            Column {
-                TextButton(onClick = {
-                    pickTaskDetailDateTime(context, zone) { onSetAbsolute(it) }
-                }) { Text("Set exact time") }
-                OutlinedTextField(
-                    value = offsetText,
-                    onValueChange = { offsetText = it },
-                    label = { Text("Offset minutes") },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextButton(onClick = {
-                    val minutes = offsetText.toIntOrNull() ?: 30
-                    onSetOffset(minutes)
-                }) { Text("Set offset") }
-                TextButton(onClick = onClear) { Text("Clear reminders") }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        }
-    )
 }
 
 private fun serializeTaskToParserInput(
@@ -1004,49 +558,6 @@ private fun ordinal(value: Int): String {
     return "$value$suffix"
 }
 
-private fun ReminderEntity.toReminderSpec(): ReminderSpec? {
-    return when {
-        timeAt != null -> ReminderSpec.Absolute(timeAt)
-        offsetMinutes != null -> ReminderSpec.Offset(offsetMinutes)
-        else -> null
-    }
-}
-
-private fun mergeParsedTaskDetailResult(
-    base: QuickAddResult,
-    dueOverrideEnabled: Boolean,
-    dueOverride: Long?,
-    dueAllDayOverride: Boolean?,
-    deadlineOverrideEnabled: Boolean,
-    deadlineOverride: Long?,
-    deadlineAllDayOverride: Boolean?,
-    priorityOverrideEnabled: Boolean,
-    priorityOverride: Priority?,
-    projectOverrideEnabled: Boolean,
-    projectOverride: String?,
-    sectionOverrideEnabled: Boolean,
-    sectionOverride: String?,
-    recurrenceOverrideEnabled: Boolean,
-    recurrenceOverride: String?,
-    deadlineRecurrenceOverrideEnabled: Boolean,
-    deadlineRecurrenceOverride: String?,
-    remindersOverrideEnabled: Boolean,
-    remindersOverride: List<ReminderSpec>?
-): QuickAddResult {
-    return base.copy(
-        dueAt = if (dueOverrideEnabled) dueOverride else base.dueAt,
-        deadlineAt = if (deadlineOverrideEnabled) deadlineOverride else base.deadlineAt,
-        allDay = if (dueOverrideEnabled) dueAllDayOverride ?: base.allDay else base.allDay,
-        deadlineAllDay = if (deadlineOverrideEnabled) deadlineAllDayOverride ?: base.deadlineAllDay else base.deadlineAllDay,
-        priority = if (priorityOverrideEnabled) priorityOverride ?: base.priority else base.priority,
-        projectName = if (projectOverrideEnabled) projectOverride else base.projectName,
-        sectionName = if (sectionOverrideEnabled) sectionOverride else base.sectionName,
-        recurrenceRule = if (recurrenceOverrideEnabled) recurrenceOverride else base.recurrenceRule,
-        deadlineRecurringRule = if (deadlineRecurrenceOverrideEnabled) deadlineRecurrenceOverride else base.deadlineRecurringRule,
-        reminders = if (remindersOverrideEnabled) remindersOverride ?: emptyList() else base.reminders
-    )
-}
-
 @Composable
 private fun rememberTaskDetailTokenHighlighter(): VisualTransformation {
     val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
@@ -1106,34 +617,6 @@ private fun highlightTaskDetailTokens(text: String, color: Color): AnnotatedStri
         }
     }
     return builder.toAnnotatedString()
-}
-
-private fun pickTaskDetailDateTime(
-    context: android.content.Context,
-    zone: ZoneId,
-    onPicked: (Long) -> Unit
-) {
-    val now = LocalDateTime.now(zone)
-    DatePickerDialog(
-        context,
-        { _, year, month, day ->
-            val pickedDate = LocalDate.of(year, month + 1, day)
-            TimePickerDialog(
-                context,
-                { _, hour, minute ->
-                    val instant = LocalDateTime.of(pickedDate, LocalTime.of(hour, minute))
-                        .atZone(zone).toInstant().toEpochMilli()
-                    onPicked(instant)
-                },
-                now.hour,
-                now.minute,
-                false
-            ).show()
-        },
-        now.year,
-        now.monthValue - 1,
-        now.dayOfMonth
-    ).show()
 }
 
 private fun taskActivityLabel(event: ActivityEventEntity, json: Json): String {
