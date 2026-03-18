@@ -8,7 +8,6 @@ import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
-import com.notpr.emberlist.domain.reparentAsSubtask
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.ui.startOfTodayMillis

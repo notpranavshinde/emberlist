@@ -10,8 +10,6 @@ import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.ObjectType
-import com.notpr.emberlist.data.model.LocationEntity
-import com.notpr.emberlist.data.model.LocationTriggerType
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logActivity
@@ -20,7 +18,6 @@ import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.reminders.ReminderScheduler
-import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -31,8 +28,7 @@ import java.util.UUID
 class TaskDetailViewModel(
     private val repository: TaskRepository,
     private val reminderScheduler: ReminderScheduler,
-    private val undoController: UndoController,
-    private val geofenceScheduler: GeofenceScheduler
+    private val undoController: UndoController
 ) : ViewModel() {
     fun observeTask(taskId: String): StateFlow<TaskEntity?> = repository.observeTask(taskId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -57,15 +53,10 @@ class TaskDetailViewModel(
         repository.observeActivity(taskId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun observeLocation(locationId: String): StateFlow<LocationEntity?> =
-        repository.observeLocation(locationId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-
     fun updateTask(task: TaskEntity) {
         viewModelScope.launch {
             repository.upsertTask(task.copy(updatedAt = System.currentTimeMillis()))
             logTaskActivity(repository, ActivityType.UPDATED, task)
-            geofenceScheduler.refresh()
         }
     }
 
@@ -117,7 +108,6 @@ class TaskDetailViewModel(
                         }
                     )
                 )
-                geofenceScheduler.refresh()
             } else {
                 val updated = task.copy(
                     status = TaskStatus.OPEN,
@@ -135,7 +125,6 @@ class TaskDetailViewModel(
                         }
                     )
                 )
-                geofenceScheduler.refresh()
             }
         }
     }
@@ -159,7 +148,6 @@ class TaskDetailViewModel(
                     }
                 )
             )
-            geofenceScheduler.refresh()
         }
     }
 
@@ -201,64 +189,14 @@ class TaskDetailViewModel(
         }
     }
 
-    fun addLocationReminder(task: TaskEntity, location: LocationEntity, triggerType: LocationTriggerType) {
-        viewModelScope.launch {
-            repository.upsertLocation(location)
-            val reminder = ReminderEntity(
-                id = UUID.randomUUID().toString(),
-                taskId = task.id,
-                type = ReminderType.LOCATION,
-                timeAt = null,
-                offsetMinutes = null,
-                locationId = location.id,
-                locationTriggerType = triggerType,
-                enabled = true,
-                createdAt = System.currentTimeMillis()
-            )
-            repository.upsertReminder(reminder)
-            logActivity(repository, ActivityType.REMINDER_SCHEDULED, ObjectType.REMINDER, reminder.id)
-            geofenceScheduler.refresh()
-        }
-    }
-
-    fun setTaskLocation(task: TaskEntity, location: LocationEntity, triggerType: LocationTriggerType) {
-        viewModelScope.launch {
-            repository.upsertLocation(location)
-            val updated = task.copy(
-                locationId = location.id,
-                locationTriggerType = triggerType,
-                updatedAt = System.currentTimeMillis()
-            )
-            repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
-            geofenceScheduler.refresh()
-        }
-    }
-
-    fun clearTaskLocation(task: TaskEntity) {
-        viewModelScope.launch {
-            val updated = task.copy(locationId = null, locationTriggerType = null, updatedAt = System.currentTimeMillis())
-            repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
-            geofenceScheduler.refresh()
-        }
-    }
-
-    suspend fun getLocationsByIds(ids: List<String>): List<LocationEntity> =
-        repository.getLocationsByIds(ids)
-
     fun toggleReminder(task: TaskEntity, reminder: ReminderEntity) {
         viewModelScope.launch {
             val updated = reminder.copy(enabled = !reminder.enabled)
             repository.upsertReminder(updated)
-            if (updated.type == ReminderType.LOCATION) {
-                geofenceScheduler.refresh()
+            if (updated.enabled) {
+                reminderScheduler.scheduleReminder(task, updated)
             } else {
-                if (updated.enabled) {
-                    reminderScheduler.scheduleReminder(task, updated)
-                } else {
-                    reminderScheduler.cancelReminder(updated.id)
-                }
+                reminderScheduler.cancelReminder(updated.id)
             }
         }
     }
@@ -266,11 +204,7 @@ class TaskDetailViewModel(
     fun deleteReminder(reminder: ReminderEntity) {
         viewModelScope.launch {
             repository.deleteReminder(reminder.id)
-            if (reminder.type == ReminderType.LOCATION) {
-                geofenceScheduler.refresh()
-            } else {
-                reminderScheduler.cancelReminder(reminder.id)
-            }
+            reminderScheduler.cancelReminder(reminder.id)
         }
     }
 
@@ -288,7 +222,6 @@ class TaskDetailViewModel(
                         }
                     )
                 )
-                geofenceScheduler.refresh()
             } else {
                 repository.deleteTask(taskId)
             }

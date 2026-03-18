@@ -10,11 +10,9 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
-import com.notpr.emberlist.domain.reparentAsSubtask
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
-import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -30,8 +28,7 @@ import com.notpr.emberlist.ui.startOfTomorrowMillis
 
 class ProjectViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController,
-    private val geofenceScheduler: GeofenceScheduler
+    private val undoController: UndoController
 ) : ViewModel() {
     fun observeProject(projectId: String): StateFlow<ProjectEntity?> =
         repository.observeProject(projectId)
@@ -44,28 +41,6 @@ class ProjectViewModel(
     fun observeSections(projectId: String): StateFlow<List<SectionEntity>> =
         repository.observeSections(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    private fun refreshGeofences() {
-        viewModelScope.launch { geofenceScheduler.refresh() }
-    }
-
-    fun makeSubtask(dragged: TaskEntity, parent: TaskEntity) {
-        viewModelScope.launch {
-            val before = dragged
-            val updated = reparentAsSubtask(repository, dragged, parent) ?: return@launch
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
-            undoController.post(
-                UndoEvent(
-                    message = "Undo subtask: ${dragged.title}",
-                    undo = {
-                        repository.upsertTask(before)
-                        logTaskActivity(repository, ActivityType.UPDATED, before)
-                    }
-                )
-            )
-            refreshGeofences()
-        }
-    }
 
     fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>> =
         if (parentIds.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyList())
@@ -96,7 +71,6 @@ class ProjectViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -144,7 +118,6 @@ class ProjectViewModel(
                         }
                     )
                 )
-                refreshGeofences()
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -163,7 +136,6 @@ class ProjectViewModel(
                         }
                     )
                 )
-                refreshGeofences()
             }
         }
     }
@@ -190,7 +162,6 @@ class ProjectViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -217,7 +188,6 @@ class ProjectViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -234,7 +204,6 @@ class ProjectViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -243,7 +212,6 @@ class ProjectViewModel(
             repository.deleteTasksByProject(projectId)
             repository.deleteSectionsByProject(projectId)
             repository.deleteProject(projectId)
-            refreshGeofences()
         }
     }
 }

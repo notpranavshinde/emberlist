@@ -32,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.backup.BackupManager
@@ -117,39 +116,6 @@ fun SettingsScreen(padding: PaddingValues) {
             onCheckedChange = viewModel::updateShowCompletedToday
         )
 
-        val fineGranted = ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.ACCESS_FINE_LOCATION
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        val backgroundGranted = if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
-            true
-        } else {
-            ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.ACCESS_BACKGROUND_LOCATION
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-        val locationStatus = when {
-            !fineGranted -> "Off"
-            backgroundGranted -> "Always"
-            else -> "While in use"
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(text = "Location access")
-            Text(text = locationStatus, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f))
-        }
-        TextButton(onClick = {
-            val intent = android.content.Intent(
-                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                android.net.Uri.fromParts("package", context.packageName, null)
-            )
-            context.startActivity(intent)
-        }) {
-            Text("Manage in Settings")
-        }
         SectionHeader(text = "Data")
         RowSwitch(
             label = "Replace on import",

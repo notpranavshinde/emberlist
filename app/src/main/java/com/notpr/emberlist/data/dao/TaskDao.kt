@@ -52,9 +52,6 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE projectId = :projectId AND parentTaskId IS NULL AND status = :status ORDER BY `order` ASC")
     fun observeProjectTasks(projectId: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
-    @Query("SELECT * FROM tasks WHERE status = :status AND locationId IS NOT NULL")
-    suspend fun getTasksWithLocation(status: TaskStatus = TaskStatus.OPEN): List<TaskEntity>
-
     @Query("SELECT * FROM tasks WHERE id = :id")
     fun observeTask(id: String): Flow<TaskEntity?>
 

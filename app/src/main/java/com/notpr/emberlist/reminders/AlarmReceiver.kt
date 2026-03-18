@@ -6,9 +6,6 @@ import android.content.Intent
 import androidx.core.app.NotificationManagerCompat
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.TaskRepositoryImpl
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.firstOrNull
 
 class AlarmReceiver : BroadcastReceiver() {
@@ -21,12 +18,11 @@ class AlarmReceiver : BroadcastReceiver() {
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
-            db.locationDao(),
             db.activityDao()
         )
 
-        CoroutineScope(Dispatchers.IO).launch {
-            val task = repository.observeTask(taskId).firstOrNull() ?: return@launch
+        launchAsync {
+            val task = repository.observeTask(taskId).firstOrNull() ?: return@launchAsync
             NotificationHelper.ensureChannel(context)
             val notification = NotificationHelper.buildReminderNotification(
                 context,

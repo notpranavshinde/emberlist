@@ -2,6 +2,7 @@ package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,19 +37,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
-import com.notpr.emberlist.ui.components.DragToSubtaskState
 import com.notpr.emberlist.ui.components.TaskRow
 import java.time.Instant
 import java.time.LocalDate
@@ -90,7 +89,6 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
         }
     }
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
-    val dragState = remember { DragToSubtaskState() }
     val parentResults = filteredResults.filter { it.task.parentTaskId == null }
     val parentIds = parentResults.map { it.task.id }.toSet()
     val orphanSubtasks = filteredResults.filter { it.task.parentTaskId != null && it.task.parentTaskId !in parentIds }
@@ -290,9 +288,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                     expanded = item.isExpanded,
                     onToggleExpand = {
                         expanded[item.task.id] = !(expanded[item.task.id] ?: false)
-                    },
-                    dragState = dragState,
-                    onDropAsSubtask = viewModel::makeSubtask
+                    }
                 )
             }
         }
@@ -371,7 +367,7 @@ private enum class SmartFilter(
 ) {
     ALL("All", { _, _, _ -> true }),
     OVERDUE("Overdue", { item, _, _ -> item.isOverdue }),
-    TODAY("Today", { item, zone, _, _ ->
+    TODAY("Today", { item, zone, _ ->
         val dueAt = item.task.dueAt
         if (dueAt == null) {
             false
@@ -382,7 +378,7 @@ private enum class SmartFilter(
             dueAt in start..end
         }
     }),
-    THIS_WEEK("This Week", { item, zone, _, _ ->
+    THIS_WEEK("This Week", { item, zone, _ ->
         val dueAt = item.task.dueAt
         if (dueAt == null) {
             false
@@ -409,7 +405,6 @@ private enum class SmartFilter(
     HAS_REMINDER("Has Reminder", { item, _, reminderTaskIds -> reminderTaskIds.contains(item.task.id) });
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SearchTaskRowSelectable(
     item: com.notpr.emberlist.ui.components.TaskListItem,
@@ -422,21 +417,21 @@ private fun SearchTaskRowSelectable(
     onDelete: (com.notpr.emberlist.data.model.TaskEntity) -> Unit,
     showExpand: Boolean,
     expanded: Boolean,
-    onToggleExpand: () -> Unit,
-    dragState: DragToSubtaskState,
-    onDropAsSubtask: (com.notpr.emberlist.data.model.TaskEntity, com.notpr.emberlist.data.model.TaskEntity) -> Unit
+    onToggleExpand: () -> Unit
 ) {
     val modifier = Modifier
         .fillMaxWidth()
         .padding(horizontal = 16.dp, vertical = 6.dp)
-        .combinedClickable(
-            onClick = {
-                if (selectionMode) onSelectToggle(!selected) else onOpen()
-            },
-            onLongClick = {
-                if (!selectionMode) onEnterSelection()
-            }
-        )
+        .pointerInput(selectionMode, selected, item.task.id) {
+            detectTapGestures(
+                onTap = {
+                    if (selectionMode) onSelectToggle(!selected) else onOpen()
+                },
+                onLongPress = {
+                    if (!selectionMode) onEnterSelection()
+                }
+            )
+        }
     Row(modifier = modifier) {
         if (selectionMode) {
             androidx.compose.material3.Checkbox(checked = selected, onCheckedChange = null)
@@ -450,9 +445,7 @@ private fun SearchTaskRowSelectable(
                 onClick = null,
                 showExpand = showExpand,
                 expanded = expanded,
-                onToggleExpand = onToggleExpand,
-                dragState = dragState,
-                onDropAsSubtask = onDropAsSubtask
+                onToggleExpand = onToggleExpand
             )
         }
     }

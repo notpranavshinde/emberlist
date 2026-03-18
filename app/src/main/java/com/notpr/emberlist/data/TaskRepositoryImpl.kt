@@ -1,13 +1,11 @@
 package com.notpr.emberlist.data
 
 import com.notpr.emberlist.data.dao.ActivityDao
-import com.notpr.emberlist.data.dao.LocationDao
 import com.notpr.emberlist.data.dao.ProjectDao
 import com.notpr.emberlist.data.dao.ReminderDao
 import com.notpr.emberlist.data.dao.SectionDao
 import com.notpr.emberlist.data.dao.TaskDao
 import com.notpr.emberlist.data.model.ActivityEventEntity
-import com.notpr.emberlist.data.model.LocationEntity
 import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
@@ -19,7 +17,6 @@ class TaskRepositoryImpl(
     private val sectionDao: SectionDao,
     private val taskDao: TaskDao,
     private val reminderDao: ReminderDao,
-    private val locationDao: LocationDao,
     private val activityDao: ActivityDao
 ) : TaskRepository {
     override fun observeInbox(): Flow<List<TaskEntity>> = taskDao.observeInbox()
@@ -73,8 +70,6 @@ class TaskRepositoryImpl(
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = activityDao.observeAll()
 
     override fun search(query: String): Flow<List<TaskEntity>> = taskDao.search(query)
-
-    override fun observeLocation(locationId: String): Flow<LocationEntity?> = locationDao.observe(locationId)
 
     override suspend fun upsertProject(project: ProjectEntity) {
         projectDao.upsert(project)
@@ -131,20 +126,4 @@ class TaskRepositoryImpl(
     }
 
     override suspend fun getEnabledReminders(): List<ReminderEntity> = reminderDao.getEnabled()
-
-    override suspend fun upsertLocation(location: LocationEntity) {
-        locationDao.upsert(location)
-    }
-
-    override suspend fun deleteLocation(locationId: String) {
-        locationDao.delete(locationId)
-    }
-
-    override suspend fun getLocation(locationId: String): LocationEntity? = locationDao.get(locationId)
-
-    override suspend fun getLocationsByIds(ids: List<String>): List<LocationEntity> = locationDao.getByIds(ids)
-
-    override suspend fun getEnabledLocationReminders(): List<ReminderEntity> = reminderDao.getEnabledLocationReminders()
-
-    override suspend fun getOpenTasksWithLocation(): List<TaskEntity> = taskDao.getTasksWithLocation()
 }

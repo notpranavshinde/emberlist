@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.annotation.VisibleForTesting
 import androidx.work.Data
+import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.notpr.emberlist.data.TaskRepository
@@ -27,6 +28,7 @@ class ReminderScheduler(
 
     suspend fun scheduleReminder(task: TaskEntity, reminder: ReminderEntity) {
         val triggerAt = computeTriggerAt(task, reminder) ?: return
+        cancelReminder(reminder.id)
         val intent = AlarmReceiver.intentFor(context, task.id, reminder.id)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -52,6 +54,7 @@ class ReminderScheduler(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         alarmManager.cancel(pendingIntent)
+        workManagerOrNull()?.cancelUniqueWork(workName(reminderId))
     }
 
     suspend fun rescheduleAll() {
@@ -81,6 +84,18 @@ class ReminderScheduler(
             .setInitialDelay(delay, TimeUnit.MILLISECONDS)
             .setInputData(data)
             .build()
-        WorkManager.getInstance(context).enqueue(request)
+        workManagerOrNull()?.enqueueUniqueWork(
+            workName(reminderId),
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    private fun workName(reminderId: String): String {
+        return "reminder-$reminderId"
+    }
+
+    private fun workManagerOrNull(): WorkManager? {
+        return runCatching { WorkManager.getInstance(context) }.getOrNull()
     }
 }

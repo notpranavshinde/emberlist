@@ -22,7 +22,6 @@ class ReminderWorker(
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
-            db.locationDao(),
             db.activityDao()
         )
         val task = repository.observeTask(taskId).firstOrNull() ?: return Result.success()

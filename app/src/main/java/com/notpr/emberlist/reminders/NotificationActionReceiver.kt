@@ -8,9 +8,6 @@ import com.notpr.emberlist.data.TaskRepositoryImpl
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.firstOrNull
 
 class NotificationActionReceiver : BroadcastReceiver() {
@@ -24,18 +21,16 @@ class NotificationActionReceiver : BroadcastReceiver() {
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
-            db.locationDao(),
             db.activityDao()
         )
 
-        CoroutineScope(Dispatchers.IO).launch {
-            val task = repository.observeTask(taskId).firstOrNull() ?: return@launch
+        launchAsync {
+            val task = repository.observeTask(taskId).firstOrNull() ?: return@launchAsync
             when (action) {
                 ACTION_COMPLETE -> {
                     val updated = task.copy(status = TaskStatus.COMPLETED, completedAt = System.currentTimeMillis())
                     repository.upsertTask(updated)
                     logTaskActivity(repository, ActivityType.COMPLETED, updated)
-                    com.notpr.emberlist.location.GeofenceScheduler(context, repository).refresh()
                 }
                 ACTION_SNOOZE -> {
                     val scheduler = ReminderScheduler(context, repository)

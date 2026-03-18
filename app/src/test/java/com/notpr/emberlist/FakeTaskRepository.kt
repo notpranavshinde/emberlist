@@ -2,7 +2,6 @@ package com.notpr.emberlist
 
 import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.ActivityEventEntity
-import com.notpr.emberlist.data.model.LocationEntity
 import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
@@ -14,7 +13,6 @@ class FakeTaskRepository : TaskRepository {
     val tasks = LinkedHashMap<String, TaskEntity>()
     val reminders = LinkedHashMap<String, ReminderEntity>()
     val activities = ArrayList<ActivityEventEntity>()
-    val locations = LinkedHashMap<String, LocationEntity>()
 
     override fun observeInbox(): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
     override fun observeToday(endOfDay: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
@@ -44,7 +42,6 @@ class FakeTaskRepository : TaskRepository {
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun search(query: String): Flow<List<TaskEntity>> = flowOf(emptyList())
-    override fun observeLocation(locationId: String): Flow<LocationEntity?> = flowOf(locations[locationId])
 
     override suspend fun upsertProject(project: ProjectEntity) {}
     override suspend fun upsertSection(section: SectionEntity) {}
@@ -79,24 +76,6 @@ class FakeTaskRepository : TaskRepository {
         activities.add(event)
     }
 
-    override suspend fun upsertLocation(location: LocationEntity) {
-        locations[location.id] = location
-    }
-
-    override suspend fun deleteLocation(locationId: String) {
-        locations.remove(locationId)
-    }
-
-    override suspend fun getLocation(locationId: String): LocationEntity? = locations[locationId]
-    override suspend fun getLocationsByIds(ids: List<String>): List<LocationEntity> =
-        ids.mapNotNull { locations[it] }
-
     override suspend fun getEnabledReminders(): List<ReminderEntity> =
         reminders.values.filter { it.enabled }
-
-    override suspend fun getEnabledLocationReminders(): List<ReminderEntity> =
-        reminders.values.filter { it.enabled && it.type == com.notpr.emberlist.data.model.ReminderType.LOCATION }
-
-    override suspend fun getOpenTasksWithLocation(): List<TaskEntity> =
-        tasks.values.filter { it.locationId != null }
 }

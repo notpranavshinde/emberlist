@@ -5,9 +5,6 @@ import android.content.Context
 import android.content.Intent
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.TaskRepositoryImpl
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -17,13 +14,11 @@ class BootReceiver : BroadcastReceiver() {
             db.sectionDao(),
             db.taskDao(),
             db.reminderDao(),
-            db.locationDao(),
             db.activityDao()
         )
         val scheduler = ReminderScheduler(context, repository)
-        CoroutineScope(Dispatchers.IO).launch {
+        launchAsync {
             scheduler.rescheduleAll()
-            com.notpr.emberlist.location.GeofenceScheduler(context, repository).refresh()
         }
     }
 }

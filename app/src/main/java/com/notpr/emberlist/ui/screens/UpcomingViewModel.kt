@@ -10,13 +10,11 @@ import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
-import com.notpr.emberlist.domain.reparentAsSubtask
 import com.notpr.emberlist.domain.RecurrenceEngine
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
-import com.notpr.emberlist.location.GeofenceScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import java.time.Instant
 import java.time.LocalDate
@@ -42,8 +40,7 @@ data class UpcomingItem(
 
 class UpcomingViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController,
-    private val geofenceScheduler: GeofenceScheduler
+    private val undoController: UndoController
 ) : ViewModel() {
     private val startOfTomorrow = startOfTomorrowMillis()
 
@@ -85,28 +82,6 @@ class UpcomingViewModel(
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private fun refreshGeofences() {
-        viewModelScope.launch { geofenceScheduler.refresh() }
-    }
-
-    fun makeSubtask(dragged: TaskEntity, parent: TaskEntity) {
-        viewModelScope.launch {
-            val before = dragged
-            val updated = reparentAsSubtask(repository, dragged, parent) ?: return@launch
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
-            undoController.post(
-                UndoEvent(
-                    message = "Undo subtask: ${dragged.title}",
-                    undo = {
-                        repository.upsertTask(before)
-                        logTaskActivity(repository, ActivityType.UPDATED, before)
-                    }
-                )
-            )
-            refreshGeofences()
-        }
-    }
-
     @OptIn(ExperimentalCoroutinesApi::class)
     private val subtaskEntities = tasks
         .map { list -> list.map { it.item.task.id } }
@@ -147,7 +122,6 @@ class UpcomingViewModel(
                         }
                     )
                 )
-                refreshGeofences()
             } else {
                 repository.upsertTask(
                     task.copy(
@@ -166,7 +140,6 @@ class UpcomingViewModel(
                         }
                     )
                 )
-                refreshGeofences()
             }
         }
     }
@@ -190,7 +163,6 @@ class UpcomingViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -221,7 +193,6 @@ class UpcomingViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -248,7 +219,6 @@ class UpcomingViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -265,7 +235,6 @@ class UpcomingViewModel(
                     }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -283,7 +252,6 @@ class UpcomingViewModel(
                     undo = { tasks.forEach { repository.upsertTask(it) } }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -303,7 +271,6 @@ class UpcomingViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
-            refreshGeofences()
         }
     }
 
@@ -323,7 +290,6 @@ class UpcomingViewModel(
                     undo = { before.forEach { repository.upsertTask(it) } }
                 )
             )
-            refreshGeofences()
         }
     }
 

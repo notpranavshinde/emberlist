@@ -18,7 +18,6 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Recurring tasks (due + deadline recurrence)
 - Time‑based reminders with notifications
 - Optional completed section on Today
-- Location‑based reminders (arrive/leave)
 - Notification actions (complete, snooze)
 - Swipe actions on tasks (reschedule via date picker, delete with confirmation)
 - Search
@@ -62,26 +61,9 @@ Entities live in `app/src/main/java/com/notpr/emberlist/data/model/Models.kt`.
 - `SectionEntity`
 - `TaskEntity`
 - `ReminderEntity`
-- `LocationEntity`
 - `ActivityEventEntity`
 
 Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/data/EmberlistDatabase.kt` with migrations `1 -> 2`, `2 -> 3`, and `3 -> 4`.
-
-## Location Features
-
-Location‑based reminders use Android Geofences and require a Google Maps API key.
-
-### Setup
-1. Create a Google Maps API key in Google Cloud.
-2. Add it to `local.properties` (do not commit):
-   ```
-   MAPS_API_KEY=your_key_here
-   ```
-3. Restrict the key by **package name + SHA‑1** (debug and release).
-
-### Permissions
-- Foreground: `ACCESS_FINE_LOCATION`
-- Background: `ACCESS_BACKGROUND_LOCATION` (required for reminders when app is closed)
 
 ## Reminders
 
