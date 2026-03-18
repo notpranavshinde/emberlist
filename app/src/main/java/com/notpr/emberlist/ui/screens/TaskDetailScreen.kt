@@ -1,25 +1,35 @@
 package com.notpr.emberlist.ui.screens
 
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -94,6 +104,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     var projectMenuOpen by remember { mutableStateOf(false) }
     var sectionMenuOpen by remember { mutableStateOf(false) }
     var activityExpanded by remember(taskId) { mutableStateOf(false) }
+    var actionsMenuOpen by remember { mutableStateOf(false) }
     val parserFocusRequester = remember { FocusRequester() }
 
     val hashToken = remember(inputState.text) {
@@ -180,152 +191,191 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
             .fillMaxSize()
             .padding(padding)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            DropdownMenu(
-                expanded = projectMenuOpen && projectQuery != null && !hasSlash,
-                onDismissRequest = { projectMenuOpen = false },
-                properties = PopupProperties(focusable = false),
-                modifier = Modifier.fillMaxWidth()
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
-                projectMatches.forEach { name ->
-                    DropdownMenuItem(
-                        text = { Text(name) },
-                        onClick = {
-                            val currentText = inputState.text
-                            val hashIndex = currentText.lastIndexOf('#')
-                            if (hashIndex != -1) {
-                                val before = currentText.substring(0, hashIndex + 1)
-                                val after = currentText.substring(hashIndex + 1)
-                                val remainder = after.dropWhile { !it.isWhitespace() }
-                                val spacer = if (remainder.isEmpty()) " " else ""
-                                val newText = "$before$name$spacer$remainder"
-                                val cursor = before.length + name.length + spacer.length
-                                inputState = TextFieldValue(newText, selection = TextRange(cursor))
-                                projectMenuOpen = false
-                            }
-                        }
-                    )
+                task?.let {
+                    Box(modifier = Modifier.padding(top = 10.dp)) {
+                        TaskDetailToggle(
+                            task = it,
+                            onToggle = viewModel::toggleComplete
+                        )
+                    }
                 }
-            }
-            DropdownMenu(
-                expanded = sectionMenuOpen && sectionQuery != null,
-                onDismissRequest = { sectionMenuOpen = false },
-                properties = PopupProperties(focusable = false),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                sectionMatches.forEach { name ->
-                    DropdownMenuItem(
-                        text = { Text(name) },
-                        onClick = {
-                            val currentText = inputState.text
-                            val hashIndex = currentText.lastIndexOf('#')
-                            if (hashIndex != -1) {
-                                val afterHash = currentText.substring(hashIndex + 1)
-                                val token = afterHash.takeWhile { !it.isWhitespace() }
-                                val slashIndex = token.indexOf('/')
-                                if (slashIndex != -1) {
-                                    val tokenStart = hashIndex + 1
-                                    val before = currentText.substring(0, tokenStart + slashIndex + 1)
-                                    val after = currentText.substring(tokenStart + slashIndex + 1)
-                                    val remainder = after.dropWhile { !it.isWhitespace() }
-                                    val spacer = if (remainder.isEmpty()) " " else ""
-                                    val newText = "$before$name$spacer$remainder"
-                                    val cursor = before.length + name.length + spacer.length
-                                    inputState = TextFieldValue(newText, selection = TextRange(cursor))
-                                    sectionMenuOpen = false
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp)
+                ) {
+                    TextField(
+                        value = inputState,
+                        onValueChange = { value ->
+                            inputState = value
+                            val hashIndex = value.text.lastIndexOf('#')
+                            val token = if (hashIndex == -1) "" else value.text.substring(hashIndex + 1).takeWhile { !it.isWhitespace() }
+                            val tokenHasSlash = token.contains("/")
+                            projectMenuOpen = hashIndex != -1 && !tokenHasSlash
+                            sectionMenuOpen = hashIndex != -1 && tokenHasSlash
+                        },
+                        placeholder = { Text("Edit task") },
+                        visualTransformation = rememberTaskDetailTokenHighlighter(),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { }),
+                        textStyle = MaterialTheme.typography.titleLarge,
+                        minLines = 1,
+                        maxLines = 3,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(parserFocusRequester)
+                            .onFocusChanged { focusState ->
+                                projectMenuOpen = focusState.isFocused && projectQuery != null && !hasSlash
+                                sectionMenuOpen = focusState.isFocused && sectionQuery != null
+                            }
+                    )
+                    DropdownMenu(
+                        expanded = projectMenuOpen && projectQuery != null && !hasSlash,
+                        onDismissRequest = { projectMenuOpen = false },
+                        properties = PopupProperties(focusable = false),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        projectMatches.forEach { name ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = {
+                                    val currentText = inputState.text
+                                    val hashIndex = currentText.lastIndexOf('#')
+                                    if (hashIndex != -1) {
+                                        val before = currentText.substring(0, hashIndex + 1)
+                                        val after = currentText.substring(hashIndex + 1)
+                                        val remainder = after.dropWhile { !it.isWhitespace() }
+                                        val spacer = if (remainder.isEmpty()) " " else ""
+                                        val newText = "$before$name$spacer$remainder"
+                                        val cursor = before.length + name.length + spacer.length
+                                        inputState = TextFieldValue(newText, selection = TextRange(cursor))
+                                        projectMenuOpen = false
+                                    }
                                 }
-                            }
+                            )
                         }
-                    )
+                    }
+                    DropdownMenu(
+                        expanded = sectionMenuOpen && sectionQuery != null,
+                        onDismissRequest = { sectionMenuOpen = false },
+                        properties = PopupProperties(focusable = false),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        sectionMatches.forEach { name ->
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = {
+                                    val currentText = inputState.text
+                                    val hashIndex = currentText.lastIndexOf('#')
+                                    if (hashIndex != -1) {
+                                        val afterHash = currentText.substring(hashIndex + 1)
+                                        val token = afterHash.takeWhile { !it.isWhitespace() }
+                                        val slashIndex = token.indexOf('/')
+                                        if (slashIndex != -1) {
+                                            val tokenStart = hashIndex + 1
+                                            val before = currentText.substring(0, tokenStart + slashIndex + 1)
+                                            val after = currentText.substring(tokenStart + slashIndex + 1)
+                                            val remainder = after.dropWhile { !it.isWhitespace() }
+                                            val spacer = if (remainder.isEmpty()) " " else ""
+                                            val newText = "$before$name$spacer$remainder"
+                                            val cursor = before.length + name.length + spacer.length
+                                            inputState = TextFieldValue(newText, selection = TextRange(cursor))
+                                            sectionMenuOpen = false
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
-            TextField(
-                value = inputState,
-                onValueChange = { value ->
-                    inputState = value
-                    val hashIndex = value.text.lastIndexOf('#')
-                    val token = if (hashIndex == -1) "" else value.text.substring(hashIndex + 1).takeWhile { !it.isWhitespace() }
-                    val tokenHasSlash = token.contains("/")
-                    projectMenuOpen = hashIndex != -1 && !tokenHasSlash
-                    sectionMenuOpen = hashIndex != -1 && tokenHasSlash
-                },
-                placeholder = { Text("Task name") },
-                singleLine = true,
-                visualTransformation = rememberTaskDetailTokenHighlighter(),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { }),
-                textStyle = MaterialTheme.typography.headlineSmall,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(parserFocusRequester)
-                    .onFocusChanged { focusState ->
-                        projectMenuOpen = focusState.isFocused && projectQuery != null && !hasSlash
-                        sectionMenuOpen = focusState.isFocused && sectionQuery != null
+                    .padding(top = 0.dp, end = 2.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Box {
+                    IconButton(onClick = { actionsMenuOpen = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Task actions")
                     }
+                    DropdownMenu(
+                        expanded = actionsMenuOpen,
+                        onDismissRequest = { actionsMenuOpen = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive") },
+                            onClick = {
+                                task?.let(viewModel::toggleArchive)
+                                actionsMenuOpen = false
+                            }
+                        )
+                        if (task?.recurringRule != null || task?.deadlineRecurringRule != null) {
+                            DropdownMenuItem(
+                                text = { Text("Complete forever") },
+                                onClick = {
+                                    task?.let(viewModel::completeForever)
+                                    actionsMenuOpen = false
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                actionsMenuOpen = false
+                                showDeleteDialog = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "Notes",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                modifier = Modifier.padding(top = 6.dp)
             )
             TextField(
                 value = description,
                 onValueChange = { description = it },
-                placeholder = { Text("Description") },
-                singleLine = true,
+                placeholder = { Text("Add notes") },
+                minLines = 2,
+                maxLines = 4,
                 textStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 ),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
+                    .padding(top = 6.dp)
             )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = { task?.let { viewModel.toggleComplete(it) } }
-            ) {
-                Text(if (task?.status == TaskStatus.COMPLETED) "Uncomplete" else "Complete")
-            }
-            Button(
-                modifier = Modifier.weight(1f),
-                onClick = { task?.let { viewModel.toggleArchive(it) } }
-            ) {
-                Text(if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive")
-            }
-        }
-
-        TextButton(
-            onClick = { showDeleteDialog = true },
-            modifier = Modifier.padding(top = 4.dp)
-        ) {
-            Text("Delete", color = MaterialTheme.colorScheme.error)
         }
 
         Text(
             text = "Subtasks",
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(top = 16.dp)
+            modifier = Modifier.padding(top = 22.dp)
         )
         val currentTask = task
         var newSubtask by remember(task?.id) { mutableStateOf("") }
@@ -355,9 +405,9 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent
                 )
@@ -370,7 +420,8 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                         newSubtask = ""
                     }
                 },
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = 8.dp),
+                shape = RoundedCornerShape(16.dp)
             ) {
                 Text("Add")
             }
@@ -380,7 +431,8 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 20.dp),
+                    .padding(top = 18.dp)
+                    .clickable { activityExpanded = !activityExpanded },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -392,12 +444,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
-                TextButton(onClick = { activityExpanded = !activityExpanded }) {
-                    Icon(
-                        imageVector = if (activityExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (activityExpanded) "Collapse activity" else "Expand activity"
-                    )
-                }
+                Icon(
+                    imageVector = if (activityExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (activityExpanded) "Collapse activity" else "Expand activity"
+                )
             }
             if (activityExpanded) {
                 val activityFormatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
@@ -445,6 +495,38 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun TaskDetailToggle(task: TaskEntity, onToggle: (TaskEntity) -> Unit) {
+    val color = taskDetailPriorityColor(task.priority)
+    val isCompleted = task.status == TaskStatus.COMPLETED
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .border(2.dp, color, CircleShape)
+            .background(if (isCompleted) color else Color.Transparent, CircleShape)
+            .clickable { onToggle(task) },
+        contentAlignment = Alignment.Center
+    ) {
+        if (isCompleted) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = "Completed",
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+private fun taskDetailPriorityColor(priority: Priority): Color {
+    return when (priority) {
+        Priority.P1 -> Color(0xFFE05A4F)
+        Priority.P2 -> Color(0xFFEE6A3C)
+        Priority.P3 -> Color(0xFF4B7BEC)
+        Priority.P4 -> Color(0xFFA8A29E)
     }
 }
 

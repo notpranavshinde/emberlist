@@ -15,7 +15,12 @@ fun flattenTaskItemsWithSubtasks(
         val children = subtasksByParent[parent.task.id].orEmpty()
         val hasSubtasks = children.isNotEmpty()
         val isExpanded = expandedState[parent.task.id] ?: defaultExpanded
-        result += parent.copy(hasSubtasks = hasSubtasks, isExpanded = isExpanded)
+        result += parent.copy(
+            hasSubtasks = hasSubtasks,
+            isExpanded = isExpanded,
+            subtaskCount = children.size,
+            completedSubtaskCount = children.count { it.task.status == com.notpr.emberlist.data.model.TaskStatus.COMPLETED }
+        )
         if (hasSubtasks && isExpanded) {
             children.forEach { child ->
                 result += child.copy(isSubtask = true, indentLevel = 1)
@@ -39,7 +44,12 @@ fun flattenUpcomingItemsWithSubtasks(
         val hasSubtasks = children.isNotEmpty()
         val isExpanded = expandedState[parent.item.task.id] ?: defaultExpanded
         result += parent.copy(
-            item = parent.item.copy(hasSubtasks = hasSubtasks, isExpanded = isExpanded)
+            item = parent.item.copy(
+                hasSubtasks = hasSubtasks,
+                isExpanded = isExpanded,
+                subtaskCount = children.size,
+                completedSubtaskCount = children.count { it.task.status == com.notpr.emberlist.data.model.TaskStatus.COMPLETED }
+            )
         )
         if (hasSubtasks && isExpanded && !parent.isPreview) {
             children.forEach { child ->

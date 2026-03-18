@@ -146,6 +146,30 @@ class TaskDetailViewModel(
         }
     }
 
+    fun completeForever(task: TaskEntity) {
+        viewModelScope.launch {
+            val before = task
+            val beforeSubtasks = repository.getSubtasks(task.id)
+            val withoutRecurrence = task.copy(
+                recurringRule = null,
+                deadlineRecurringRule = null,
+                updatedAt = System.currentTimeMillis()
+            )
+            completeTaskAndSubtasks(repository, withoutRecurrence)
+            logTaskActivity(repository, ActivityType.UPDATED, withoutRecurrence)
+            undoController.post(
+                UndoEvent(
+                    message = "Undo complete forever: ${task.title}",
+                    undo = {
+                        repository.upsertTask(before)
+                        beforeSubtasks.forEach { repository.upsertTask(it) }
+                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                    }
+                )
+            )
+        }
+    }
+
     fun applyParsedTaskChanges(
         current: TaskEntity,
         description: String,

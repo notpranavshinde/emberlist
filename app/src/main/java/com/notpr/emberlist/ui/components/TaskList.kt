@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
@@ -61,7 +63,9 @@ data class TaskListItem(
     val isSubtask: Boolean = false,
     val indentLevel: Int = 0,
     val hasSubtasks: Boolean = false,
-    val isExpanded: Boolean = false
+    val isExpanded: Boolean = false,
+    val subtaskCount: Int = 0,
+    val completedSubtaskCount: Int = 0
 )
 
 @Composable
@@ -90,7 +94,7 @@ fun TaskRow(
     }
 
     val indentPadding = if (item.isSubtask && item.task.parentTaskId != null) {
-        24.dp * (item.indentLevel.coerceAtLeast(1))
+        18.dp * (item.indentLevel.coerceAtLeast(1))
     } else {
         0.dp
     }
@@ -147,25 +151,19 @@ fun TaskRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp + indentPadding + hoverIndent, end = 16.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(start = 16.dp + indentPadding + hoverIndent, end = 16.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.Top
         ) {
-            if (showExpand) {
-                val icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
-                Icon(
-                    imageVector = icon,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable { onToggleExpand?.invoke() },
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            Row(
+                modifier = Modifier.padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TaskToggle(
+                    task = item.task,
+                    onToggle = onToggle
                 )
             }
-            TaskToggle(
-                task = item.task,
-                onToggle = onToggle
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                 val isCompleted = item.task.status == TaskStatus.COMPLETED
                 Text(
                     text = item.task.title,
@@ -178,7 +176,25 @@ fun TaskRow(
                         MaterialTheme.colorScheme.onSurface
                     }
                 )
+                if (item.hasSubtasks) {
+                    TaskSubtaskSummary(
+                        completedCount = item.completedSubtaskCount,
+                        totalCount = item.subtaskCount
+                    )
+                }
                 TaskMetaLine(item = item)
+            }
+            if (showExpand) {
+                val icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
+                Icon(
+                    imageVector = icon,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier
+                        .padding(top = 6.dp, start = 8.dp)
+                        .size(18.dp)
+                        .clickable { onToggleExpand?.invoke() },
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
+                )
             }
         }
         Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
@@ -226,11 +242,33 @@ private fun TaskToggle(task: TaskEntity, onToggle: (TaskEntity) -> Unit) {
 }
 
 @Composable
+private fun TaskSubtaskSummary(completedCount: Int, totalCount: Int) {
+    if (totalCount <= 0) return
+    val metaColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    Row(
+        modifier = Modifier.padding(top = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 12.dp, height = 10.dp)
+                .border(1.dp, metaColor, RoundedCornerShape(3.dp))
+        )
+        Text(
+            text = "$completedCount/$totalCount",
+            style = MaterialTheme.typography.bodySmall,
+            color = metaColor,
+            modifier = Modifier.padding(start = 6.dp)
+        )
+    }
+}
+
+@Composable
 private fun TaskMetaLine(item: TaskListItem) {
     val dueLabel = buildDueLabel(item)
     val metaColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = if (item.hasSubtasks) 3.dp else 2.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

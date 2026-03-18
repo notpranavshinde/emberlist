@@ -11,7 +11,7 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Projects with sections
 - List + Board views for projects
 - Drag‑and‑drop between sections in Board view
-- Parser-first task detail editor (quick-parser + description, subtasks, status actions, collapsed activity)
+- Parser-first task detail editor (quick-parser + description, subtasks, overflow actions, collapsed activity)
 - Task archive/unarchive
 - Subtasks in task detail
 - Task activity log
@@ -44,6 +44,7 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Reminders are scheduled through `ReminderScheduler` (AlarmManager; WorkManager fallback).
 - Export/import uses JSON via `BackupManager`.
 - Task detail uses the same parser model as Quick Add for live metadata edits.
+- Repeating tasks can be ended from task detail with a "Complete forever" action that completes the current task and stops future recurrence.
 
 ## Project Setup
 
