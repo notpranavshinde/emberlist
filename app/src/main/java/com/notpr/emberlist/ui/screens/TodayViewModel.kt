@@ -11,6 +11,7 @@ import com.notpr.emberlist.ui.startOfTodayMillis
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.domain.reparentAsSubtask
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.ui.components.TaskListItem
 import com.notpr.emberlist.ui.startOfTomorrowMillis
@@ -258,6 +259,13 @@ class TodayViewModel(
                     }
                 )
             )
+        }
+    }
+
+    fun makeSubtask(dragged: TaskEntity, parent: TaskEntity) {
+        viewModelScope.launch {
+            val updated = reparentAsSubtask(repository, dragged, parent) ?: return@launch
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 

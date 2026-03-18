@@ -3,27 +3,29 @@ package com.notpr.emberlist.ui.screens
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.notpr.emberlist.data.TaskRepository
+import com.notpr.emberlist.data.model.ActivityType
+import com.notpr.emberlist.data.model.ObjectType
+import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.ReminderType
-import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
-import com.notpr.emberlist.data.model.ObjectType
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
-import com.notpr.emberlist.data.model.ActivityType
+import com.notpr.emberlist.parsing.QuickAddResult
+import com.notpr.emberlist.parsing.ReminderSpec
+import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
-import com.notpr.emberlist.reminders.ReminderScheduler
+import java.util.UUID
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class TaskDetailViewModel(
     private val repository: TaskRepository,
@@ -45,20 +47,13 @@ class TaskDetailViewModel(
         repository.observeProjects()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun observeSections(projectId: String): StateFlow<List<SectionEntity>> =
-        repository.observeSections(projectId)
+    fun observeAllSections(): StateFlow<List<SectionEntity>> =
+        repository.observeAllSections()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun observeActivity(taskId: String) =
         repository.observeActivity(taskId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    fun updateTask(task: TaskEntity) {
-        viewModelScope.launch {
-            repository.upsertTask(task.copy(updatedAt = System.currentTimeMillis()))
-            logTaskActivity(repository, ActivityType.UPDATED, task)
-        }
-    }
 
     fun addSubtask(parent: TaskEntity, title: String) {
         viewModelScope.launch {
@@ -151,60 +146,77 @@ class TaskDetailViewModel(
         }
     }
 
-    fun addReminderAt(task: TaskEntity, timeAt: Long) {
+    fun applyParsedTaskChanges(
+        current: TaskEntity,
+        description: String,
+        parsed: QuickAddResult,
+        existingReminders: List<ReminderEntity>
+    ) {
         viewModelScope.launch {
-            val reminder = ReminderEntity(
-                id = UUID.randomUUID().toString(),
-                taskId = task.id,
-                type = ReminderType.TIME,
-                timeAt = timeAt,
-                offsetMinutes = null,
-                locationId = null,
-                locationTriggerType = null,
-                enabled = true,
-                createdAt = System.currentTimeMillis()
-            )
-            repository.upsertReminder(reminder)
-            reminderScheduler.scheduleReminder(task, reminder)
-            logActivity(repository, ActivityType.REMINDER_SCHEDULED, ObjectType.REMINDER, reminder.id)
-        }
-    }
-
-    fun addReminderOffset(task: TaskEntity, minutes: Int) {
-        viewModelScope.launch {
-            val reminder = ReminderEntity(
-                id = UUID.randomUUID().toString(),
-                taskId = task.id,
-                type = ReminderType.TIME,
-                timeAt = null,
-                offsetMinutes = minutes,
-                locationId = null,
-                locationTriggerType = null,
-                enabled = true,
-                createdAt = System.currentTimeMillis()
-            )
-            repository.upsertReminder(reminder)
-            reminderScheduler.scheduleReminder(task, reminder)
-            logActivity(repository, ActivityType.REMINDER_SCHEDULED, ObjectType.REMINDER, reminder.id)
-        }
-    }
-
-    fun toggleReminder(task: TaskEntity, reminder: ReminderEntity) {
-        viewModelScope.launch {
-            val updated = reminder.copy(enabled = !reminder.enabled)
-            repository.upsertReminder(updated)
-            if (updated.enabled) {
-                reminderScheduler.scheduleReminder(task, updated)
-            } else {
-                reminderScheduler.cancelReminder(updated.id)
+            val normalized = normalizeParsedResult(parsed)
+            val now = System.currentTimeMillis()
+            val projectId = normalized.projectName?.let { name ->
+                val existing = repository.getProjectByName(name)
+                if (existing != null) {
+                    existing.id
+                } else {
+                    val newProject = ProjectEntity(
+                        id = UUID.randomUUID().toString(),
+                        name = name,
+                        color = "#EE6A3C",
+                        favorite = false,
+                        order = 0,
+                        archived = false,
+                        viewPreference = null,
+                        createdAt = now,
+                        updatedAt = now
+                    )
+                    repository.upsertProject(newProject)
+                    logActivity(repository, ActivityType.CREATED, ObjectType.PROJECT, newProject.id)
+                    newProject.id
+                }
             }
-        }
-    }
+            val sectionId = if (!normalized.sectionName.isNullOrBlank() && projectId != null) {
+                val existing = repository.getSectionByName(projectId, normalized.sectionName)
+                if (existing != null) {
+                    existing.id
+                } else {
+                    val newSection = SectionEntity(
+                        id = UUID.randomUUID().toString(),
+                        projectId = projectId,
+                        name = normalized.sectionName,
+                        order = 0,
+                        createdAt = now,
+                        updatedAt = now
+                    )
+                    repository.upsertSection(newSection)
+                    newSection.id
+                }
+            } else {
+                null
+            }
 
-    fun deleteReminder(reminder: ReminderEntity) {
-        viewModelScope.launch {
-            repository.deleteReminder(reminder.id)
-            reminderScheduler.cancelReminder(reminder.id)
+            val updatedTask = current.copy(
+                title = normalized.title,
+                description = description.trim(),
+                projectId = projectId,
+                sectionId = sectionId,
+                priority = normalized.priority,
+                dueAt = normalized.dueAt,
+                allDay = normalized.allDay,
+                deadlineAt = normalized.deadlineAt,
+                deadlineAllDay = normalized.deadlineAllDay,
+                recurringRule = normalized.recurrenceRule,
+                deadlineRecurringRule = normalized.deadlineRecurringRule,
+                updatedAt = now
+            )
+
+            if (updatedTask != current) {
+                repository.upsertTask(updatedTask)
+                logTaskActivity(repository, ActivityType.UPDATED, updatedTask)
+            }
+
+            syncReminders(updatedTask, existingReminders, desiredReminderSpecs(normalized))
         }
     }
 
@@ -225,6 +237,82 @@ class TaskDetailViewModel(
             } else {
                 repository.deleteTask(taskId)
             }
+        }
+    }
+
+    private suspend fun syncReminders(
+        task: TaskEntity,
+        existingReminders: List<ReminderEntity>,
+        desiredSpecs: List<ReminderSpec>
+    ) {
+        val existingComparable = existingReminders
+            .filter { it.type == ReminderType.TIME }
+            .map { it.toComparable() }
+            .sortedBy { "${it.timeAt}:${it.offsetMinutes}" }
+        val desiredComparable = desiredSpecs
+            .map { it.toComparable() }
+            .sortedBy { "${it.timeAt}:${it.offsetMinutes}" }
+
+        if (existingComparable == desiredComparable) return
+
+        existingReminders.forEach { reminder ->
+            repository.deleteReminder(reminder.id)
+            reminderScheduler.cancelReminder(reminder.id)
+        }
+
+        val newReminders = desiredSpecs.map { spec ->
+            ReminderEntity(
+                id = UUID.randomUUID().toString(),
+                taskId = task.id,
+                type = ReminderType.TIME,
+                timeAt = (spec as? ReminderSpec.Absolute)?.timeAtMillis,
+                offsetMinutes = (spec as? ReminderSpec.Offset)?.minutes,
+                locationId = null,
+                locationTriggerType = null,
+                enabled = true,
+                createdAt = System.currentTimeMillis()
+            )
+        }
+        newReminders.forEach { repository.upsertReminder(it) }
+        reminderScheduler.scheduleForTask(task, newReminders)
+    }
+
+    private fun normalizeParsedResult(parsed: QuickAddResult): QuickAddResult {
+        var result = parsed
+        if (result.dueAt == null && !result.recurrenceRule.isNullOrBlank()) {
+            val zone = java.time.ZoneId.systemDefault()
+            val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+            result = result.copy(dueAt = startOfDay, allDay = true)
+        }
+        if (result.deadlineAt == null && !result.deadlineRecurringRule.isNullOrBlank()) {
+            val zone = java.time.ZoneId.systemDefault()
+            val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+            result = result.copy(deadlineAt = startOfDay, deadlineAllDay = true)
+        }
+        return result
+    }
+
+    private fun desiredReminderSpecs(parsed: QuickAddResult): List<ReminderSpec> {
+        return if (parsed.reminders.isEmpty() && parsed.dueAt != null && !parsed.allDay) {
+            listOf(ReminderSpec.Absolute(parsed.dueAt))
+        } else {
+            parsed.reminders
+        }
+    }
+
+    private data class ComparableReminder(
+        val timeAt: Long?,
+        val offsetMinutes: Int?
+    )
+
+    private fun ReminderEntity.toComparable(): ComparableReminder {
+        return ComparableReminder(timeAt = timeAt, offsetMinutes = offsetMinutes)
+    }
+
+    private fun ReminderSpec.toComparable(): ComparableReminder {
+        return when (this) {
+            is ReminderSpec.Absolute -> ComparableReminder(timeAt = timeAtMillis, offsetMinutes = null)
+            is ReminderSpec.Offset -> ComparableReminder(timeAt = null, offsetMinutes = minutes)
         }
     }
 }

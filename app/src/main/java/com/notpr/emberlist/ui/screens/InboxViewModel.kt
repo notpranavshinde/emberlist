@@ -8,6 +8,7 @@ import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.domain.reparentAsSubtask
 import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.data.model.ActivityType
@@ -175,6 +176,13 @@ class InboxViewModel(
                     }
                 )
             )
+        }
+    }
+
+    fun makeSubtask(dragged: TaskEntity, parent: TaskEntity) {
+        viewModelScope.launch {
+            val updated = reparentAsSubtask(repository, dragged, parent) ?: return@launch
+            logTaskActivity(repository, ActivityType.UPDATED, updated)
         }
     }
 }
