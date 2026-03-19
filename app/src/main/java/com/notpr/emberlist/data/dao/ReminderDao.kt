@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ReminderDao {
-    @Query("SELECT * FROM reminders WHERE taskId = :taskId ORDER BY createdAt ASC")
+    @Query("SELECT * FROM reminders WHERE taskId = :taskId AND ephemeral = 0 ORDER BY createdAt ASC")
     fun observeForTask(taskId: String): Flow<List<ReminderEntity>>
+
+    @Query("SELECT * FROM reminders WHERE taskId = :taskId ORDER BY createdAt ASC")
+    suspend fun getForTask(taskId: String): List<ReminderEntity>
 
     @Query("SELECT * FROM reminders WHERE enabled = 1")
     fun observeEnabled(): Flow<List<ReminderEntity>>
@@ -33,4 +36,13 @@ interface ReminderDao {
 
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun delete(id: String)
+
+    @Query("DELETE FROM reminders WHERE taskId = :taskId")
+    suspend fun deleteByTaskId(taskId: String)
+
+    @Query("DELETE FROM reminders WHERE taskId IN (:taskIds)")
+    suspend fun deleteByTaskIds(taskIds: List<String>)
+
+    @Query("DELETE FROM reminders WHERE taskId = :taskId AND ephemeral = 1")
+    suspend fun deleteEphemeralByTaskId(taskId: String)
 }

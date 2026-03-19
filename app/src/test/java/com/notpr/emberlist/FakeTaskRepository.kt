@@ -39,6 +39,8 @@ class FakeTaskRepository : TaskRepository {
     override fun observeEnabledReminders(): Flow<List<ReminderEntity>> =
         flowOf(reminders.values.filter { it.enabled })
     override suspend fun getReminder(reminderId: String): ReminderEntity? = reminders[reminderId]
+    override suspend fun getRemindersForTask(taskId: String): List<ReminderEntity> =
+        reminders.values.filter { it.taskId == taskId }
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun search(query: String): Flow<List<TaskEntity>> = flowOf(emptyList())
@@ -70,6 +72,14 @@ class FakeTaskRepository : TaskRepository {
 
     override suspend fun deleteReminder(reminderId: String) {
         reminders.remove(reminderId)
+    }
+
+    override suspend fun deleteRemindersForTask(taskId: String) {
+        reminders.entries.removeIf { it.value.taskId == taskId }
+    }
+
+    override suspend fun deleteEphemeralRemindersForTask(taskId: String) {
+        reminders.entries.removeIf { it.value.taskId == taskId && it.value.ephemeral }
     }
 
     override suspend fun insertActivity(event: ActivityEventEntity) {

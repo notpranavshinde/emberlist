@@ -6,7 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.TaskRepositoryImpl
-import kotlinx.coroutines.flow.firstOrNull
+import com.notpr.emberlist.data.model.TaskStatus
 
 class ReminderWorker(
     appContext: Context,
@@ -24,7 +24,28 @@ class ReminderWorker(
             db.reminderDao(),
             db.activityDao()
         )
-        val task = repository.observeTask(taskId).firstOrNull() ?: return Result.success()
+        val reminder = repository.getReminder(reminderId)
+        val task = repository.getTask(taskId)
+        val scheduler = ReminderScheduler(applicationContext, repository)
+        if (
+            reminder == null ||
+            task == null ||
+            reminder.taskId != taskId ||
+            !reminder.enabled ||
+            task.status != TaskStatus.OPEN
+        ) {
+            scheduler.cancelReminder(reminderId)
+            if (reminder?.ephemeral == true || task == null) {
+                repository.deleteReminder(reminderId)
+            }
+            return Result.success()
+        }
+        val triggerAt = scheduler.computeTriggerAt(task, reminder)
+        val now = System.currentTimeMillis()
+        if (triggerAt == null || triggerAt < now - MAX_ALLOWED_LATENESS_MS || triggerAt > now + 60_000L) {
+            scheduler.cancelReminder(reminderId)
+            return Result.success()
+        }
         NotificationHelper.ensureChannel(applicationContext)
         val notification = NotificationHelper.buildReminderNotification(
             applicationContext,
@@ -33,11 +54,15 @@ class ReminderWorker(
             task.title
         ).build()
         NotificationManagerCompat.from(applicationContext).notify(reminderId.hashCode(), notification)
+        if (reminder.ephemeral) {
+            repository.deleteReminder(reminderId)
+        }
         return Result.success()
     }
 
     companion object {
         const val KEY_TASK_ID = "key_task_id"
         const val KEY_REMINDER_ID = "key_reminder_id"
+        private const val MAX_ALLOWED_LATENESS_MS = 15 * 60 * 1000L
     }
 }

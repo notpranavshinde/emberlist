@@ -65,6 +65,8 @@ class TaskRepositoryImpl(
 
     override suspend fun getReminder(reminderId: String): ReminderEntity? = reminderDao.getById(reminderId)
 
+    override suspend fun getRemindersForTask(taskId: String): List<ReminderEntity> = reminderDao.getForTask(taskId)
+
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = activityDao.observeForObject(objectId)
 
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = activityDao.observeAll()
@@ -88,6 +90,8 @@ class TaskRepositoryImpl(
     }
 
     override suspend fun deleteTasksByProject(projectId: String) {
+        val taskIds = taskDao.getTaskIdsByProject(projectId)
+        if (taskIds.isNotEmpty()) reminderDao.deleteByTaskIds(taskIds)
         taskDao.deleteByProject(projectId)
     }
 
@@ -100,12 +104,15 @@ class TaskRepositoryImpl(
     }
 
     override suspend fun deleteTask(taskId: String) {
+        reminderDao.deleteByTaskId(taskId)
         taskDao.delete(taskId)
     }
 
     override suspend fun getSubtasks(parentId: String): List<TaskEntity> = taskDao.getSubtasks(parentId)
 
     override suspend fun clearCompletedTasks() {
+        val taskIds = taskDao.getTaskIdsByStatus(com.notpr.emberlist.data.model.TaskStatus.COMPLETED)
+        if (taskIds.isNotEmpty()) reminderDao.deleteByTaskIds(taskIds)
         taskDao.deleteCompleted()
     }
 
@@ -119,6 +126,14 @@ class TaskRepositoryImpl(
 
     override suspend fun deleteReminder(reminderId: String) {
         reminderDao.delete(reminderId)
+    }
+
+    override suspend fun deleteRemindersForTask(taskId: String) {
+        reminderDao.deleteByTaskId(taskId)
+    }
+
+    override suspend fun deleteEphemeralRemindersForTask(taskId: String) {
+        reminderDao.deleteEphemeralByTaskId(taskId)
     }
 
     override suspend fun insertActivity(event: ActivityEventEntity) {

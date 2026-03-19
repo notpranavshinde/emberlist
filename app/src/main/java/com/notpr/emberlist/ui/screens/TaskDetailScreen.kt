@@ -36,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -68,6 +69,7 @@ import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
+import com.notpr.emberlist.domain.formatActivityLabel
 import com.notpr.emberlist.parsing.QuickAddParser
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import com.notpr.emberlist.ui.components.TaskRow
@@ -93,7 +95,6 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val zone = ZoneId.systemDefault()
     val parser = remember { QuickAddParser(zone) }
-    val json = remember { Json { ignoreUnknownKeys = true } }
     val projectById = remember(projects) { projects.associateBy { it.id } }
     val sectionById = remember(allSections) { allSections.associateBy { it.id } }
 
@@ -173,6 +174,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     }
 
     val parsed by remember(inputState.text) { derivedStateOf { parser.parse(inputState.text) } }
+
+    DisposableEffect(taskId) {
+        onDispose { viewModel.flushPendingActivity() }
+    }
 
     LaunchedEffect(task?.id, inputState.text, description, parsed, reminders) {
         val current = task ?: return@LaunchedEffect
@@ -459,7 +464,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                             .padding(vertical = 6.dp)
                     ) {
                         Text(
-                            text = taskActivityLabel(event, json),
+                            text = taskActivityLabel(event),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
@@ -701,14 +706,6 @@ private fun highlightTaskDetailTokens(text: String, color: Color): AnnotatedStri
     return builder.toAnnotatedString()
 }
 
-private fun taskActivityLabel(event: ActivityEventEntity, json: Json): String {
-    if (event.objectType != ObjectType.TASK) return event.type.name
-    return try {
-        val payload = json.parseToJsonElement(event.payloadJson).jsonObject
-        val title = payload["title"]?.jsonPrimitive?.content
-        val action = event.type.name.lowercase().replaceFirstChar { it.uppercase() }
-        if (title.isNullOrBlank()) action else "$action: $title"
-    } catch (_: Exception) {
-        event.type.name
-    }
+private fun taskActivityLabel(event: ActivityEventEntity): String {
+    return formatActivityLabel(event)
 }

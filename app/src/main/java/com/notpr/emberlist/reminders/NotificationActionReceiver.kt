@@ -3,12 +3,12 @@ package com.notpr.emberlist.reminders
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationManagerCompat
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.TaskRepositoryImpl
-import com.notpr.emberlist.data.model.TaskStatus
-import com.notpr.emberlist.domain.logTaskActivity
-import com.notpr.emberlist.data.model.ActivityType
-import kotlinx.coroutines.flow.firstOrNull
+import com.notpr.emberlist.data.model.ReminderEntity
+import com.notpr.emberlist.data.model.ReminderType
+import com.notpr.emberlist.domain.completeTaskAndSubtasks
 
 class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -25,29 +25,36 @@ class NotificationActionReceiver : BroadcastReceiver() {
         )
 
         launchAsync {
-            val task = repository.observeTask(taskId).firstOrNull() ?: return@launchAsync
+            val task = repository.getTask(taskId) ?: run {
+                NotificationManagerCompat.from(context).cancel(reminderId.hashCode())
+                return@launchAsync
+            }
+            val reminder = repository.getReminder(reminderId)
+            val scheduler = ReminderScheduler(context, repository)
+            NotificationManagerCompat.from(context).cancel(reminderId.hashCode())
             when (action) {
                 ACTION_COMPLETE -> {
-                    val updated = task.copy(status = TaskStatus.COMPLETED, completedAt = System.currentTimeMillis())
-                    repository.upsertTask(updated)
-                    logTaskActivity(repository, ActivityType.COMPLETED, updated)
+                    scheduler.cancelRemindersForTask(task.id)
+                    completeTaskAndSubtasks(repository, task)
+                    if (reminder?.ephemeral == true) repository.deleteReminder(reminderId)
                 }
                 ACTION_SNOOZE -> {
-                    val scheduler = ReminderScheduler(context, repository)
-                    val snoozed = task.copy()
-                    val snoozeReminder = com.notpr.emberlist.data.model.ReminderEntity(
-                        id = "snooze-$reminderId",
+                    scheduler.cancelReminder(reminderId)
+                    repository.deleteEphemeralRemindersForTask(task.id)
+                    val snoozeReminder = ReminderEntity(
+                        id = "snooze-${task.id}",
                         taskId = taskId,
-                        type = com.notpr.emberlist.data.model.ReminderType.TIME,
+                        type = ReminderType.TIME,
                         timeAt = System.currentTimeMillis() + 10 * 60 * 1000,
                         offsetMinutes = null,
                         locationId = null,
                         locationTriggerType = null,
                         enabled = true,
+                        ephemeral = true,
                         createdAt = System.currentTimeMillis()
                     )
                     repository.upsertReminder(snoozeReminder)
-                    scheduler.scheduleReminder(snoozed, snoozeReminder)
+                    scheduler.scheduleReminder(task, snoozeReminder)
                 }
             }
         }

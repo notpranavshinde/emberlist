@@ -37,6 +37,7 @@ class ReminderSchedulerTest {
             locationId = null,
             locationTriggerType = null,
             enabled = true,
+            ephemeral = false,
             createdAt = 0L
         )
         assertEquals(2_000_000L, scheduler.computeTriggerAt(task, reminder))
@@ -56,6 +57,7 @@ class ReminderSchedulerTest {
             locationId = null,
             locationTriggerType = null,
             enabled = true,
+            ephemeral = false,
             createdAt = 0L
         )
         assertEquals(1_800_000L, scheduler.computeTriggerAt(task, reminder))
@@ -75,6 +77,7 @@ class ReminderSchedulerTest {
             locationId = null,
             locationTriggerType = null,
             enabled = true,
+            ephemeral = false,
             createdAt = 0L
         )
         assertNull(scheduler.computeTriggerAt(task, reminder))
@@ -84,8 +87,9 @@ class ReminderSchedulerTest {
     fun scheduleReminderRegistersExactAlarm() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val scheduler = ReminderScheduler(context, FakeTaskRepository())
-        val task = baseTask(dueAt = 1_000_000L)
-        val reminder = reminder(timeAt = 2_000_000L)
+        val now = System.currentTimeMillis()
+        val task = baseTask(dueAt = now + 1_000_000L)
+        val reminder = reminder(timeAt = now + 2_000_000L)
         ShadowAlarmManager.setCanScheduleExactAlarms(true)
 
         scheduler.scheduleReminder(task, reminder)
@@ -93,7 +97,7 @@ class ReminderSchedulerTest {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val scheduledAlarms = shadowOf(alarmManager).scheduledAlarms
         assertEquals(1, scheduledAlarms.size)
-        assertEquals(2_000_000L, scheduledAlarms.single().triggerAtTime)
+        assertEquals(now + 2_000_000L, scheduledAlarms.single().triggerAtTime)
         assertTrue(scheduledAlarms.single().allowWhileIdle)
     }
 
@@ -101,29 +105,67 @@ class ReminderSchedulerTest {
     fun scheduleReminderReplacesExistingAlarmForSameReminder() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val scheduler = ReminderScheduler(context, FakeTaskRepository())
-        val task = baseTask(dueAt = 1_000_000L)
-        val reminder = reminder(timeAt = 2_000_000L)
+        val now = System.currentTimeMillis()
+        val task = baseTask(dueAt = now + 1_000_000L)
+        val reminder = reminder(timeAt = now + 2_000_000L)
         ShadowAlarmManager.setCanScheduleExactAlarms(true)
 
         scheduler.scheduleReminder(task, reminder)
-        scheduler.scheduleReminder(task, reminder.copy(timeAt = 3_000_000L))
+        scheduler.scheduleReminder(task, reminder.copy(timeAt = now + 3_000_000L))
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val scheduledAlarms = shadowOf(alarmManager).scheduledAlarms
         assertEquals(1, scheduledAlarms.size)
-        assertEquals(3_000_000L, scheduledAlarms.single().triggerAtTime)
+        assertEquals(now + 3_000_000L, scheduledAlarms.single().triggerAtTime)
     }
 
     @Test
     fun cancelReminderRemovesScheduledAlarm() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val scheduler = ReminderScheduler(context, FakeTaskRepository())
-        val task = baseTask(dueAt = 1_000_000L)
-        val reminder = reminder(timeAt = 2_000_000L)
+        val now = System.currentTimeMillis()
+        val task = baseTask(dueAt = now + 1_000_000L)
+        val reminder = reminder(timeAt = now + 2_000_000L)
         ShadowAlarmManager.setCanScheduleExactAlarms(true)
 
         scheduler.scheduleReminder(task, reminder)
         scheduler.cancelReminder(reminder.id)
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        assertTrue(shadowOf(alarmManager).scheduledAlarms.isEmpty())
+    }
+
+    @Test
+    fun scheduleReminderDoesNotSchedulePastReminder() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val scheduler = ReminderScheduler(context, FakeTaskRepository())
+        val task = baseTask(dueAt = System.currentTimeMillis() - 60_000L)
+        val reminder = reminder(timeAt = System.currentTimeMillis() - 60_000L)
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+
+        scheduler.scheduleReminder(task, reminder)
+
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        assertTrue(shadowOf(alarmManager).scheduledAlarms.isEmpty())
+    }
+
+    @Test
+    fun cancelRemindersForTaskRemovesAllScheduledAlarms() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val now = System.currentTimeMillis()
+        val task = baseTask(dueAt = now + 1_000_000L)
+        repository.tasks[task.id] = task
+        val first = reminder(timeAt = now + 2_000_000L)
+        val second = reminder(id = "r2", timeAt = now + 2_100_000L)
+        repository.reminders[first.id] = first
+        repository.reminders[second.id] = second
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+
+        scheduler.scheduleReminder(task, first)
+        scheduler.scheduleReminder(task, second)
+        scheduler.cancelRemindersForTask(task.id)
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         assertTrue(shadowOf(alarmManager).scheduledAlarms.isEmpty())
@@ -154,9 +196,9 @@ class ReminderSchedulerTest {
         )
     }
 
-    private fun reminder(timeAt: Long? = null, offsetMinutes: Int? = null): ReminderEntity {
+    private fun reminder(id: String = "r1", timeAt: Long? = null, offsetMinutes: Int? = null): ReminderEntity {
         return ReminderEntity(
-            id = "r1",
+            id = id,
             taskId = "t1",
             type = ReminderType.TIME,
             timeAt = timeAt,
@@ -164,6 +206,7 @@ class ReminderSchedulerTest {
             locationId = null,
             locationTriggerType = null,
             enabled = true,
+            ephemeral = false,
             createdAt = 0L
         )
     }

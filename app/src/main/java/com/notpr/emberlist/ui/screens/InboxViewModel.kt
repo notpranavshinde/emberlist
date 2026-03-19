@@ -9,6 +9,7 @@ import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.domain.reparentAsSubtask
+import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.ui.UndoEvent
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.data.model.ActivityType
@@ -32,7 +33,8 @@ import java.time.ZoneId
 
 class InboxViewModel(
     private val repository: TaskRepository,
-    private val undoController: UndoController
+    private val undoController: UndoController,
+    private val reminderScheduler: ReminderScheduler
 ) : ViewModel() {
     val tasks: StateFlow<List<TaskListItem>> = combine(
         repository.observeInbox(),
@@ -77,8 +79,10 @@ class InboxViewModel(
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task
+            val reminders = repository.getRemindersForTask(task.id)
             if (task.status != TaskStatus.COMPLETED) {
                 val beforeSubtasks = repository.getSubtasks(task.id)
+                reminderScheduler.cancelRemindersForTask(task.id)
                 completeTaskAndSubtasks(repository, task)
                 undoController.post(
                     UndoEvent(
@@ -86,24 +90,26 @@ class InboxViewModel(
                         undo = {
                             repository.upsertTask(before)
                             beforeSubtasks.forEach { repository.upsertTask(it) }
+                            reminderScheduler.replaceTaskReminders(before, reminders)
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )
                 )
             } else {
-                repository.upsertTask(
-                    task.copy(
-                        status = TaskStatus.OPEN,
-                        completedAt = null,
-                        updatedAt = System.currentTimeMillis()
-                    )
+                val reopened = task.copy(
+                    status = TaskStatus.OPEN,
+                    completedAt = null,
+                    updatedAt = System.currentTimeMillis()
                 )
-                logTaskActivity(repository, ActivityType.UNCOMPLETED, task)
+                repository.upsertTask(reopened)
+                reminderScheduler.replaceTaskReminders(reopened, reminders)
+                logTaskActivity(repository, ActivityType.UNCOMPLETED, reopened)
                 undoController.post(
                     UndoEvent(
                         message = "Undo reopen: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            reminderScheduler.cancelRemindersForTask(before.id)
                             logTaskActivity(repository, ActivityType.COMPLETED, before)
                         }
                     )
@@ -124,7 +130,7 @@ class InboxViewModel(
             val allDay = if (task.dueAt == null) true else task.allDay
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
             undoController.post(
                 UndoEvent(
                     message = "Undo reschedule: ${task.title}",
@@ -150,7 +156,7 @@ class InboxViewModel(
             val allDay = if (task.dueAt == null) true else task.allDay
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
             undoController.post(
                 UndoEvent(
                     message = "Undo reschedule: ${task.title}",
@@ -182,7 +188,13 @@ class InboxViewModel(
     fun makeSubtask(dragged: TaskEntity, parent: TaskEntity) {
         viewModelScope.launch {
             val updated = reparentAsSubtask(repository, dragged, parent) ?: return@launch
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
+            logTaskActivity(
+                repository = repository,
+                type = ActivityType.UPDATED,
+                task = updated,
+                beforeTask = dragged,
+                details = mapOf("parentTitleAfter" to parent.title)
+            )
         }
     }
 }

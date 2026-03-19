@@ -125,6 +125,7 @@ data class ReminderEntity(
     val locationId: String?,
     val locationTriggerType: LocationTriggerType?,
     val enabled: Boolean,
+    val ephemeral: Boolean,
     val createdAt: Long
 )
 

@@ -30,7 +30,7 @@ import com.notpr.emberlist.data.model.TaskEntity
         LocationEntity::class,
         ActivityEventEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -95,11 +95,18 @@ abstract class EmberlistDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE reminders ADD COLUMN ephemeral INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context): EmberlistDatabase {
             return Room.databaseBuilder(context, EmberlistDatabase::class.java, DB_NAME)
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
+                .addMigrations(MIGRATION_4_5)
                 .build()
         }
     }

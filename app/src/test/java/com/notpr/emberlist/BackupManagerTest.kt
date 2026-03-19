@@ -109,6 +109,7 @@ class BackupManagerTest {
             locationId = null,
             locationTriggerType = null,
             enabled = true,
+            ephemeral = false,
             createdAt = now
         )
         val location = LocationEntity(

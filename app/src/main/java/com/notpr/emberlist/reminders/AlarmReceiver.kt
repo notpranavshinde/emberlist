@@ -3,9 +3,9 @@ package com.notpr.emberlist.reminders
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import androidx.core.app.NotificationManagerCompat
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.TaskRepositoryImpl
+import com.notpr.emberlist.data.model.TaskStatus
 import kotlinx.coroutines.flow.firstOrNull
 
 class AlarmReceiver : BroadcastReceiver() {
@@ -22,7 +22,28 @@ class AlarmReceiver : BroadcastReceiver() {
         )
 
         launchAsync {
-            val task = repository.observeTask(taskId).firstOrNull() ?: return@launchAsync
+            val reminder = repository.getReminder(reminderId)
+            val task = repository.observeTask(taskId).firstOrNull()
+            val scheduler = ReminderScheduler(context, repository)
+            if (
+                reminder == null ||
+                task == null ||
+                reminder.taskId != taskId ||
+                !reminder.enabled ||
+                task.status != TaskStatus.OPEN
+            ) {
+                scheduler.cancelReminder(reminderId)
+                if (reminder?.ephemeral == true || task == null) {
+                    repository.deleteReminder(reminderId)
+                }
+                return@launchAsync
+            }
+            val triggerAt = scheduler.computeTriggerAt(task, reminder)
+            val now = System.currentTimeMillis()
+            if (triggerAt == null || triggerAt < now - MAX_ALLOWED_LATENESS_MS || triggerAt > now + 60_000L) {
+                scheduler.cancelReminder(reminderId)
+                return@launchAsync
+            }
             NotificationHelper.ensureChannel(context)
             val notification = NotificationHelper.buildReminderNotification(
                 context,
@@ -30,13 +51,17 @@ class AlarmReceiver : BroadcastReceiver() {
                 reminderId,
                 task.title
             ).build()
-            NotificationManagerCompat.from(context).notify(reminderId.hashCode(), notification)
+            androidx.core.app.NotificationManagerCompat.from(context).notify(reminderId.hashCode(), notification)
+            if (reminder.ephemeral) {
+                repository.deleteReminder(reminder.id)
+            }
         }
     }
 
     companion object {
         private const val EXTRA_TASK_ID = "extra_task_id"
         private const val EXTRA_REMINDER_ID = "extra_reminder_id"
+        private const val MAX_ALLOWED_LATENESS_MS = 15 * 60 * 1000L
 
         fun intentFor(context: Context, taskId: String, reminderId: String): Intent {
             return Intent(context, AlarmReceiver::class.java)

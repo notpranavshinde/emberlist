@@ -106,7 +106,7 @@ class SearchViewModel(
             val allDay = if (task.dueAt == null) true else task.allDay
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
             undoController.post(
                 UndoEvent(
                     message = "Undo reschedule: ${task.title}",
@@ -132,7 +132,7 @@ class SearchViewModel(
             val allDay = if (task.dueAt == null) true else task.allDay
             val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
             repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated)
+            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
             undoController.post(
                 UndoEvent(
                     message = "Undo reschedule: ${task.title}",
@@ -160,7 +160,7 @@ class SearchViewModel(
                 val newDue = LocalDateTime.of(date, time).atZone(zone).toInstant().toEpochMilli()
                 val updated = task.copy(dueAt = newDue, updatedAt = System.currentTimeMillis())
                 repository.upsertTask(updated)
-                logTaskActivity(repository, ActivityType.UPDATED, updated)
+                logTaskActivity(repository, ActivityType.UPDATED, updated, task)
             }
             undoController.post(
                 UndoEvent(
@@ -212,7 +212,7 @@ class SearchViewModel(
                 val task = before.firstOrNull { it.id == id } ?: return@forEach
                 val updated = task.copy(projectId = projectId, sectionId = null, updatedAt = System.currentTimeMillis())
                 repository.upsertTask(updated)
-                logTaskActivity(repository, ActivityType.UPDATED, updated)
+                logTaskActivity(repository, ActivityType.UPDATED, updated, task)
             }
             undoController.post(
                 UndoEvent(
@@ -231,7 +231,7 @@ class SearchViewModel(
                 val task = before.firstOrNull { it.id == id } ?: return@forEach
                 val updated = task.copy(priority = priority, updatedAt = System.currentTimeMillis())
                 repository.upsertTask(updated)
-                logTaskActivity(repository, ActivityType.UPDATED, updated)
+                logTaskActivity(repository, ActivityType.UPDATED, updated, task)
             }
             undoController.post(
                 UndoEvent(

@@ -28,6 +28,7 @@ interface TaskRepository {
     fun observeReminders(taskId: String): Flow<List<ReminderEntity>>
     fun observeEnabledReminders(): Flow<List<ReminderEntity>>
     suspend fun getReminder(reminderId: String): ReminderEntity?
+    suspend fun getRemindersForTask(taskId: String): List<ReminderEntity>
     fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>>
     fun observeAllActivity(): Flow<List<ActivityEventEntity>>
     fun search(query: String): Flow<List<TaskEntity>>
@@ -44,6 +45,8 @@ interface TaskRepository {
     suspend fun clearTasksInSection(sectionId: String)
     suspend fun upsertReminder(reminder: ReminderEntity)
     suspend fun deleteReminder(reminderId: String)
+    suspend fun deleteRemindersForTask(taskId: String)
+    suspend fun deleteEphemeralRemindersForTask(taskId: String)
     suspend fun insertActivity(event: ActivityEventEntity)
 
     suspend fun getEnabledReminders(): List<ReminderEntity>

@@ -19,14 +19,14 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
             modelClass.isAssignableFrom(InboxViewModel::class.java) ->
-                InboxViewModel(container.repository, container.undoController)
+                InboxViewModel(container.repository, container.undoController, container.reminderScheduler)
             modelClass.isAssignableFrom(TodayViewModel::class.java) ->
-                TodayViewModel(container.repository, container.undoController)
+                TodayViewModel(container.repository, container.undoController, container.reminderScheduler)
             modelClass.isAssignableFrom(UpcomingViewModel::class.java) ->
-                UpcomingViewModel(container.repository, container.undoController)
+                UpcomingViewModel(container.repository, container.undoController, container.reminderScheduler)
             modelClass.isAssignableFrom(BrowseViewModel::class.java) -> BrowseViewModel(container.repository)
             modelClass.isAssignableFrom(ProjectViewModel::class.java) ->
-                ProjectViewModel(container.repository, container.undoController)
+                ProjectViewModel(container.repository, container.undoController, container.reminderScheduler)
             modelClass.isAssignableFrom(TaskDetailViewModel::class.java) ->
                 TaskDetailViewModel(
                     container.repository,
@@ -40,7 +40,7 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
                 SettingsViewModel(container.settingsRepository, container.repository)
             modelClass.isAssignableFrom(ActivityViewModel::class.java) ->
-                ActivityViewModel(container.repository)
+                ActivityViewModel(container.repository, container.reminderScheduler)
             else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")
         } as T
     }

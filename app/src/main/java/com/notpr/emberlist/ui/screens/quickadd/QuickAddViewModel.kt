@@ -231,12 +231,13 @@ class QuickAddViewModel(
                     locationId = null,
                     locationTriggerType = null,
                     enabled = true,
+                    ephemeral = false,
                     createdAt = now
                 )
                 repository.upsertReminder(reminder)
                 reminder
             }
-            reminderScheduler.scheduleForTask(task, reminderEntities)
+            reminderScheduler.replaceTaskReminders(task, reminderEntities)
             resetInput()
             onSaved()
         }

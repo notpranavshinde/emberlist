@@ -61,6 +61,12 @@ interface TaskDao {
     @Query("SELECT * FROM tasks")
     suspend fun getAll(): List<TaskEntity>
 
+    @Query("SELECT id FROM tasks WHERE status = :status")
+    suspend fun getTaskIdsByStatus(status: TaskStatus): List<String>
+
+    @Query("SELECT id FROM tasks WHERE projectId = :projectId")
+    suspend fun getTaskIdsByProject(projectId: String): List<String>
+
     @Query("SELECT * FROM tasks WHERE parentTaskId = :parentId AND status = :status ORDER BY `order` ASC")
     fun observeSubtasks(parentId: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 

@@ -6,15 +6,16 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.annotation.VisibleForTesting
+import androidx.core.app.NotificationManagerCompat
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.notpr.emberlist.data.TaskRepository
+import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.flow.firstOrNull
 
 class ReminderScheduler(
     private val context: Context,
@@ -26,9 +27,19 @@ class ReminderScheduler(
         reminders.filter { it.enabled }.forEach { scheduleReminder(task, it) }
     }
 
+    suspend fun replaceTaskReminders(task: TaskEntity, reminders: List<ReminderEntity>) {
+        cancelRemindersForTask(task.id)
+        scheduleForTask(task, reminders)
+    }
+
     suspend fun scheduleReminder(task: TaskEntity, reminder: ReminderEntity) {
         val triggerAt = computeTriggerAt(task, reminder) ?: return
+        if (task.status != TaskStatus.OPEN) {
+            cancelReminder(reminder.id)
+            return
+        }
         cancelReminder(reminder.id)
+        if (triggerAt <= System.currentTimeMillis()) return
         val intent = AlarmReceiver.intentFor(context, task.id, reminder.id)
         val pendingIntent = PendingIntent.getBroadcast(
             context,
@@ -55,12 +66,33 @@ class ReminderScheduler(
         )
         alarmManager.cancel(pendingIntent)
         workManagerOrNull()?.cancelUniqueWork(workName(reminderId))
+        dismissNotification(reminderId)
+    }
+
+    suspend fun cancelRemindersForTask(taskId: String) {
+        repository.getRemindersForTask(taskId).forEach { reminder ->
+            cancelReminder(reminder.id)
+        }
+    }
+
+    fun dismissNotification(reminderId: String) {
+        NotificationManagerCompat.from(context).cancel(reminderId.hashCode())
     }
 
     suspend fun rescheduleAll() {
         val reminders = repository.getEnabledReminders()
         reminders.forEach { reminder ->
-            val task = repository.observeTask(reminder.taskId).firstOrNull() ?: return@forEach
+            val task = repository.getTask(reminder.taskId)
+            if (task == null) {
+                cancelReminder(reminder.id)
+                repository.deleteReminder(reminder.id)
+                return@forEach
+            }
+            if (task.status != TaskStatus.OPEN) {
+                cancelReminder(reminder.id)
+                if (reminder.ephemeral) repository.deleteReminder(reminder.id)
+                return@forEach
+            }
             scheduleReminder(task, reminder)
         }
     }

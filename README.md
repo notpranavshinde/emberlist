@@ -11,12 +11,13 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Projects with sections
 - List + Board views for projects
 - Drag‑and‑drop between sections in Board view
-- Parser-first task detail editor (quick-parser + description, subtasks, overflow actions, collapsed activity)
+- Parser-first task detail editor (quick-parser + notes, subtasks, overflow actions, collapsed activity)
 - Task archive/unarchive
 - Subtasks in task detail
-- Task activity log
+- Task activity log with per-entry undo and specific change labels
 - Recurring tasks (due + deadline recurrence)
 - Time‑based reminders with notifications
+- Reminder notifications validate task/reminder state before firing and support working Complete / Snooze 10m / Open actions
 - Optional completed section on Today
 - Notification actions (complete, snooze)
 - Swipe actions on tasks (reschedule via date picker, delete with confirmation)
@@ -42,8 +43,9 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Quick Add parses text live into due/deadline/priority/project/recurrence/reminder chips.
 - Completing a recurring task generates the next instance via `RecurrenceEngine` (due + deadline recurrence supported).
 - Reminders are scheduled through `ReminderScheduler` (AlarmManager; WorkManager fallback).
+- Reminders are cancelled immediately when tasks are completed/archived or reminder sets change, and stale alarms are ignored on receipt.
 - Export/import uses JSON via `BackupManager`.
-- Task detail uses the same parser model as Quick Add for live metadata edits.
+- Task detail uses the same parser model as Quick Add for live metadata edits, and logs buffered change summaries instead of every keystroke.
 - Repeating tasks can be ended from task detail with a "Complete forever" action that completes the current task and stops future recurrence.
 
 ## Project Setup
@@ -123,10 +125,13 @@ Run:
    - Add reminder: `remind me at 6pm`
    - Verify notification fires
    - Tap snooze and verify it fires 10 minutes later
+   - Delete or complete the task and verify the reminder does not fire later
+   - Remove a reminder from task detail and verify old notifications do not reappear after reboot/time change
 7. **Task detail edits**
-   - Open a task and edit it through the parser field and parser chips
+   - Open a task and edit it through the parser field
    - Verify due/project/priority/reminder/recurrence changes reflect in Today/Upcoming
-   - Verify description still edits separately
+   - Verify notes still edit separately
+   - Verify Activity shows specific labels like due/reminder/priority changes and allows undo
 8. **Board toggle + drag**
    - Open a project and toggle between List/Board
    - Drag a task card between section columns

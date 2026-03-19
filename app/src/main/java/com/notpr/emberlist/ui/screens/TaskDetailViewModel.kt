@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.ObjectType
+import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.ReminderType
@@ -21,6 +22,8 @@ import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
 import java.util.UUID
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -32,6 +35,13 @@ class TaskDetailViewModel(
     private val reminderScheduler: ReminderScheduler,
     private val undoController: UndoController
 ) : ViewModel() {
+    private var pendingLogJob: Job? = null
+    private var editSessionTaskId: String? = null
+    private var editSessionBaseTask: TaskEntity? = null
+    private var editSessionBaseReminders: List<ReminderEntity> = emptyList()
+    private var pendingLoggedTask: TaskEntity? = null
+    private var pendingLoggedReminders: List<ReminderEntity> = emptyList()
+
     fun observeTask(taskId: String): StateFlow<TaskEntity?> = repository.observeTask(taskId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -66,7 +76,7 @@ class TaskDetailViewModel(
                 description = "",
                 projectId = parent.projectId,
                 sectionId = parent.sectionId,
-                priority = com.notpr.emberlist.data.model.Priority.P4,
+                priority = Priority.P4,
                 dueAt = null,
                 allDay = false,
                 deadlineAt = null,
@@ -83,15 +93,24 @@ class TaskDetailViewModel(
                 updatedAt = now
             )
             repository.upsertTask(subtask)
-            logTaskActivity(repository, ActivityType.CREATED, subtask)
+            logTaskActivity(
+                repository = repository,
+                type = ActivityType.UPDATED,
+                task = subtask,
+                beforeTask = subtask.copy(parentTaskId = null),
+                details = mapOf("parentTitleAfter" to parent.title)
+            )
         }
     }
 
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
+            flushPendingActivityInternal()
             val before = task
+            val reminders = repository.getRemindersForTask(task.id)
             if (task.status != TaskStatus.COMPLETED) {
                 val beforeSubtasks = repository.getSubtasks(task.id)
+                reminderScheduler.cancelRemindersForTask(task.id)
                 completeTaskAndSubtasks(repository, task)
                 undoController.post(
                     UndoEvent(
@@ -99,6 +118,7 @@ class TaskDetailViewModel(
                         undo = {
                             repository.upsertTask(before)
                             beforeSubtasks.forEach { repository.upsertTask(it) }
+                            reminderScheduler.replaceTaskReminders(before, reminders)
                             logTaskActivity(repository, ActivityType.UNCOMPLETED, before)
                         }
                     )
@@ -110,12 +130,14 @@ class TaskDetailViewModel(
                     updatedAt = System.currentTimeMillis()
                 )
                 repository.upsertTask(updated)
+                reminderScheduler.replaceTaskReminders(updated, reminders)
                 logTaskActivity(repository, ActivityType.UNCOMPLETED, updated)
                 undoController.post(
                     UndoEvent(
                         message = "Undo reopen: ${task.title}",
                         undo = {
                             repository.upsertTask(before)
+                            reminderScheduler.cancelRemindersForTask(before.id)
                             logTaskActivity(repository, ActivityType.COMPLETED, before)
                         }
                     )
@@ -126,20 +148,32 @@ class TaskDetailViewModel(
 
     fun toggleArchive(task: TaskEntity) {
         viewModelScope.launch {
+            flushPendingActivityInternal()
             val before = task
-            val archived = task.status != TaskStatus.ARCHIVED
+            val reminders = repository.getRemindersForTask(task.id)
+            val archived = task.status == TaskStatus.OPEN || task.status == TaskStatus.COMPLETED
             val updated = task.copy(
                 status = if (archived) TaskStatus.ARCHIVED else TaskStatus.OPEN,
                 updatedAt = System.currentTimeMillis()
             )
             repository.upsertTask(updated)
+            if (archived) {
+                reminderScheduler.cancelRemindersForTask(task.id)
+            } else {
+                reminderScheduler.replaceTaskReminders(updated, reminders)
+            }
             logTaskActivity(repository, if (archived) ActivityType.ARCHIVED else ActivityType.UNARCHIVED, updated)
             undoController.post(
                 UndoEvent(
                     message = if (archived) "Undo archive: ${task.title}" else "Undo unarchive: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
-                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                        if (before.status == TaskStatus.ARCHIVED) {
+                            reminderScheduler.cancelRemindersForTask(before.id)
+                        } else {
+                            reminderScheduler.replaceTaskReminders(before, reminders)
+                        }
+                        logTaskActivity(repository, ActivityType.UPDATED, before, updated)
                     }
                 )
             )
@@ -148,22 +182,26 @@ class TaskDetailViewModel(
 
     fun completeForever(task: TaskEntity) {
         viewModelScope.launch {
+            flushPendingActivityInternal()
             val before = task
             val beforeSubtasks = repository.getSubtasks(task.id)
+            val reminders = repository.getRemindersForTask(task.id)
             val withoutRecurrence = task.copy(
                 recurringRule = null,
                 deadlineRecurringRule = null,
                 updatedAt = System.currentTimeMillis()
             )
+            reminderScheduler.cancelRemindersForTask(task.id)
             completeTaskAndSubtasks(repository, withoutRecurrence)
-            logTaskActivity(repository, ActivityType.UPDATED, withoutRecurrence)
+            logTaskActivity(repository, ActivityType.UPDATED, withoutRecurrence, before)
             undoController.post(
                 UndoEvent(
                     message = "Undo complete forever: ${task.title}",
                     undo = {
                         repository.upsertTask(before)
                         beforeSubtasks.forEach { repository.upsertTask(it) }
-                        logTaskActivity(repository, ActivityType.UPDATED, before)
+                        reminderScheduler.replaceTaskReminders(before, reminders)
+                        logTaskActivity(repository, ActivityType.UPDATED, before, withoutRecurrence)
                     }
                 )
             )
@@ -177,6 +215,8 @@ class TaskDetailViewModel(
         existingReminders: List<ReminderEntity>
     ) {
         viewModelScope.launch {
+            beginEditSessionIfNeeded(current, existingReminders)
+
             val normalized = normalizeParsedResult(parsed)
             val now = System.currentTimeMillis()
             val projectId = normalized.projectName?.let { name ->
@@ -235,17 +275,32 @@ class TaskDetailViewModel(
                 updatedAt = now
             )
 
-            if (updatedTask != current) {
+            val taskChanged = updatedTask != current
+            if (taskChanged) {
                 repository.upsertTask(updatedTask)
-                logTaskActivity(repository, ActivityType.UPDATED, updatedTask)
             }
 
-            syncReminders(updatedTask, existingReminders, desiredReminderSpecs(normalized))
+            val syncedReminders = syncReminders(
+                task = if (taskChanged) updatedTask else current,
+                existingReminders = existingReminders,
+                desiredSpecs = desiredReminderSpecs(normalized)
+            )
+
+            if (taskChanged || canonicalReminders(existingReminders) != canonicalReminders(syncedReminders)) {
+                pendingLoggedTask = if (taskChanged) updatedTask else current
+                pendingLoggedReminders = canonicalReminders(syncedReminders)
+                schedulePendingActivityFlush()
+            }
         }
+    }
+
+    fun flushPendingActivity() {
+        viewModelScope.launch { flushPendingActivityInternal() }
     }
 
     fun deleteTask(taskId: String) {
         viewModelScope.launch {
+            flushPendingActivityInternal()
             val task = repository.observeTask(taskId).first()
             if (task != null) {
                 deleteTaskWithLog(repository, task)
@@ -268,22 +323,8 @@ class TaskDetailViewModel(
         task: TaskEntity,
         existingReminders: List<ReminderEntity>,
         desiredSpecs: List<ReminderSpec>
-    ) {
-        val existingComparable = existingReminders
-            .filter { it.type == ReminderType.TIME }
-            .map { it.toComparable() }
-            .sortedBy { "${it.timeAt}:${it.offsetMinutes}" }
-        val desiredComparable = desiredSpecs
-            .map { it.toComparable() }
-            .sortedBy { "${it.timeAt}:${it.offsetMinutes}" }
-
-        if (existingComparable == desiredComparable) return
-
-        existingReminders.forEach { reminder ->
-            repository.deleteReminder(reminder.id)
-            reminderScheduler.cancelReminder(reminder.id)
-        }
-
+    ): List<ReminderEntity> {
+        val existingComparable = canonicalReminders(existingReminders).map { it.toComparable() }
         val newReminders = desiredSpecs.map { spec ->
             ReminderEntity(
                 id = UUID.randomUUID().toString(),
@@ -294,11 +335,21 @@ class TaskDetailViewModel(
                 locationId = null,
                 locationTriggerType = null,
                 enabled = true,
+                ephemeral = false,
                 createdAt = System.currentTimeMillis()
             )
         }
+        val desiredComparable = canonicalReminders(newReminders).map { it.toComparable() }
+
+        if (existingComparable == desiredComparable) {
+            return canonicalReminders(existingReminders)
+        }
+
+        reminderScheduler.cancelRemindersForTask(task.id)
+        repository.deleteRemindersForTask(task.id)
         newReminders.forEach { repository.upsertReminder(it) }
-        reminderScheduler.scheduleForTask(task, newReminders)
+        reminderScheduler.replaceTaskReminders(task, newReminders)
+        return canonicalReminders(newReminders)
     }
 
     private fun normalizeParsedResult(parsed: QuickAddResult): QuickAddResult {
@@ -324,6 +375,78 @@ class TaskDetailViewModel(
         }
     }
 
+    private fun beginEditSessionIfNeeded(task: TaskEntity, existingReminders: List<ReminderEntity>) {
+        if (editSessionTaskId != task.id) {
+            resetPendingActivitySession()
+            editSessionTaskId = task.id
+        }
+        if (editSessionBaseTask == null) {
+            editSessionBaseTask = task
+            editSessionBaseReminders = canonicalReminders(existingReminders)
+        }
+    }
+
+    private fun schedulePendingActivityFlush() {
+        pendingLogJob?.cancel()
+        pendingLogJob = viewModelScope.launch {
+            delay(1_000)
+            flushPendingActivityInternal()
+        }
+    }
+
+    private suspend fun flushPendingActivityInternal() {
+        pendingLogJob?.cancel()
+        pendingLogJob = null
+        val beforeTask = editSessionBaseTask ?: return
+        val afterTask = pendingLoggedTask ?: return
+        val beforeReminders = editSessionBaseReminders
+        val afterReminders = pendingLoggedReminders
+        if (beforeTask != afterTask || beforeReminders != afterReminders) {
+            logTaskActivity(
+                repository = repository,
+                type = ActivityType.UPDATED,
+                task = afterTask,
+                beforeTask = beforeTask,
+                beforeReminders = beforeReminders,
+                afterReminders = afterReminders,
+                details = buildActivityDetails(beforeTask, afterTask, beforeReminders, afterReminders)
+            )
+        }
+        editSessionBaseTask = afterTask
+        editSessionBaseReminders = afterReminders
+        pendingLoggedTask = null
+        pendingLoggedReminders = emptyList()
+    }
+
+    private fun buildActivityDetails(
+        beforeTask: TaskEntity,
+        afterTask: TaskEntity,
+        beforeReminders: List<ReminderEntity>,
+        afterReminders: List<ReminderEntity>
+    ): Map<String, String> {
+        val details = linkedMapOf<String, String>()
+        if (beforeReminders.size == 1 || afterReminders.size == 1) {
+            details["reminderCountBefore"] = beforeReminders.size.toString()
+            details["reminderCountAfter"] = afterReminders.size.toString()
+        }
+        return details
+    }
+
+    private fun canonicalReminders(reminders: List<ReminderEntity>): List<ReminderEntity> {
+        return reminders
+            .filter { it.type == ReminderType.TIME }
+            .sortedWith(compareBy<ReminderEntity> { it.timeAt ?: Long.MIN_VALUE }.thenBy { it.offsetMinutes ?: Int.MIN_VALUE })
+    }
+
+    private fun resetPendingActivitySession() {
+        pendingLogJob?.cancel()
+        pendingLogJob = null
+        editSessionBaseTask = null
+        editSessionBaseReminders = emptyList()
+        pendingLoggedTask = null
+        pendingLoggedReminders = emptyList()
+    }
+
     private data class ComparableReminder(
         val timeAt: Long?,
         val offsetMinutes: Int?
@@ -333,10 +456,8 @@ class TaskDetailViewModel(
         return ComparableReminder(timeAt = timeAt, offsetMinutes = offsetMinutes)
     }
 
-    private fun ReminderSpec.toComparable(): ComparableReminder {
-        return when (this) {
-            is ReminderSpec.Absolute -> ComparableReminder(timeAt = timeAtMillis, offsetMinutes = null)
-            is ReminderSpec.Offset -> ComparableReminder(timeAt = null, offsetMinutes = minutes)
-        }
+    override fun onCleared() {
+        flushPendingActivity()
+        super.onCleared()
     }
 }
