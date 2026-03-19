@@ -7,6 +7,7 @@ import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddViewModel
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -154,5 +155,51 @@ class QuickAddViewModelBulkTest {
         viewModel.updateInput("- buy milk\n\n* call mom\n1. keep numbered")
 
         assertEquals(listOf("buy milk", "call mom", "1. keep numbered"), viewModel.bulkTaskLines())
+    }
+
+    @Test
+    fun saveTaskCreatesTodayTimedTaskAndReminderForBareTime() = runTest(dispatcher) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val viewModel = QuickAddViewModel(repository, scheduler)
+        val zone = ZoneId.systemDefault()
+
+        viewModel.updateInput("tax forms at 9:50pm")
+        viewModel.saveTask {}
+        advanceUntilIdle()
+
+        val task = repository.tasks.values.single()
+        val reminders = repository.getRemindersForTask(task.id)
+        val due = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(task.dueAt!!), zone)
+
+        assertEquals("tax forms", task.title)
+        assertTrue(!task.allDay)
+        assertEquals(21, due.hour)
+        assertEquals(50, due.minute)
+        assertEquals(LocalDate.now(zone), due.toLocalDate())
+        assertEquals(1, reminders.size)
+        assertEquals(task.dueAt, reminders.single().timeAt)
+    }
+
+    @Test
+    fun saveBulkTasksCreatesTodayTimedTaskAndReminderForBareTimeLine() = runTest(dispatcher) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val viewModel = QuickAddViewModel(repository, scheduler)
+        val zone = ZoneId.systemDefault()
+
+        viewModel.saveBulkTasks(listOf("call mom at 7:15pm", "laundry")) {}
+        advanceUntilIdle()
+
+        val timedTask = repository.tasks.values.first { it.title == "call mom" }
+        val timedReminder = repository.getRemindersForTask(timedTask.id).single()
+        val due = LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(timedTask.dueAt!!), zone)
+
+        assertEquals(LocalDate.now(zone), due.toLocalDate())
+        assertEquals(19, due.hour)
+        assertEquals(15, due.minute)
+        assertEquals(timedTask.dueAt, timedReminder.timeAt)
     }
 }

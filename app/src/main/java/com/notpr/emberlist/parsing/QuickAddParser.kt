@@ -60,6 +60,11 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         var allDay = false
         var deadlineAllDay = false
 
+        if (due == null && explicitTime != null) {
+            due = LocalDateTime.of(now.toLocalDate(), explicitTime).atZone(zoneId).toInstant().toEpochMilli()
+            allDay = false
+        }
+
         if (due == null && recurrence != null) {
             val time = explicitTime ?: LocalTime.MIDNIGHT
             allDay = explicitTime == null

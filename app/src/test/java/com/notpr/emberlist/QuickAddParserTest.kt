@@ -4,6 +4,7 @@ import com.notpr.emberlist.parsing.QuickAddParser
 import com.notpr.emberlist.parsing.ReminderSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
 import java.time.Month
@@ -28,6 +29,56 @@ class QuickAddParserTest {
         val result = parser.parse("Review report tomorrow 9am remind me 30m before", now)
         val reminder = result.reminders.first() as ReminderSpec.Offset
         assertEquals(30, reminder.minutes)
+    }
+
+    @Test
+    fun parseBareTimeDefaultsDueToTodayAndRemovesAtFromTitle() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Pay rent at 9:50pm", now)
+        val expectedDue = LocalDateTime.of(2026, Month.FEBRUARY, 6, 21, 50)
+            .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+
+        assertEquals("Pay rent", result.title)
+        assertEquals(expectedDue, result.dueAt)
+        assertTrue(!result.allDay)
+    }
+
+    @Test
+    fun parseBareTimeWithoutAtDefaultsDueToToday() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Workout 7:15pm", now)
+        val expectedDue = LocalDateTime.of(2026, Month.FEBRUARY, 6, 19, 15)
+            .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+
+        assertEquals("Workout", result.title)
+        assertEquals(expectedDue, result.dueAt)
+        assertTrue(!result.allDay)
+    }
+
+    @Test
+    fun parseBarePastTimeKeepsTodayAndDoesNotRollForward() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 23, 0)
+        val result = parser.parse("Laundry at 9:50pm", now)
+        val expectedDue = LocalDateTime.of(2026, Month.FEBRUARY, 6, 21, 50)
+            .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+
+        assertEquals(expectedDue, result.dueAt)
+        assertTrue(result.dueAt!! < now.atZone(ZoneId.of("UTC")).toInstant().toEpochMilli())
+    }
+
+    @Test
+    fun parseExplicitDateStillOverridesBareTimeRule() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+        val result = parser.parse("Doctor aug 14 9:50pm", now)
+        val expectedDue = LocalDateTime.of(2026, Month.AUGUST, 14, 21, 50)
+            .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+
+        assertEquals("Doctor", result.title)
+        assertEquals(expectedDue, result.dueAt)
     }
 
     @Test
