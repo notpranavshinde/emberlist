@@ -12,6 +12,8 @@ import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.parsing.QuickAddParser
 import com.notpr.emberlist.parsing.ReminderSpec
+import com.notpr.emberlist.parsing.QuickAddResult
+import com.notpr.emberlist.parsing.extractBulkQuickAddLines
 import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
@@ -134,113 +136,135 @@ class QuickAddViewModel(
     }
 
     fun saveTask(onSaved: () -> Unit) {
-        var result = _parsed.value
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val taskId = UUID.randomUUID().toString()
-            if (result.dueAt == null && !result.recurrenceRule.isNullOrBlank()) {
-                val zone = java.time.ZoneId.systemDefault()
-                val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
-                result = result.copy(dueAt = startOfDay, allDay = true)
-            }
-            if (result.deadlineAt == null && !result.deadlineRecurringRule.isNullOrBlank()) {
-                val zone = java.time.ZoneId.systemDefault()
-                val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
-                result = result.copy(deadlineAt = startOfDay, deadlineAllDay = true)
-            }
-            val projectId = result.projectName?.let { name ->
-                val existing = repository.getProjectByName(name)
-                if (existing != null) {
-                    existing.id
-                } else {
-                    val newProject = ProjectEntity(
-                        id = UUID.randomUUID().toString(),
-                        name = name,
-                        color = "#EE6A3C",
-                        favorite = false,
-                        order = 0,
-                        archived = false,
-                        viewPreference = null,
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                    repository.upsertProject(newProject)
-                    logActivity(repository, ActivityType.CREATED, ObjectType.PROJECT, newProject.id)
-                    newProject.id
-                }
-            }
-            val sectionName = result.sectionName
-            val sectionId = if (!sectionName.isNullOrBlank() && projectId != null) {
-                val existing = repository.getSectionByName(projectId, sectionName)
-                if (existing != null) {
-                    existing.id
-                } else {
-                    val newSection = com.notpr.emberlist.data.model.SectionEntity(
-                        id = UUID.randomUUID().toString(),
-                        projectId = projectId,
-                        name = sectionName,
-                        order = 0,
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                    repository.upsertSection(newSection)
-                    newSection.id
-                }
-            } else {
-                null
-            }
-            val task = TaskEntity(
-                id = taskId,
-                title = result.title,
-                description = _description.value.trim(),
-                projectId = projectId,
-                sectionId = sectionId,
-                priority = result.priority,
-                dueAt = result.dueAt,
-                allDay = result.allDay,
-                deadlineAt = result.deadlineAt,
-                deadlineAllDay = result.deadlineAllDay,
-                recurringRule = result.recurrenceRule,
-                deadlineRecurringRule = result.deadlineRecurringRule,
-                status = TaskStatus.OPEN,
-                completedAt = null,
-                parentTaskId = null,
-                locationId = null,
-                locationTriggerType = null,
-                order = 0,
-                createdAt = now,
-                updatedAt = now
+            createTaskFromParsed(
+                result = _parsed.value,
+                description = _description.value.trim()
             )
-            repository.upsertTask(task)
-            logTaskActivity(repository, ActivityType.CREATED, task)
-
-            val baseReminders = if (result.reminders.isEmpty() && result.dueAt != null && !result.allDay) {
-                val dueAt = result.dueAt
-                if (dueAt != null) listOf(ReminderSpec.Absolute(dueAt)) else emptyList()
-            } else {
-                result.reminders
-            }
-
-            val reminderEntities = baseReminders.map { spec ->
-                val reminder = ReminderEntity(
-                    id = UUID.randomUUID().toString(),
-                    taskId = taskId,
-                    type = ReminderType.TIME,
-                    timeAt = (spec as? ReminderSpec.Absolute)?.timeAtMillis,
-                    offsetMinutes = (spec as? ReminderSpec.Offset)?.minutes,
-                    locationId = null,
-                    locationTriggerType = null,
-                    enabled = true,
-                    ephemeral = false,
-                    createdAt = now
-                )
-                repository.upsertReminder(reminder)
-                reminder
-            }
-            reminderScheduler.replaceTaskReminders(task, reminderEntities)
             resetInput()
             onSaved()
         }
+    }
+
+    fun saveBulkTasks(lines: List<String>, onSaved: () -> Unit) {
+        viewModelScope.launch {
+            val description = _description.value.trim()
+            lines.forEach { line ->
+                createTaskFromParsed(
+                    result = mergeBulkDefaults(line, parser.parse(line)),
+                    description = description
+                )
+            }
+            resetInput()
+            onSaved()
+        }
+    }
+
+    fun saveSingleTaskFromBulk(lines: List<String>, onSaved: () -> Unit) {
+        viewModelScope.launch {
+            val defaultsOnly = mergeOverrides(parser.parse(""))
+            createTaskFromParsed(
+                result = defaultsOnly.copy(title = lines.joinToString(" ")),
+                description = _description.value.trim()
+            )
+            resetInput()
+            onSaved()
+        }
+    }
+
+    fun bulkTaskLines(text: String = _input.value): List<String> = extractBulkQuickAddLines(text)
+
+    private suspend fun createTaskFromParsed(
+        result: QuickAddResult,
+        description: String
+    ) {
+        val normalized = normalizeParsedResult(result)
+        val now = System.currentTimeMillis()
+        val taskId = UUID.randomUUID().toString()
+        val projectId = normalized.projectName?.let { name ->
+            val existing = repository.getProjectByName(name)
+            if (existing != null) {
+                existing.id
+            } else {
+                val newProject = ProjectEntity(
+                    id = UUID.randomUUID().toString(),
+                    name = name,
+                    color = "#EE6A3C",
+                    favorite = false,
+                    order = 0,
+                    archived = false,
+                    viewPreference = null,
+                    createdAt = now,
+                    updatedAt = now
+                )
+                repository.upsertProject(newProject)
+                logActivity(repository, ActivityType.CREATED, ObjectType.PROJECT, newProject.id)
+                newProject.id
+            }
+        }
+        val sectionName = normalized.sectionName
+        val sectionId = if (!sectionName.isNullOrBlank() && projectId != null) {
+            val existing = repository.getSectionByName(projectId, sectionName)
+            if (existing != null) {
+                existing.id
+            } else {
+                val newSection = com.notpr.emberlist.data.model.SectionEntity(
+                    id = UUID.randomUUID().toString(),
+                    projectId = projectId,
+                    name = sectionName,
+                    order = 0,
+                    createdAt = now,
+                    updatedAt = now
+                )
+                repository.upsertSection(newSection)
+                newSection.id
+            }
+        } else {
+            null
+        }
+        val task = TaskEntity(
+            id = taskId,
+            title = normalized.title,
+            description = description,
+            projectId = projectId,
+            sectionId = sectionId,
+            priority = normalized.priority,
+            dueAt = normalized.dueAt,
+            allDay = normalized.allDay,
+            deadlineAt = normalized.deadlineAt,
+            deadlineAllDay = normalized.deadlineAllDay,
+            recurringRule = normalized.recurrenceRule,
+            deadlineRecurringRule = normalized.deadlineRecurringRule,
+            status = TaskStatus.OPEN,
+            completedAt = null,
+            parentTaskId = null,
+            locationId = null,
+            locationTriggerType = null,
+            order = 0,
+            createdAt = now,
+            updatedAt = now
+        )
+        repository.upsertTask(task)
+        logTaskActivity(repository, ActivityType.CREATED, task)
+
+        val baseReminders = desiredReminderSpecs(normalized)
+        val reminderEntities = baseReminders.map { spec ->
+            val reminder = ReminderEntity(
+                id = UUID.randomUUID().toString(),
+                taskId = taskId,
+                type = ReminderType.TIME,
+                timeAt = (spec as? ReminderSpec.Absolute)?.timeAtMillis,
+                offsetMinutes = (spec as? ReminderSpec.Offset)?.minutes,
+                locationId = null,
+                locationTriggerType = null,
+                enabled = true,
+                ephemeral = false,
+                createdAt = now
+            )
+            repository.upsertReminder(reminder)
+            reminder
+        }
+        reminderScheduler.replaceTaskReminders(task, reminderEntities)
     }
 
     private fun resetInput() {
@@ -274,6 +298,48 @@ class QuickAddViewModel(
             projectOverride.value = null
         }
         _parsed.value = mergeOverrides(_parsed.value)
+    }
+
+    private fun normalizeParsedResult(parsed: QuickAddResult): QuickAddResult {
+        var result = parsed
+        if (result.dueAt == null && !result.recurrenceRule.isNullOrBlank()) {
+            val zone = java.time.ZoneId.systemDefault()
+            val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+            result = result.copy(dueAt = startOfDay, allDay = true)
+        }
+        if (result.deadlineAt == null && !result.deadlineRecurringRule.isNullOrBlank()) {
+            val zone = java.time.ZoneId.systemDefault()
+            val startOfDay = java.time.LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+            result = result.copy(deadlineAt = startOfDay, deadlineAllDay = true)
+        }
+        return result
+    }
+
+    private fun desiredReminderSpecs(parsed: QuickAddResult): List<ReminderSpec> {
+        return if (parsed.reminders.isEmpty() && parsed.dueAt != null && !parsed.allDay) {
+            listOf(ReminderSpec.Absolute(parsed.dueAt))
+        } else {
+            parsed.reminders
+        }
+    }
+
+    private fun mergeBulkDefaults(
+        inputLine: String,
+        base: QuickAddResult
+    ): QuickAddResult {
+        val hasPriorityToken = Regex("\\bp[1-4]\\b", RegexOption.IGNORE_CASE).containsMatchIn(inputLine)
+        return base.copy(
+            dueAt = base.dueAt ?: dueOverride.value ?: defaultDueOverride.value,
+            deadlineAt = base.deadlineAt ?: deadlineOverride.value,
+            allDay = if (base.dueAt == null) allDayOverride.value ?: (defaultDueOverride.value?.let { true } ?: base.allDay) else base.allDay,
+            deadlineAllDay = if (base.deadlineAt == null) deadlineAllDayOverride.value ?: base.deadlineAllDay else base.deadlineAllDay,
+            priority = if (hasPriorityToken) base.priority else priorityOverride.value ?: base.priority,
+            projectName = base.projectName ?: projectOverride.value ?: defaultProjectName.value,
+            sectionName = base.sectionName ?: sectionOverride.value,
+            recurrenceRule = base.recurrenceRule ?: recurrenceOverride.value,
+            deadlineRecurringRule = base.deadlineRecurringRule ?: deadlineRecurrenceOverride.value,
+            reminders = if (base.reminders.isNotEmpty()) base.reminders else remindersOverride.value ?: base.reminders
+        )
     }
 
     private fun mergeOverrides(base: com.notpr.emberlist.parsing.QuickAddResult): com.notpr.emberlist.parsing.QuickAddResult {

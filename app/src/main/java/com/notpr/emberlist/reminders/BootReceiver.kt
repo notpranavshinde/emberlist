@@ -8,7 +8,7 @@ import com.notpr.emberlist.data.TaskRepositoryImpl
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val db = EmberlistDatabase.build(context)
+        val db = EmberlistDatabase.getInstance(context)
         val repository = TaskRepositoryImpl(
             db.projectDao(),
             db.sectionDao(),

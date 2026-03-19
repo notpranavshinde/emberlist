@@ -15,7 +15,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         val taskId = intent.getStringExtra(EXTRA_TASK_ID) ?: return
         val reminderId = intent.getStringExtra(EXTRA_REMINDER_ID) ?: return
-        val db = EmberlistDatabase.build(context)
+        val db = EmberlistDatabase.getInstance(context)
         val repository = TaskRepositoryImpl(
             db.projectDao(),
             db.sectionDao(),

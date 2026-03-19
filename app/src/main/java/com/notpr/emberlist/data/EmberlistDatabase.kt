@@ -44,6 +44,7 @@ abstract class EmberlistDatabase : RoomDatabase() {
 
     companion object {
         private const val DB_NAME = "emberlist.db"
+        private var instance: EmberlistDatabase? = null
 
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -98,6 +99,22 @@ abstract class EmberlistDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE reminders ADD COLUMN ephemeral INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        fun getInstance(context: Context): EmberlistDatabase {
+            return instance ?: synchronized(this) {
+                instance ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    EmberlistDatabase::class.java,
+                    DB_NAME
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_2_3)
+                    .addMigrations(MIGRATION_3_4)
+                    .addMigrations(MIGRATION_4_5)
+                    .build()
+                    .also { instance = it }
             }
         }
 

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Divider
@@ -43,6 +42,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.notpr.emberlist.data.model.Priority
@@ -151,11 +151,11 @@ fun TaskRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp + indentPadding + hoverIndent, end = 16.dp, top = 4.dp, bottom = 4.dp),
+                .padding(start = 16.dp + indentPadding + hoverIndent, end = 16.dp, top = 1.dp, bottom = 2.dp),
             verticalAlignment = Alignment.Top
         ) {
             Row(
-                modifier = Modifier.padding(top = 4.dp),
+                modifier = Modifier.padding(top = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TaskToggle(
@@ -163,7 +163,7 @@ fun TaskRow(
                     onToggle = onToggle
                 )
             }
-            Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
+            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 val isCompleted = item.task.status == TaskStatus.COMPLETED
                 Text(
                     text = item.task.title,
@@ -185,13 +185,13 @@ fun TaskRow(
                 TaskMetaLine(item = item)
             }
             if (showExpand) {
-                val icon = if (expanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight
                 Icon(
-                    imageVector = icon,
+                    imageVector = Icons.Default.KeyboardArrowDown,
                     contentDescription = if (expanded) "Collapse" else "Expand",
                     modifier = Modifier
-                        .padding(top = 6.dp, start = 8.dp)
+                        .padding(top = 4.dp, start = 8.dp)
                         .size(18.dp)
+                        .rotate(if (expanded) 180f else 0f)
                         .clickable { onToggleExpand?.invoke() },
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
                 )

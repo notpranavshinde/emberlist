@@ -147,6 +147,18 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
             var showDeadlineRecurrenceDialog by remember { mutableStateOf(false) }
             var showReminderDialog by remember { mutableStateOf(false) }
             var moreMenuOpen by remember { mutableStateOf(false) }
+            var bulkDialogOpen by remember { mutableStateOf(false) }
+            var lastBulkPromptText by remember { mutableStateOf<String?>(null) }
+            val bulkLines = remember(inputState.text) { viewModel.bulkTaskLines(inputState.text) }
+
+            fun submitQuickAdd() {
+                if (bulkLines.size > 1) {
+                    bulkDialogOpen = true
+                } else {
+                    viewModel.saveTask { /* keep sheet open */ }
+                    titleFocusRequester.requestFocus()
+                }
+            }
 
             LaunchedEffect(input) {
                 if (inputState.text != input) {
@@ -174,6 +186,16 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
             LaunchedEffect(Unit) {
                 titleFocusRequester.requestFocus()
             }
+            LaunchedEffect(inputState.text, bulkLines) {
+                if (bulkLines.size > 1) {
+                    if (lastBulkPromptText != inputState.text) {
+                        bulkDialogOpen = true
+                        lastBulkPromptText = inputState.text
+                    }
+                } else if (inputState.text.isBlank()) {
+                    lastBulkPromptText = null
+                }
+            }
 
             Column(modifier = Modifier.padding(16.dp)) {
                 Box {
@@ -190,13 +212,14 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                                 sectionMenuOpen = hashIndex != -1 && hasSlash
                             },
                             placeholder = { Text("Task name") },
-                            singleLine = true,
+                            singleLine = false,
+                            minLines = 1,
+                            maxLines = 5,
                             visualTransformation = rememberTokenHighlighter(),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(
                                 onDone = {
-                                    viewModel.saveTask { /* keep sheet open */ }
-                                    titleFocusRequester.requestFocus()
+                                    submitQuickAdd()
                                 }
                             ),
                             colors = TextFieldDefaults.colors(
@@ -316,8 +339,7 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                 ) {
                     AssistChip(
                         onClick = {
-                            viewModel.saveTask { /* keep sheet open */ }
-                            titleFocusRequester.requestFocus()
+                            submitQuickAdd()
                         },
                         label = { Text("Add") }
                     )
@@ -411,8 +433,50 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                     }
                 )
             }
+
+            if (bulkDialogOpen && bulkLines.size > 1) {
+                BulkAddConfirmDialog(
+                    count = bulkLines.size,
+                    onDismiss = { bulkDialogOpen = false },
+                    onAddOne = {
+                        bulkDialogOpen = false
+                        viewModel.saveSingleTaskFromBulk(bulkLines) {
+                            titleFocusRequester.requestFocus()
+                        }
+                    },
+                    onAddMany = {
+                        bulkDialogOpen = false
+                        viewModel.saveBulkTasks(bulkLines) {
+                            titleFocusRequester.requestFocus()
+                        }
+                    }
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun BulkAddConfirmDialog(
+    count: Int,
+    onDismiss: () -> Unit,
+    onAddOne: () -> Unit,
+    onAddMany: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add $count tasks?") },
+        text = { Text("Emberlist found $count items in your pasted list.") },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+                TextButton(onClick = onAddOne) { Text("Add 1 task") }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onAddMany) { Text("Add $count tasks") }
+        }
+    )
 }
 
 @Composable

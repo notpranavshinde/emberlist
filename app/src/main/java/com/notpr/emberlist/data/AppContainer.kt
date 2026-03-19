@@ -10,7 +10,7 @@ import com.notpr.emberlist.ui.UndoController
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
-    val database: EmberlistDatabase = EmberlistDatabase.build(appContext)
+    val database: EmberlistDatabase = EmberlistDatabase.getInstance(appContext)
 
     val repository: TaskRepository = TaskRepositoryImpl(
         database.projectDao(),

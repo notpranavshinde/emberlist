@@ -16,7 +16,7 @@ class ReminderWorker(
         val taskId = inputData.getString(KEY_TASK_ID) ?: return Result.failure()
         val reminderId = inputData.getString(KEY_REMINDER_ID) ?: return Result.failure()
 
-        val db = EmberlistDatabase.build(applicationContext)
+        val db = EmberlistDatabase.getInstance(applicationContext)
         val repository = TaskRepositoryImpl(
             db.projectDao(),
             db.sectionDao(),

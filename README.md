@@ -6,6 +6,7 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 
 - Offline‑first (no accounts, no sync)
 - Quick Add with live parsing (due, deadline, priority, project, recurrence, reminders)
+- Bulk paste in Quick Add: paste a multi-line list and create one task or one task per line
 - Live project suggestions when typing `#`
 - Inbox, Today (with Overdue), Upcoming (grouped by date)
 - Projects with sections
@@ -14,6 +15,7 @@ Emberlist is a single‑device, offline‑first Android task manager inspired by
 - Parser-first task detail editor (quick-parser + notes, subtasks, overflow actions, collapsed activity)
 - Task archive/unarchive
 - Subtasks in task detail
+- Bulk paste subtasks from task detail with the same one-vs-many confirmation flow
 - Task activity log with per-entry undo and specific change labels
 - Recurring tasks (due + deadline recurrence)
 - Time‑based reminders with notifications
@@ -67,7 +69,7 @@ Entities live in `app/src/main/java/com/notpr/emberlist/data/model/Models.kt`.
 - `ReminderEntity`
 - `ActivityEventEntity`
 
-Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/data/EmberlistDatabase.kt` with migrations `1 -> 2`, `2 -> 3`, and `3 -> 4`.
+Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/data/EmberlistDatabase.kt` with migrations `1 -> 2`, `2 -> 3`, `3 -> 4`, and `4 -> 5`.
 
 ## Reminders
 
@@ -109,6 +111,9 @@ Run:
 3. **Quick Add chip editing**
    - Tap Due/Deadline/Priority/Project/Repeat/Reminders chips and edit values
    - Verify created task uses edited values
+   - Paste a multi-line list into Quick Add
+   - Verify Emberlist prompts to add 1 task or one task per line
+   - Verify common bullets like `-` and `*` are stripped, while numbered prefixes are preserved
 4. **Today + Upcoming**
    - Create tasks due today and future
    - Today shows today + overdue
@@ -132,6 +137,8 @@ Run:
    - Verify due/project/priority/reminder/recurrence changes reflect in Today/Upcoming
    - Verify notes still edit separately
    - Verify Activity shows specific labels like due/reminder/priority changes and allows undo
+   - Paste a multi-line list into Add subtask
+   - Verify Emberlist prompts to add 1 subtask or one subtask per line
 8. **Board toggle + drag**
    - Open a project and toggle between List/Board
    - Drag a task card between section columns

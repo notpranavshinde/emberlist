@@ -70,6 +70,7 @@ import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.formatActivityLabel
+import com.notpr.emberlist.parsing.extractBulkQuickAddLines
 import com.notpr.emberlist.parsing.QuickAddParser
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import com.notpr.emberlist.ui.components.TaskRow
@@ -384,6 +385,19 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
         )
         val currentTask = task
         var newSubtask by remember(task?.id) { mutableStateOf("") }
+        var subtaskBulkDialogOpen by remember(task?.id) { mutableStateOf(false) }
+        var lastSubtaskBulkPromptText by remember(task?.id) { mutableStateOf<String?>(null) }
+        val bulkSubtaskLines = remember(newSubtask) { extractBulkQuickAddLines(newSubtask) }
+        LaunchedEffect(newSubtask, bulkSubtaskLines) {
+            if (bulkSubtaskLines.size > 1) {
+                if (lastSubtaskBulkPromptText != newSubtask) {
+                    subtaskBulkDialogOpen = true
+                    lastSubtaskBulkPromptText = newSubtask
+                }
+            } else if (newSubtask.isBlank()) {
+                lastSubtaskBulkPromptText = null
+            }
+        }
         subtasks.forEach { subtask ->
             val item = buildTaskListItem(
                 task = subtask,
@@ -407,7 +421,9 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 value = newSubtask,
                 onValueChange = { newSubtask = it },
                 placeholder = { Text("Add subtask") },
-                singleLine = true,
+                singleLine = false,
+                minLines = 1,
+                maxLines = 4,
                 modifier = Modifier.weight(1f),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
@@ -419,10 +435,13 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
             )
             Button(
                 onClick = {
-                    val titleText = newSubtask.trim()
-                    if (titleText.isNotEmpty() && currentTask != null) {
-                        viewModel.addSubtask(currentTask, titleText)
-                        newSubtask = ""
+                    if (currentTask == null) return@Button
+                    when {
+                        bulkSubtaskLines.size > 1 -> subtaskBulkDialogOpen = true
+                        newSubtask.trim().isNotEmpty() -> {
+                            viewModel.addSubtask(currentTask, newSubtask.trim())
+                            newSubtask = ""
+                        }
                     }
                 },
                 modifier = Modifier.padding(start = 8.dp),
@@ -430,6 +449,39 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
             ) {
                 Text("Add")
             }
+        }
+
+        if (subtaskBulkDialogOpen && bulkSubtaskLines.size > 1 && currentTask != null) {
+            AlertDialog(
+                onDismissRequest = { subtaskBulkDialogOpen = false },
+                title = { Text("Add ${bulkSubtaskLines.size} tasks?") },
+                text = { Text("Emberlist found ${bulkSubtaskLines.size} items in your pasted list.") },
+                dismissButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { subtaskBulkDialogOpen = false }) { Text("Cancel") }
+                        TextButton(
+                            onClick = {
+                                val joined = bulkSubtaskLines.joinToString(" ")
+                                if (joined.isNotBlank()) {
+                                    viewModel.addSubtask(currentTask, joined)
+                                    newSubtask = ""
+                                }
+                                subtaskBulkDialogOpen = false
+                            }
+                        ) { Text("Add 1 task") }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val parsedEntries = bulkSubtaskLines.map { parser.parse(it) }
+                            viewModel.addParsedSubtasks(currentTask, parsedEntries)
+                            newSubtask = ""
+                            subtaskBulkDialogOpen = false
+                        }
+                    ) { Text("Add ${bulkSubtaskLines.size} tasks") }
+                }
+            )
         }
 
         if (activity.isNotEmpty()) {

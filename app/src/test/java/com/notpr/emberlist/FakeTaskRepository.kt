@@ -13,6 +13,8 @@ class FakeTaskRepository : TaskRepository {
     val tasks = LinkedHashMap<String, TaskEntity>()
     val reminders = LinkedHashMap<String, ReminderEntity>()
     val activities = ArrayList<ActivityEventEntity>()
+    val projects = LinkedHashMap<String, ProjectEntity>()
+    val sections = LinkedHashMap<String, SectionEntity>()
 
     override fun observeInbox(): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
     override fun observeToday(endOfDay: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
@@ -20,14 +22,18 @@ class FakeTaskRepository : TaskRepository {
         flowOf(tasks.values.toList())
     override fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
     override fun observeOverdueRecurring(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(emptyList())
-    override fun observeProjects(): Flow<List<ProjectEntity>> = flowOf(emptyList())
+    override fun observeProjects(): Flow<List<ProjectEntity>> = flowOf(projects.values.toList())
     override fun observeProjectTaskCounts() = flowOf(emptyList<com.notpr.emberlist.data.model.ProjectTaskCount>())
-    override fun observeProject(projectId: String): Flow<ProjectEntity?> = flowOf(null)
-    override suspend fun getProjectByName(name: String): ProjectEntity? = null
-    override suspend fun getSectionByName(projectId: String, name: String): SectionEntity? = null
-    override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> = flowOf(emptyList())
-    override fun observeSections(projectId: String): Flow<List<SectionEntity>> = flowOf(emptyList())
-    override fun observeAllSections(): Flow<List<SectionEntity>> = flowOf(emptyList())
+    override fun observeProject(projectId: String): Flow<ProjectEntity?> = flowOf(projects[projectId])
+    override suspend fun getProjectByName(name: String): ProjectEntity? =
+        projects.values.firstOrNull { it.name.equals(name, ignoreCase = true) }
+    override suspend fun getSectionByName(projectId: String, name: String): SectionEntity? =
+        sections.values.firstOrNull { it.projectId == projectId && it.name.equals(name, ignoreCase = true) }
+    override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> =
+        flowOf(tasks.values.filter { it.projectId == projectId })
+    override fun observeSections(projectId: String): Flow<List<SectionEntity>> =
+        flowOf(sections.values.filter { it.projectId == projectId })
+    override fun observeAllSections(): Flow<List<SectionEntity>> = flowOf(sections.values.toList())
     override fun observeTask(taskId: String): Flow<TaskEntity?> = flowOf(tasks[taskId])
     override suspend fun getTask(taskId: String): TaskEntity? = tasks[taskId]
     override fun observeSubtasks(parentId: String): Flow<List<TaskEntity>> =
@@ -45,12 +51,24 @@ class FakeTaskRepository : TaskRepository {
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun search(query: String): Flow<List<TaskEntity>> = flowOf(emptyList())
 
-    override suspend fun upsertProject(project: ProjectEntity) {}
-    override suspend fun upsertSection(section: SectionEntity) {}
-    override suspend fun deleteSection(sectionId: String) {}
-    override suspend fun deleteProject(projectId: String) {}
-    override suspend fun deleteTasksByProject(projectId: String) {}
-    override suspend fun deleteSectionsByProject(projectId: String) {}
+    override suspend fun upsertProject(project: ProjectEntity) {
+        projects[project.id] = project
+    }
+    override suspend fun upsertSection(section: SectionEntity) {
+        sections[section.id] = section
+    }
+    override suspend fun deleteSection(sectionId: String) {
+        sections.remove(sectionId)
+    }
+    override suspend fun deleteProject(projectId: String) {
+        projects.remove(projectId)
+    }
+    override suspend fun deleteTasksByProject(projectId: String) {
+        tasks.entries.removeIf { it.value.projectId == projectId }
+    }
+    override suspend fun deleteSectionsByProject(projectId: String) {
+        sections.entries.removeIf { it.value.projectId == projectId }
+    }
 
     override suspend fun upsertTask(task: TaskEntity) {
         tasks[task.id] = task

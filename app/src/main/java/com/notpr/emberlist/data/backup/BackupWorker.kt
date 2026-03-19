@@ -11,7 +11,7 @@ class BackupWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         return try {
-            val db = EmberlistDatabase.build(applicationContext)
+            val db = EmberlistDatabase.getInstance(applicationContext)
             val manager = BackupManager(db)
             manager.exportToFile(applicationContext)
             Result.success()

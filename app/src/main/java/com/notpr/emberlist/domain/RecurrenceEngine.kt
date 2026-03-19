@@ -51,10 +51,11 @@ object RecurrenceEngine {
                 }
             }
             "MONTHLY" -> {
-                val target = currentDate.plusMonths(interval.toLong())
                 if (byMonthDay != null) {
-                    target.withDayOfMonth(coerceDay(target, byMonthDay))
-                } else target
+                    findMonthWithDay(currentDate, interval, byMonthDay)
+                } else {
+                    currentDate.plusMonths(interval.toLong())
+                }
             }
             "YEARLY" -> currentDate.plusYears(interval.toLong())
             else -> return null
@@ -80,5 +81,13 @@ object RecurrenceEngine {
     private fun coerceDay(date: LocalDate, day: Int): Int {
         val max = date.lengthOfMonth()
         return day.coerceIn(1, max)
+    }
+
+    private fun findMonthWithDay(base: LocalDate, interval: Int, targetDay: Int): LocalDate {
+        var candidate = base.plusMonths(interval.toLong())
+        while (candidate.lengthOfMonth() < targetDay) {
+            candidate = candidate.plusMonths(1)
+        }
+        return candidate.withDayOfMonth(targetDay)
     }
 }

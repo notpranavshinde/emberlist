@@ -66,40 +66,82 @@ class TaskDetailViewModel(
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun addSubtask(parent: TaskEntity, title: String) {
+        val parsed = QuickAddResult(
+            title = title,
+            dueAt = null,
+            deadlineAt = null,
+            allDay = false,
+            deadlineAllDay = false,
+            priority = Priority.P4,
+            projectName = null,
+            sectionName = null,
+            recurrenceRule = null,
+            deadlineRecurringRule = null,
+            reminders = emptyList()
+        )
+        addParsedSubtasks(parent, listOf(parsed))
+    }
+
+    fun addParsedSubtasks(parent: TaskEntity, entries: List<QuickAddResult>) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val siblings = repository.observeSubtasks(parent.id).first()
-            val nextOrder = (siblings.maxOfOrNull { it.order } ?: 0) + 1
-            val subtask = TaskEntity(
-                id = UUID.randomUUID().toString(),
-                title = title,
-                description = "",
-                projectId = parent.projectId,
-                sectionId = parent.sectionId,
-                priority = Priority.P4,
-                dueAt = null,
-                allDay = false,
-                deadlineAt = null,
-                deadlineAllDay = false,
-                recurringRule = null,
-                deadlineRecurringRule = null,
-                status = TaskStatus.OPEN,
-                completedAt = null,
-                parentTaskId = parent.id,
-                locationId = null,
-                locationTriggerType = null,
-                order = nextOrder,
-                createdAt = now,
-                updatedAt = now
-            )
-            repository.upsertTask(subtask)
-            logTaskActivity(
-                repository = repository,
-                type = ActivityType.UPDATED,
-                task = subtask,
-                beforeTask = subtask.copy(parentTaskId = null),
-                details = mapOf("parentTitleAfter" to parent.title)
-            )
+            var nextOrder = (siblings.maxOfOrNull { it.order } ?: 0) + 1
+            entries.forEach { entry ->
+                val normalized = normalizeParsedResult(entry)
+                val projectId = resolveProjectId(normalized.projectName, now) ?: parent.projectId
+                val sectionId = if (projectId == parent.projectId) {
+                    resolveSectionId(projectId, normalized.sectionName, now) ?: parent.sectionId
+                } else {
+                    resolveSectionId(projectId, normalized.sectionName, now)
+                }
+                val subtask = TaskEntity(
+                    id = UUID.randomUUID().toString(),
+                    title = normalized.title,
+                    description = "",
+                    projectId = projectId,
+                    sectionId = sectionId,
+                    priority = normalized.priority,
+                    dueAt = normalized.dueAt,
+                    allDay = normalized.allDay,
+                    deadlineAt = normalized.deadlineAt,
+                    deadlineAllDay = normalized.deadlineAllDay,
+                    recurringRule = normalized.recurrenceRule,
+                    deadlineRecurringRule = normalized.deadlineRecurringRule,
+                    status = TaskStatus.OPEN,
+                    completedAt = null,
+                    parentTaskId = parent.id,
+                    locationId = null,
+                    locationTriggerType = null,
+                    order = nextOrder++,
+                    createdAt = now,
+                    updatedAt = now
+                )
+                repository.upsertTask(subtask)
+                val reminderEntities = desiredReminderSpecs(normalized).map { spec ->
+                    ReminderEntity(
+                        id = UUID.randomUUID().toString(),
+                        taskId = subtask.id,
+                        type = ReminderType.TIME,
+                        timeAt = (spec as? ReminderSpec.Absolute)?.timeAtMillis,
+                        offsetMinutes = (spec as? ReminderSpec.Offset)?.minutes,
+                        locationId = null,
+                        locationTriggerType = null,
+                        enabled = true,
+                        ephemeral = false,
+                        createdAt = now
+                    )
+                }
+                reminderEntities.forEach { repository.upsertReminder(it) }
+                reminderScheduler.replaceTaskReminders(subtask, reminderEntities)
+                logTaskActivity(
+                    repository = repository,
+                    type = ActivityType.UPDATED,
+                    task = subtask,
+                    beforeTask = subtask.copy(parentTaskId = null),
+                    details = mapOf("parentTitleAfter" to parent.title)
+                )
+            }
         }
     }
 
@@ -365,6 +407,46 @@ class TaskDetailViewModel(
             result = result.copy(deadlineAt = startOfDay, deadlineAllDay = true)
         }
         return result
+    }
+
+    private suspend fun resolveProjectId(projectName: String?, now: Long): String? {
+        return projectName?.let { name ->
+            val existing = repository.getProjectByName(name)
+            if (existing != null) {
+                existing.id
+            } else {
+                val newProject = ProjectEntity(
+                    id = UUID.randomUUID().toString(),
+                    name = name,
+                    color = "#EE6A3C",
+                    favorite = false,
+                    order = 0,
+                    archived = false,
+                    viewPreference = null,
+                    createdAt = now,
+                    updatedAt = now
+                )
+                repository.upsertProject(newProject)
+                logActivity(repository, ActivityType.CREATED, ObjectType.PROJECT, newProject.id)
+                newProject.id
+            }
+        }
+    }
+
+    private suspend fun resolveSectionId(projectId: String?, sectionName: String?, now: Long): String? {
+        if (projectId == null || sectionName.isNullOrBlank()) return null
+        val existing = repository.getSectionByName(projectId, sectionName)
+        if (existing != null) return existing.id
+        val newSection = SectionEntity(
+            id = UUID.randomUUID().toString(),
+            projectId = projectId,
+            name = sectionName,
+            order = 0,
+            createdAt = now,
+            updatedAt = now
+        )
+        repository.upsertSection(newSection)
+        return newSection.id
     }
 
     private fun desiredReminderSpecs(parsed: QuickAddResult): List<ReminderSpec> {
