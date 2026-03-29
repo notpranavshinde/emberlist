@@ -16,30 +16,30 @@ class FakeTaskRepository : TaskRepository {
     val projects = LinkedHashMap<String, ProjectEntity>()
     val sections = LinkedHashMap<String, SectionEntity>()
 
-    override fun observeInbox(): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
-    override fun observeToday(endOfDay: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
+    override fun observeInbox(): Flow<List<TaskEntity>> = flowOf(tasks.values.filter { it.deletedAt == null })
+    override fun observeToday(endOfDay: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.filter { it.deletedAt == null })
     override fun observeCompletedToday(startOfDay: Long, endOfDay: Long): Flow<List<TaskEntity>> =
-        flowOf(tasks.values.toList())
-    override fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.toList())
+        flowOf(tasks.values.filter { it.deletedAt == null })
+    override fun observeUpcoming(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(tasks.values.filter { it.deletedAt == null })
     override fun observeOverdueRecurring(startOfTomorrow: Long): Flow<List<TaskEntity>> = flowOf(emptyList())
-    override fun observeProjects(): Flow<List<ProjectEntity>> = flowOf(projects.values.toList())
+    override fun observeProjects(): Flow<List<ProjectEntity>> = flowOf(projects.values.filter { it.deletedAt == null })
     override fun observeProjectTaskCounts() = flowOf(emptyList<com.notpr.emberlist.data.model.ProjectTaskCount>())
-    override fun observeProject(projectId: String): Flow<ProjectEntity?> = flowOf(projects[projectId])
+    override fun observeProject(projectId: String): Flow<ProjectEntity?> = flowOf(projects[projectId]?.takeIf { it.deletedAt == null })
     override suspend fun getProjectByName(name: String): ProjectEntity? =
-        projects.values.firstOrNull { it.name.equals(name, ignoreCase = true) }
+        projects.values.firstOrNull { it.deletedAt == null && it.name.equals(name, ignoreCase = true) }
     override suspend fun getSectionByName(projectId: String, name: String): SectionEntity? =
-        sections.values.firstOrNull { it.projectId == projectId && it.name.equals(name, ignoreCase = true) }
+        sections.values.firstOrNull { it.deletedAt == null && it.projectId == projectId && it.name.equals(name, ignoreCase = true) }
     override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> =
-        flowOf(tasks.values.filter { it.projectId == projectId })
+        flowOf(tasks.values.filter { it.deletedAt == null && it.projectId == projectId })
     override fun observeSections(projectId: String): Flow<List<SectionEntity>> =
-        flowOf(sections.values.filter { it.projectId == projectId })
-    override fun observeAllSections(): Flow<List<SectionEntity>> = flowOf(sections.values.toList())
-    override fun observeTask(taskId: String): Flow<TaskEntity?> = flowOf(tasks[taskId])
-    override suspend fun getTask(taskId: String): TaskEntity? = tasks[taskId]
+        flowOf(sections.values.filter { it.deletedAt == null && it.projectId == projectId })
+    override fun observeAllSections(): Flow<List<SectionEntity>> = flowOf(sections.values.filter { it.deletedAt == null })
+    override fun observeTask(taskId: String): Flow<TaskEntity?> = flowOf(tasks[taskId]?.takeIf { it.deletedAt == null })
+    override suspend fun getTask(taskId: String): TaskEntity? = tasks[taskId]?.takeIf { it.deletedAt == null }
     override fun observeSubtasks(parentId: String): Flow<List<TaskEntity>> =
-        flowOf(tasks.values.filter { it.parentTaskId == parentId })
+        flowOf(tasks.values.filter { it.deletedAt == null && it.parentTaskId == parentId })
     override fun observeSubtasksForParents(parentIds: List<String>): Flow<List<TaskEntity>> =
-        flowOf(tasks.values.filter { it.parentTaskId in parentIds })
+        flowOf(tasks.values.filter { it.deletedAt == null && it.parentTaskId in parentIds })
     override fun observeReminders(taskId: String): Flow<List<ReminderEntity>> =
         flowOf(reminders.values.filter { it.taskId == taskId })
     override fun observeEnabledReminders(): Flow<List<ReminderEntity>> =
@@ -58,16 +58,24 @@ class FakeTaskRepository : TaskRepository {
         sections[section.id] = section
     }
     override suspend fun deleteSection(sectionId: String) {
-        sections.remove(sectionId)
+        sections[sectionId]?.let { sections[sectionId] = it.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()) }
     }
     override suspend fun deleteProject(projectId: String) {
-        projects.remove(projectId)
+        projects[projectId]?.let { projects[projectId] = it.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()) }
     }
     override suspend fun deleteTasksByProject(projectId: String) {
-        tasks.entries.removeIf { it.value.projectId == projectId }
+        tasks.entries.forEach { entry ->
+            if (entry.value.projectId == projectId) {
+                entry.setValue(entry.value.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()))
+            }
+        }
     }
     override suspend fun deleteSectionsByProject(projectId: String) {
-        sections.entries.removeIf { it.value.projectId == projectId }
+        sections.entries.forEach { entry ->
+            if (entry.value.projectId == projectId) {
+                entry.setValue(entry.value.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()))
+            }
+        }
     }
 
     override suspend fun upsertTask(task: TaskEntity) {
@@ -75,14 +83,30 @@ class FakeTaskRepository : TaskRepository {
     }
 
     override suspend fun deleteTask(taskId: String) {
-        tasks.remove(taskId)
+        tasks.entries.forEach { entry ->
+            if (entry.value.id == taskId || entry.value.parentTaskId == taskId) {
+                entry.setValue(entry.value.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()))
+            }
+        }
     }
 
     override suspend fun getSubtasks(parentId: String): List<TaskEntity> =
-        tasks.values.filter { it.parentTaskId == parentId }
+        tasks.values.filter { it.deletedAt == null && it.parentTaskId == parentId }
 
-    override suspend fun clearCompletedTasks() {}
-    override suspend fun clearTasksInSection(sectionId: String) {}
+    override suspend fun clearCompletedTasks() {
+        tasks.entries.forEach { entry ->
+            if (entry.value.status == com.notpr.emberlist.data.model.TaskStatus.COMPLETED && entry.value.deletedAt == null) {
+                entry.setValue(entry.value.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()))
+            }
+        }
+    }
+    override suspend fun clearTasksInSection(sectionId: String) {
+        tasks.entries.forEach { entry ->
+            if (entry.value.sectionId == sectionId) {
+                entry.setValue(entry.value.copy(sectionId = null, updatedAt = System.currentTimeMillis()))
+            }
+        }
+    }
 
     override suspend fun upsertReminder(reminder: ReminderEntity) {
         reminders[reminder.id] = reminder

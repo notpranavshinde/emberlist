@@ -43,7 +43,8 @@ data class ProjectEntity(
     val archived: Boolean,
     val viewPreference: ViewPreference?,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val deletedAt: Long? = null
 )
 
 @Entity(
@@ -57,7 +58,8 @@ data class SectionEntity(
     val name: String,
     val `order`: Int,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val deletedAt: Long? = null
 )
 
 @Entity(
@@ -91,7 +93,8 @@ data class TaskEntity(
     val locationTriggerType: LocationTriggerType?,
     val `order`: Int,
     val createdAt: Long,
-    val updatedAt: Long
+    val updatedAt: Long,
+    val deletedAt: Long? = null
 )
 
 @Entity(tableName = "locations")
@@ -126,7 +129,8 @@ data class ReminderEntity(
     val locationTriggerType: LocationTriggerType?,
     val enabled: Boolean,
     val ephemeral: Boolean,
-    val createdAt: Long
+    val createdAt: Long,
+    val updatedAt: Long = createdAt
 )
 
 @Entity(tableName = "activity_events", indices = [Index("objectId")])

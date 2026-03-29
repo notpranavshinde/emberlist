@@ -15,9 +15,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -34,22 +34,26 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
-import com.notpr.emberlist.data.backup.BackupManager
-import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import com.notpr.emberlist.data.backup.BackupScheduler
+import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(padding: PaddingValues) {
     val container = LocalAppContainer.current
     val viewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val settings by viewModel.settings.collectAsState()
+    val driveAuthState by viewModel.driveAuthState.collectAsState()
+    val syncUiState by viewModel.syncUiState.collectAsState()
     val context = LocalContext.current
-    val backupManager = remember { BackupManager(container.database) }
+    val backupManager = remember { container.backupManager }
     val scope = remember { CoroutineScope(Dispatchers.IO) }
 
     var importModeReplace by remember { mutableStateOf(true) }
@@ -81,7 +85,7 @@ fun SettingsScreen(padding: PaddingValues) {
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
-            scope.launch { backupManager.exportToUri(context.contentResolver, uri) }
+            scope.launch { backupManager.exportToUri(context, context.contentResolver, uri) }
         }
     }
 
@@ -89,6 +93,9 @@ fun SettingsScreen(padding: PaddingValues) {
         if (uri != null) {
             scope.launch { backupManager.importFromUri(context.contentResolver, uri, importModeReplace) }
         }
+    }
+    val driveSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        viewModel.handleDriveSignInResult(result.data)
     }
 
     Column(modifier = Modifier.padding(padding).padding(16.dp)) {
@@ -114,6 +121,71 @@ fun SettingsScreen(padding: PaddingValues) {
             label = "Show completed in Today",
             checked = settings.showCompletedToday,
             onCheckedChange = viewModel::updateShowCompletedToday
+        )
+
+        SectionHeader(text = "Cloud Sync")
+        Text(
+            text = when {
+                driveAuthState.hasDriveScope -> "Connected: ${driveAuthState.email ?: driveAuthState.displayName ?: "Google account"}"
+                driveAuthState.isSignedIn -> "Google account connected, but Drive access is missing."
+                else -> "Not connected"
+            },
+            style = MaterialTheme.typography.bodyMedium
+        )
+        settings.lastSyncedAt?.let { lastSyncedAt ->
+            Text(
+                text = "Last synced: ${formatTimestamp(lastSyncedAt)}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        syncUiState.status?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        syncUiState.error?.let { error ->
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+        ActionRow {
+            if (driveAuthState.hasDriveScope) {
+                OutlinedButton(
+                    onClick = { viewModel.disconnectDrive() },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Disconnect") }
+            } else {
+                Button(
+                    onClick = { driveSignInLauncher.launch(container.driveAuthManager.signInIntent()) },
+                    modifier = Modifier.weight(1f)
+                ) { Text("Connect Google") }
+            }
+            Button(
+                onClick = { viewModel.syncNow() },
+                enabled = settings.syncEnabled && driveAuthState.hasDriveScope && !syncUiState.isSyncing,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (syncUiState.isSyncing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Sync now")
+                }
+            }
+        }
+        RowSwitch(
+            label = "Enable sync",
+            checked = settings.syncEnabled,
+            onCheckedChange = viewModel::updateSyncEnabled,
+            enabled = driveAuthState.hasDriveScope
         )
 
         SectionHeader(text = "Data")
@@ -230,13 +302,18 @@ fun SettingsScreen(padding: PaddingValues) {
 }
 
 @Composable
-private fun RowSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+private fun RowSwitch(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true
+) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = label)
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 
@@ -296,3 +373,6 @@ private fun ActionRow(content: @Composable RowScope.() -> Unit) {
         content = content
     )
 }
+
+private fun formatTimestamp(value: Long): String =
+    SimpleDateFormat("MMM d, h:mm a", Locale.US).format(Date(value))

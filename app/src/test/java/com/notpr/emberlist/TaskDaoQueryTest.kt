@@ -84,6 +84,22 @@ class TaskDaoQueryTest {
         db.close()
     }
 
+    @Test
+    fun tombstonedTasksAreExcludedFromNormalQueries() = kotlinx.coroutines.runBlocking {
+        val db = buildDb()
+        val dao = db.taskDao()
+        val now = System.currentTimeMillis()
+        dao.upsert(baseTask("live", null, null, now))
+        dao.upsert(baseTask("deleted", null, null, now).copy(deletedAt = now, updatedAt = now))
+
+        val inbox = dao.observeInbox().first().map { it.id }
+        val search = dao.search("Task", TaskStatus.OPEN).first().map { it.id }
+
+        assertEquals(listOf("live"), inbox)
+        assertEquals(listOf("live"), search)
+        db.close()
+    }
+
     private fun buildDb(): EmberlistDatabase {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         return Room.inMemoryDatabaseBuilder(context, EmberlistDatabase::class.java)

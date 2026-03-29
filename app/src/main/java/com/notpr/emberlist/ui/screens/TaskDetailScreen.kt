@@ -107,6 +107,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     var sectionMenuOpen by remember { mutableStateOf(false) }
     var activityExpanded by remember(taskId) { mutableStateOf(false) }
     var actionsMenuOpen by remember { mutableStateOf(false) }
+    var hasUserEdited by remember(taskId) { mutableStateOf(false) }
     val parserFocusRequester = remember { FocusRequester() }
 
     val hashToken = remember(inputState.text) {
@@ -153,25 +154,19 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
         val projectName = current.projectId?.let { id -> projectById[id]?.name }
         val sectionName = current.sectionId?.let { id -> sectionById[id]?.name }
         description = current.description
+        val serialized = serializeTaskToParserInput(
+            task = current,
+            projectName = projectName,
+            sectionName = sectionName,
+            reminders = reminders,
+            zone = zone
+        )
         inputState = TextFieldValue(
-            serializeTaskToParserInput(
-                task = current,
-                projectName = projectName,
-                sectionName = sectionName,
-                reminders = reminders,
-                zone = zone
-            ),
-            selection = TextRange(
-                serializeTaskToParserInput(
-                    task = current,
-                    projectName = projectName,
-                    sectionName = sectionName,
-                    reminders = reminders,
-                    zone = zone
-                ).length
-            )
+            serialized,
+            selection = TextRange(serialized.length)
         )
         seededTaskId = current.id
+        hasUserEdited = false
     }
 
     val parsed by remember(inputState.text) { derivedStateOf { parser.parse(inputState.text) } }
@@ -183,6 +178,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     LaunchedEffect(task?.id, inputState.text, description, parsed, reminders) {
         val current = task ?: return@LaunchedEffect
         if (seededTaskId != current.id) return@LaunchedEffect
+        if (!hasUserEdited) return@LaunchedEffect
         if (inputState.text.trim().isBlank()) return@LaunchedEffect
         viewModel.applyParsedTaskChanges(
             current = current,
@@ -220,6 +216,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                     TextField(
                         value = inputState,
                         onValueChange = { value ->
+                            hasUserEdited = true
                             inputState = value
                             val hashIndex = value.text.lastIndexOf('#')
                             val token = if (hashIndex == -1) "" else value.text.substring(hashIndex + 1).takeWhile { !it.isWhitespace() }
@@ -358,7 +355,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
             )
             TextField(
                 value = description,
-                onValueChange = { description = it },
+                onValueChange = {
+                    hasUserEdited = true
+                    description = it
+                },
                 placeholder = { Text("Add notes") },
                 minLines = 2,
                 maxLines = 4,

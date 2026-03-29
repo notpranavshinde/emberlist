@@ -10,13 +10,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProjectDao {
-    @Query("SELECT * FROM projects WHERE archived = 0 ORDER BY `order` ASC")
+    @Query("SELECT * FROM projects WHERE archived = 0 AND deletedAt IS NULL ORDER BY `order` ASC")
     fun observeActiveProjects(): Flow<List<ProjectEntity>>
 
-    @Query("SELECT * FROM projects WHERE id = :id")
+    @Query("SELECT * FROM projects WHERE id = :id AND deletedAt IS NULL")
     fun observeProject(id: String): Flow<ProjectEntity?>
 
-    @Query("SELECT * FROM projects WHERE name = :name LIMIT 1")
+    @Query("SELECT * FROM projects WHERE name = :name AND deletedAt IS NULL LIMIT 1")
     suspend fun getByName(name: String): ProjectEntity?
 
     @Query("SELECT * FROM projects")
@@ -28,6 +28,6 @@ interface ProjectDao {
     @Update
     suspend fun update(project: ProjectEntity)
 
-    @Query("DELETE FROM projects WHERE id = :id")
-    suspend fun delete(id: String)
+    @Query("UPDATE projects SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun softDelete(id: String, deletedAt: Long, updatedAt: Long)
 }

@@ -16,6 +16,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val KEY_ACCENT = stringPreferencesKey("accent")
         val KEY_AUTO_BACKUP = booleanPreferencesKey("auto_backup_daily")
         val KEY_SHOW_COMPLETED_TODAY = booleanPreferencesKey("show_completed_today")
+        val KEY_SYNC_ENABLED = booleanPreferencesKey("sync_enabled")
+        val KEY_LAST_SYNCED_AT = stringPreferencesKey("last_synced_at")
     }
 
     val settings: Flow<SettingsState> = dataStore.data.map { prefs ->
@@ -24,7 +26,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             use24h = prefs[KEY_24H] ?: false,
             accent = prefs[KEY_ACCENT] ?: "Ember",
             autoBackupDaily = prefs[KEY_AUTO_BACKUP] ?: false,
-            showCompletedToday = prefs[KEY_SHOW_COMPLETED_TODAY] ?: false
+            showCompletedToday = prefs[KEY_SHOW_COMPLETED_TODAY] ?: false,
+            syncEnabled = prefs[KEY_SYNC_ENABLED] ?: false,
+            lastSyncedAt = prefs[KEY_LAST_SYNCED_AT]?.toLongOrNull()
         )
     }
 
@@ -47,6 +51,20 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun updateShowCompletedToday(value: Boolean) {
         dataStore.edit { it[KEY_SHOW_COMPLETED_TODAY] = value }
     }
+
+    suspend fun updateSyncEnabled(value: Boolean) {
+        dataStore.edit { it[KEY_SYNC_ENABLED] = value }
+    }
+
+    suspend fun updateLastSyncedAt(value: Long?) {
+        dataStore.edit {
+            if (value == null) {
+                it.remove(KEY_LAST_SYNCED_AT)
+            } else {
+                it[KEY_LAST_SYNCED_AT] = value.toString()
+            }
+        }
+    }
 }
 
 data class SettingsState(
@@ -54,5 +72,7 @@ data class SettingsState(
     val use24h: Boolean,
     val accent: String,
     val autoBackupDaily: Boolean,
-    val showCompletedToday: Boolean
+    val showCompletedToday: Boolean,
+    val syncEnabled: Boolean,
+    val lastSyncedAt: Long?
 )

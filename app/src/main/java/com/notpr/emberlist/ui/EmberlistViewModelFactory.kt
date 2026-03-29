@@ -38,7 +38,12 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
             modelClass.isAssignableFrom(QuickAddViewModel::class.java) ->
                 QuickAddViewModel(container.repository, container.reminderScheduler)
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
-                SettingsViewModel(container.settingsRepository, container.repository)
+                SettingsViewModel(
+                    container.settingsRepository,
+                    container.repository,
+                    container.driveAuthManager,
+                    container.driveSyncService
+                )
             modelClass.isAssignableFrom(ActivityViewModel::class.java) ->
                 ActivityViewModel(container.repository, container.reminderScheduler)
             else -> throw IllegalArgumentException("Unknown ViewModel ${modelClass.name}")

@@ -49,6 +49,8 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "META-INF/INDEX.LIST"
+            excludes += "META-INF/DEPENDENCIES"
         }
     }
 }
@@ -77,11 +79,16 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("com.google.api-client:google-api-client-android:2.7.0")
+    implementation("com.google.http-client:google-http-client-gson:1.45.0")
+    implementation("com.google.apis:google-api-services-drive:v3-rev20260305-2.0.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")

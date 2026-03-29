@@ -30,7 +30,7 @@ import com.notpr.emberlist.data.model.TaskEntity
         LocationEntity::class,
         ActivityEventEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -102,6 +102,16 @@ abstract class EmberlistDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tasks ADD COLUMN deletedAt INTEGER")
+                db.execSQL("ALTER TABLE projects ADD COLUMN deletedAt INTEGER")
+                db.execSQL("ALTER TABLE sections ADD COLUMN deletedAt INTEGER")
+                db.execSQL("ALTER TABLE reminders ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE reminders SET updatedAt = createdAt WHERE updatedAt = 0")
+            }
+        }
+
         fun getInstance(context: Context): EmberlistDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -113,6 +123,7 @@ abstract class EmberlistDatabase : RoomDatabase() {
                     .addMigrations(MIGRATION_2_3)
                     .addMigrations(MIGRATION_3_4)
                     .addMigrations(MIGRATION_4_5)
+                    .addMigrations(MIGRATION_5_6)
                     .build()
                     .also { instance = it }
             }
@@ -124,6 +135,7 @@ abstract class EmberlistDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
                 .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_5_6)
                 .build()
         }
     }
