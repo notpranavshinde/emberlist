@@ -1,7 +1,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, ChangeEvent, ComponentType, FormEvent, ReactNode } from 'react';
 import {
-  Bell,
   Calendar,
   Check,
   Circle,
@@ -12,7 +11,6 @@ import {
   Import,
   Layers3,
   ListTodo,
-  PanelLeft,
   Plus,
   RefreshCw,
   Search,
@@ -66,6 +64,8 @@ import type { Priority, Project, Section, SyncPayload, Task } from './types/sync
 
 const syncEngine = new SyncEngine();
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
+const QUICK_ADD_PLACEHOLDER = `Try: pay rent p1 tomorrow 9pm #bills
+Or paste a whole list`;
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: 'All', value: 'ALL' },
   { label: 'Overdue', value: 'OVERDUE' },
@@ -161,6 +161,14 @@ function App() {
   useEffect(() => {
     writeStoredCloudSession(cloudSession);
   }, [cloudSession]);
+
+  useEffect(() => {
+    if (!banner || banner.tone === 'error') return;
+    const timeoutId = window.setTimeout(() => {
+      setBanner(current => (current === banner ? null : current));
+    }, 4_000);
+    return () => window.clearTimeout(timeoutId);
+  }, [banner]);
 
   const loadData = useMemo(
     () => async () => {
@@ -653,6 +661,7 @@ function WorkspaceShell({
 }: WorkspaceShellProps) {
   const location = useLocation();
   const todayStartMs = useTodayStartMs();
+  const previousPathRef = useRef(location.pathname);
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -674,6 +683,17 @@ function WorkspaceShell({
   const workspaceIdentity = getWorkspaceIdentity(cloudSession);
   const quickAddContext = useMemo(() => getQuickAddContext(location.pathname, payload), [location.pathname, payload]);
 
+  useEffect(() => {
+    document.title = `${title} · Emberlist`;
+  }, [title]);
+
+  useEffect(() => {
+    if (previousPathRef.current !== location.pathname) {
+      onDismissBanner();
+      previousPathRef.current = location.pathname;
+    }
+  }, [location.pathname, onDismissBanner]);
+
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
       <div className="flex min-h-screen flex-col md:flex-row">
@@ -686,14 +706,6 @@ function WorkspaceShell({
               <div className="flex items-center gap-1 text-sm font-semibold text-[#2b2b2b]">
                 <span>{workspaceIdentity.label}</span>
               </div>
-            </div>
-            <div className="flex items-center gap-1 text-[#6f6b66]">
-              <button className="rounded-md p-2 transition hover:bg-[#f3efeb]" aria-label="Notifications">
-                <Bell size={16} />
-              </button>
-              <button className="rounded-md p-2 transition hover:bg-[#f3efeb]" aria-label="Display options">
-                <PanelLeft size={16} />
-              </button>
             </div>
           </div>
 
@@ -783,7 +795,7 @@ function WorkspaceShell({
 
         <div className="flex min-h-screen flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-[#ece7e3] bg-[#faf8f6]/95 px-4 py-4 backdrop-blur md:px-8">
-            <div className="mx-auto flex w-full max-w-[760px] items-center justify-between gap-3">
+            <div className="mx-auto flex w-full max-w-[1080px] items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">Emberlist</p>
                 <h2 className="text-2xl font-semibold text-[#202020]">{title}</h2>
@@ -795,19 +807,20 @@ function WorkspaceShell({
                   className="flex items-center gap-2 rounded-full border border-[#ece7e3] bg-white px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
-                  <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync'}</span>
+                  <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
                 </button>
                 <button
                   onClick={onOpenQuickAdd}
                   className="flex items-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
                 >
                   <Plus size={16} />
+                  <span className="sm:hidden">Add</span>
                   <span className="hidden sm:inline">Quick add</span>
                 </button>
               </div>
             </div>
             {banner ? (
-              <div className={`mx-auto mt-4 flex w-full max-w-[760px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
+              <div className={`mx-auto mt-4 flex w-full max-w-[1080px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
                 <p>{banner.message}</p>
                 <button onClick={onDismissBanner} className="rounded-full p-1 transition hover:bg-black/5" aria-label="Dismiss status message">
                   <X size={16} />
@@ -816,8 +829,8 @@ function WorkspaceShell({
             ) : null}
           </header>
 
-          <main className="flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-8">
-            <div className="mx-auto w-full max-w-[760px]">
+          <main className="flex-1 px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10">
+            <div className="mx-auto w-full max-w-[1080px]">
             <Routes>
               <Route path="/" element={<Navigate to="/today" replace />} />
               <Route
@@ -906,7 +919,7 @@ function WorkspaceShell({
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F7F4F0]/95 px-2 py-2 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F7F4F0]/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           <BottomLink to="/today" icon={Home} label="Today" />
           <BottomLink to="/upcoming" icon={Calendar} label="Upcoming" />
@@ -1981,7 +1994,7 @@ function QuickAddDialog({
                 }
               }}
               rows={4}
-              placeholder="Try: pay rent p1 tomorrow 9pm #bills\nOr paste a whole list"
+              placeholder={QUICK_ADD_PLACEHOLDER}
               className="w-full rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
             />
           </Field>
@@ -2248,7 +2261,7 @@ function HeroCard({
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">{eyebrow}</p>
           <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">{title}</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#7a7168]">{description}</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">{description}</p>
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
@@ -2352,7 +2365,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function StatusPill({ label, tone }: { label: string; tone: CloudStatusTone }) {
   return (
-    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusPillClasses(tone)}`}>
+    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusPillClasses(tone)}`}>
       {label}
     </span>
   );
