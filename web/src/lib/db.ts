@@ -1,5 +1,6 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { SyncPayload, Project, Section, Task, Reminder, Location } from '../types/sync';
+import { createEmptySyncPayload, ensureSyncPayload } from './syncPayload';
 
 const DB_NAME = 'emberlist_db';
 const DB_VERSION = 1;
@@ -24,6 +25,7 @@ export class EmberlistDB {
 
     async savePayload(payload: SyncPayload) {
         if (!this.db) await this.init();
+        const normalizedPayload = ensureSyncPayload(payload, 'Local workspace payload');
         const tx = this.db!.transaction(['projects', 'sections', 'tasks', 'reminders', 'locations', 'metadata'], 'readwrite');
 
         await Promise.all([
@@ -36,14 +38,14 @@ export class EmberlistDB {
         ]);
 
         await Promise.all([
-            ...payload.projects.map(p => tx.objectStore('projects').put(p)),
-            ...payload.sections.map(s => tx.objectStore('sections').put(s)),
-            ...payload.tasks.map(t => tx.objectStore('tasks').put(t)),
-            ...payload.reminders.map(r => tx.objectStore('reminders').put(r)),
-            ...payload.locations.map(l => tx.objectStore('locations').put(l)),
-            tx.objectStore('metadata').put(payload.deviceId, 'deviceId'),
-            tx.objectStore('metadata').put(payload.schemaVersion, 'schemaVersion'),
-            tx.objectStore('metadata').put(payload.exportedAt, 'lastSync'),
+            ...normalizedPayload.projects.map(p => tx.objectStore('projects').put(p)),
+            ...normalizedPayload.sections.map(s => tx.objectStore('sections').put(s)),
+            ...normalizedPayload.tasks.map(t => tx.objectStore('tasks').put(t)),
+            ...normalizedPayload.reminders.map(r => tx.objectStore('reminders').put(r)),
+            ...normalizedPayload.locations.map(l => tx.objectStore('locations').put(l)),
+            tx.objectStore('metadata').put(normalizedPayload.deviceId, 'deviceId'),
+            tx.objectStore('metadata').put(normalizedPayload.schemaVersion, 'schemaVersion'),
+            tx.objectStore('metadata').put(normalizedPayload.exportedAt, 'lastSync'),
         ]);
         
         await tx.done;
@@ -64,18 +66,16 @@ export class EmberlistDB {
             tx.objectStore('metadata').get('lastSync'),
         ]);
 
-        return {
-            schemaVersion: schemaVersion || 1,
-            exportedAt: exportedAt || 0,
-            deviceId: deviceId || crypto.randomUUID(),
-            payloadId: crypto.randomUUID(),
-            source: 'web',
+        return ensureSyncPayload({
+            ...createEmptySyncPayload(typeof deviceId === 'string' ? deviceId : undefined),
+            schemaVersion: typeof schemaVersion === 'number' ? schemaVersion : 1,
+            exportedAt: typeof exportedAt === 'number' ? exportedAt : 0,
             projects: projects as Project[],
             sections: sections as Section[],
             tasks: tasks as Task[],
             reminders: reminders as Reminder[],
             locations: locations as Location[],
-        };
+        }, 'Local workspace payload');
     }
 
     /**
@@ -90,6 +90,18 @@ export class EmberlistDB {
             tasks: payload.tasks.filter(t => !t.deletedAt),
             reminders: payload.reminders.filter(r => !r.deletedAt),
         };
+    }
+
+    async reset() {
+        this.db?.close();
+        this.db = null;
+
+        await new Promise<void>((resolve, reject) => {
+            const request = window.indexedDB.deleteDatabase(DB_NAME);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error ?? new Error('Failed to delete local database.'));
+            request.onblocked = () => reject(new Error('Local database reset is blocked by another open tab.'));
+        });
     }
 }
 

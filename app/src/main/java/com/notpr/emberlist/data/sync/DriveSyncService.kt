@@ -1,6 +1,7 @@
 package com.notpr.emberlist.data.sync
 
 import android.content.Context
+import kotlinx.serialization.SerializationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -55,7 +56,7 @@ class DriveSyncService(
             }
         }.getOrElse { error ->
             SyncResult.Failure(
-                message = error.message ?: "Sync failed.",
+                message = error.toUserFacingSyncMessage(),
                 cause = error
             )
         }
@@ -86,3 +87,9 @@ class DriveSyncService(
         const val SYNC_FILE_NAME = "emberlist_sync.json"
     }
 }
+
+private fun Throwable.toUserFacingSyncMessage(): String =
+    when (this) {
+        is SerializationException -> "Cloud sync file is invalid or corrupted. Local data was not changed. Use Reset cloud sync to recreate it."
+        else -> message ?: "Sync failed."
+    }

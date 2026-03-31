@@ -1,4 +1,5 @@
 import type { SyncPayload } from '../types/sync';
+import { ensureSyncPayload } from './syncPayload';
 import { SyncEngine } from './syncEngine';
 import { db } from './db';
 
@@ -8,7 +9,7 @@ const SYNC_FILE_NAME = 'emberlist_sync.json';
 const AUTH_TIMEOUT_MS = 60_000;
 
 type DriveFileListResponse = {
-    files?: Array<{ id?: string | null }>;
+    files?: Array<{ id?: string | null; modifiedTime?: string | null }>;
 };
 
 export class DriveSyncService {
@@ -50,7 +51,16 @@ export class DriveSyncService {
         if (fileId) {
             const response = await this.authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
             if (response.ok) {
-                remotePayload = await response.json();
+                try {
+                    remotePayload = ensureSyncPayload(await response.json(), 'Cloud sync file');
+                } catch (error) {
+                    if (error instanceof Error && error.message.startsWith('Cloud sync file')) {
+                        throw new Error(
+                            'Cloud sync file is invalid or corrupted. Local web data was not changed. Reset cloud sync and sync again to recreate it.'
+                        );
+                    }
+                    throw error;
+                }
             } else if (response.status !== 404) {
                 throw new Error(`Failed to download sync payload (${response.status})`);
             }
@@ -69,8 +79,8 @@ export class DriveSyncService {
     private async findSyncFileId(): Promise<string | null> {
         const params = new URLSearchParams({
             spaces: 'appDataFolder',
-            fields: 'files(id,name)',
-            q: `name = '${SYNC_FILE_NAME}'`,
+            fields: 'files(id,modifiedTime)',
+            q: `name = '${SYNC_FILE_NAME}' and trashed = false`,
         });
 
         const response = await this.authorizedFetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
@@ -79,7 +89,18 @@ export class DriveSyncService {
         }
 
         const body = await response.json() as DriveFileListResponse;
-        return body.files?.[0]?.id ?? null;
+        const latestFile = (body.files ?? [])
+            .filter((file): file is { id: string; modifiedTime?: string | null } => typeof file.id === 'string' && file.id.length > 0)
+            .sort((left, right) => {
+                const leftTime = parseDriveModifiedTime(left.modifiedTime);
+                const rightTime = parseDriveModifiedTime(right.modifiedTime);
+                if (leftTime !== rightTime) {
+                    return rightTime - leftTime;
+                }
+                return right.id.localeCompare(left.id);
+            })[0];
+
+        return latestFile?.id ?? null;
     }
 
     private async uploadPayload(fileId: string | null, payload: SyncPayload) {
@@ -256,4 +277,10 @@ export class DriveSyncService {
 
         return DriveSyncService.gisScriptPromise;
     }
+}
+
+function parseDriveModifiedTime(value?: string | null): number {
+    if (!value) return Number.MIN_SAFE_INTEGER;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? Number.MIN_SAFE_INTEGER : parsed;
 }

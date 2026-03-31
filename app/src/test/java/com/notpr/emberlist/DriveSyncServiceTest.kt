@@ -21,7 +21,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.SerializationException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -98,6 +100,35 @@ class DriveSyncServiceTest {
         assertTrue(result is SyncResult.Failure)
         assertEquals(0, store.importedPayloads.size)
         assertEquals(null, drive.lastUploadedPayload)
+    }
+
+    @Test
+    fun malformedRemotePayloadFailsSafelyWithoutUploadingOrImporting() = runBlocking {
+        val store = FakeSyncPayloadStore(payload(taskTitle = "Local"))
+        val drive = object : FakeDriveAppDataClient(
+            files = mutableListOf(DriveFileRef("file-1", modifiedTimeMs = 50L))
+        ) {
+            override suspend fun downloadPayload(fileId: String): SyncPayload? {
+                throw SerializationException("Bad remote JSON")
+            }
+        }
+        val service = DriveSyncService(
+            context = context,
+            payloadStore = store,
+            syncManager = SyncManager(nowProvider = { 100L }, payloadIdFactory = { "merged" }),
+            driveClientProvider = { drive },
+            nowProvider = { 100L }
+        )
+
+        val result = service.sync()
+
+        assertTrue(result is SyncResult.Failure)
+        assertEquals(
+            "Cloud sync file is invalid or corrupted. Local data was not changed. Use Reset cloud sync to recreate it.",
+            (result as SyncResult.Failure).message
+        )
+        assertTrue(store.importedPayloads.isEmpty())
+        assertNull(drive.lastUploadedPayload)
     }
 
     @Test

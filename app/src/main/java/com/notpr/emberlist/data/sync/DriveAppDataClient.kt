@@ -31,7 +31,7 @@ class GoogleDriveAppDataClient(
     context: Context,
     account: GoogleSignInAccount
 ) : DriveAppDataClient {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = syncPayloadJson
     private val service: Drive = Drive.Builder(
         GoogleNetHttpTransport.newTrustedTransport(),
         GsonFactory.getDefaultInstance(),
@@ -85,4 +85,9 @@ class GoogleDriveAppDataClient(
         service.files().delete(fileId).execute()
         }
     }
+}
+
+internal val syncPayloadJson = Json {
+    encodeDefaults = true
+    ignoreUnknownKeys = true
 }

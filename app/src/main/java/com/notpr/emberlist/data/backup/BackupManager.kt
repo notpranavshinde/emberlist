@@ -13,6 +13,9 @@ import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.sync.CURRENT_SYNC_SCHEMA_VERSION
 import com.notpr.emberlist.data.sync.SyncPayload
 import com.notpr.emberlist.data.sync.SyncPayloadStore
+import androidx.room.withTransaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -35,10 +38,14 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
         const val KEY_DEVICE_ID = "device_id"
     }
 
-    override suspend fun exportSyncPayload(context: Context): SyncPayload = buildSyncPayload(context)
+    override suspend fun exportSyncPayload(context: Context): SyncPayload = withContext(Dispatchers.IO) {
+        buildSyncPayload(context)
+    }
 
     override suspend fun importSyncPayload(payload: SyncPayload, replace: Boolean) {
-        applySyncPayload(payload, replace)
+        withContext(Dispatchers.IO) {
+            applySyncPayload(payload, replace)
+        }
     }
 
     suspend fun exportToUri(context: Context, contentResolver: ContentResolver, uri: Uri) {
@@ -94,21 +101,23 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
     }
 
     private suspend fun importPayload(payload: BackupPayload, replace: Boolean) {
-        applySyncPayload(payload.sync, replace)
-        payload.activity.forEach { database.activityDao().insert(it) }
+        withContext(Dispatchers.IO) {
+            applySyncPayload(payload.sync, replace)
+            payload.activity.forEach { database.activityDao().insert(it) }
+        }
     }
 
     private suspend fun applySyncPayload(payload: SyncPayload, replace: Boolean) {
-        database.runInTransaction {
+        database.withTransaction {
             if (replace) {
                 database.clearAllTables()
             }
+            payload.projects.forEach { database.projectDao().upsert(it) }
+            payload.sections.forEach { database.sectionDao().upsert(it) }
+            payload.tasks.forEach { database.taskDao().upsert(it) }
+            payload.reminders.forEach { database.reminderDao().upsert(it) }
+            payload.locations.forEach { database.locationDao().upsert(it) }
         }
-        payload.projects.forEach { database.projectDao().upsert(it) }
-        payload.sections.forEach { database.sectionDao().upsert(it) }
-        payload.tasks.forEach { database.taskDao().upsert(it) }
-        payload.reminders.forEach { database.reminderDao().upsert(it) }
-        payload.locations.forEach { database.locationDao().upsert(it) }
     }
 
     private fun getOrCreateDeviceId(context: Context): String {

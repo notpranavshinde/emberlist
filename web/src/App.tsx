@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
+import { RecoveryScreen } from './components/RecoveryScreen';
 import { Sidebar } from './components/Sidebar';
 import { TaskList } from './components/TaskList';
 import { db } from './lib/db';
 import { SyncEngine } from './lib/syncEngine';
+import { ensureSyncPayload } from './lib/syncPayload';
 import { DriveSyncService } from './lib/syncService';
 import type { SyncPayload } from './types/sync';
 import { Upload, Cloud, RefreshCw } from 'lucide-react';
@@ -14,18 +16,46 @@ const GOOGLE_CLIENT_ID = '1032043281818-fjqpnk8tren6v259tflkk5v6sf3415lq.apps.go
 
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);
+  const [bootState, setBootState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [bootError, setBootError] = useState<string | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isResettingCache, setIsResettingCache] = useState(false);
 
   const syncService = useMemo(() => new DriveSyncService(GOOGLE_CLIENT_ID), []);
 
-  useEffect(() => {
-    async function loadData() {
+  async function loadData() {
+    setBootState('loading');
+    setBootError(null);
+    try {
       const data = await db.getPayload();
       setPayload(data);
+      setBootState('ready');
+    } catch (err) {
+      console.error('Failed to load local workspace', err);
+      setPayload(null);
+      setBootError(err instanceof Error ? err.message : 'Failed to load local workspace.');
+      setBootState('error');
     }
+  }
+
+  useEffect(() => {
     loadData();
   }, []);
+
+  const handleResetLocalCache = async () => {
+    setIsResettingCache(true);
+    try {
+      await db.reset();
+      await loadData();
+    } catch (err) {
+      console.error('Failed to reset local web cache', err);
+      setBootError(err instanceof Error ? err.message : 'Failed to reset local web cache.');
+      setBootState('error');
+    } finally {
+      setIsResettingCache(false);
+    }
+  };
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,15 +64,17 @@ function App() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const remotePayload = JSON.parse(event.target?.result as string) as SyncPayload;
+        const remotePayload = ensureSyncPayload(JSON.parse(event.target?.result as string), 'Imported JSON file');
         const localPayload = await db.getPayload();
         
         const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
         await db.savePayload(mergedPayload);
         setPayload(mergedPayload);
+        setBootState('ready');
       } catch (err) {
-        console.error("Failed to parse JSON", err);
-        alert("Failed to import JSON. Check console for details.");
+        console.error("Failed to import JSON", err);
+        const message = err instanceof Error ? err.message : "Failed to import JSON. Check console for details.";
+        alert(message);
       }
     };
     reader.readAsText(file);
@@ -58,6 +90,7 @@ function App() {
     try {
       const mergedPayload = await syncService.sync();
       setPayload(mergedPayload);
+      setBootState('ready');
       alert("Sync Complete!");
     } catch (err) {
       console.error("Sync Failed", err);
@@ -89,7 +122,31 @@ function App() {
     setPayload(newPayload);
   };
 
-  if (!payload) return <div className="p-8 text-slate-500 italic">Loading your workspace...</div>;
+  if (bootState === 'loading') {
+    return <div className="p-8 text-slate-500 italic">Loading your workspace...</div>;
+  }
+
+  if (bootState === 'error') {
+    return (
+      <RecoveryScreen
+        message={bootError ?? 'Failed to load local workspace.'}
+        onRetry={loadData}
+        onResetLocalCache={handleResetLocalCache}
+        isResetting={isResettingCache}
+      />
+    );
+  }
+
+  if (!payload) {
+    return (
+      <RecoveryScreen
+        message="Local workspace is unavailable."
+        onRetry={loadData}
+        onResetLocalCache={handleResetLocalCache}
+        isResetting={isResettingCache}
+      />
+    );
+  }
 
   const activeProject = payload.projects.find(p => p.id === activeProjectId);
   const filteredSections = payload.sections.filter(s => s.projectId === activeProjectId && !s.deletedAt);
