@@ -30,7 +30,7 @@ import { format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
 import { RecoveryScreen } from './components/RecoveryScreen';
 import { db } from './lib/db';
 import { ensureSyncPayload } from './lib/syncPayload';
-import { DriveSyncService } from './lib/syncService';
+import { DriveSyncService, type CloudSession } from './lib/syncService';
 import { SyncEngine } from './lib/syncEngine';
 import {
   archiveTask,
@@ -60,9 +60,7 @@ import {
 import type { Priority, Project, Section, SyncPayload, Task } from './types/sync';
 
 const syncEngine = new SyncEngine();
-const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ||
-  '1032043281818-fjqpnk8tren6v259tflkk5v6sf3415lq.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: 'All', value: 'ALL' },
   { label: 'Overdue', value: 'OVERDUE' },
@@ -81,6 +79,7 @@ type Banner = {
   tone: 'success' | 'error' | 'info';
   message: string;
 };
+type CloudStatusTone = 'ready' | 'idle' | 'warning' | 'muted';
 
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);
@@ -97,9 +96,14 @@ function App() {
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() =>
     readStoredNumber('emberlist.lastCloudSyncAt')
   );
+  const [cloudSession, setCloudSession] = useState<CloudSession | null>(() => readStoredCloudSession());
+  const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
   const payloadRef = useRef<SyncPayload | null>(null);
-  const syncService = useMemo(() => new DriveSyncService(GOOGLE_CLIENT_ID), []);
+  const syncService = useMemo(
+    () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
+    []
+  );
 
   useEffect(() => {
     payloadRef.current = payload;
@@ -116,6 +120,10 @@ function App() {
     }
     window.localStorage.setItem('emberlist.lastCloudSyncAt', String(lastCloudSyncAt));
   }, [lastCloudSyncAt]);
+
+  useEffect(() => {
+    writeStoredCloudSession(cloudSession);
+  }, [cloudSession]);
 
   const loadData = useMemo(
     () => async () => {
@@ -194,18 +202,29 @@ function App() {
   }
 
   async function handleCloudSync() {
+    if (!syncService) {
+      const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+      setLastSyncError(message);
+      setBanner({ tone: 'error', message });
+      return;
+    }
+
     setIsSyncing(true);
+    setLastSyncError(null);
     try {
       const mergedPayload = await syncService.sync();
       await persistPayload(mergedPayload);
       setLastCloudSyncAt(Date.now());
+      setCloudSession(syncService.getSession());
       setBootState('ready');
       setBanner({ tone: 'success', message: 'Cloud sync completed.' });
     } catch (error) {
       console.error('Cloud sync failed', error);
+      const message = error instanceof Error ? error.message : 'Cloud sync failed.';
+      setLastSyncError(message);
       setBanner({
         tone: 'error',
-        message: error instanceof Error ? error.message : 'Cloud sync failed.',
+        message,
       });
     } finally {
       setIsSyncing(false);
@@ -213,6 +232,13 @@ function App() {
   }
 
   async function handleResetCloudSync() {
+    if (!syncService) {
+      const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+      setLastSyncError(message);
+      setBanner({ tone: 'error', message });
+      return;
+    }
+
     const confirmed = window.confirm(
       'Delete all Emberlist cloud sync files in Google Drive app data? Your local web data will stay intact.'
     );
@@ -222,6 +248,7 @@ function App() {
     try {
       await syncService.resetRemoteSyncFile();
       setLastCloudSyncAt(null);
+      setLastSyncError(null);
       setBanner({
         tone: 'success',
         message: 'Cloud sync storage was reset. Sync again from the side with the data you want to keep.',
@@ -234,6 +261,21 @@ function App() {
       });
     } finally {
       setIsResettingCloud(false);
+    }
+  }
+
+  async function handleDisconnectCloud() {
+    if (!syncService) return;
+
+    try {
+      await syncService.disconnect();
+      setCloudSession(null);
+      setBanner({ tone: 'info', message: 'Signed out of Google Drive for this browser session.' });
+    } catch (error) {
+      setBanner({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Failed to disconnect Google Drive.',
+      });
     }
   }
 
@@ -352,10 +394,14 @@ function App() {
         onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
         showCompletedToday={showCompletedToday}
         onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
+        cloudConfigured={Boolean(syncService)}
+        cloudSession={cloudSession}
+        lastSyncError={lastSyncError}
         isSyncing={isSyncing}
         isResettingCloud={isResettingCloud}
         isResettingCache={isResettingCache}
         lastCloudSyncAt={lastCloudSyncAt}
+        onDisconnectCloud={() => void handleDisconnectCloud()}
         isQuickAddOpen={isQuickAddOpen}
         onOpenQuickAdd={() => setIsQuickAddOpen(true)}
         onCloseQuickAdd={() => setIsQuickAddOpen(false)}
@@ -387,10 +433,14 @@ type WorkspaceShellProps = {
   onDeleteSection: (sectionId: string) => void;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
+  cloudConfigured: boolean;
+  cloudSession: CloudSession | null;
+  lastSyncError: string | null;
   isSyncing: boolean;
   isResettingCloud: boolean;
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
+  onDisconnectCloud: () => void;
   isQuickAddOpen: boolean;
   onOpenQuickAdd: () => void;
   onCloseQuickAdd: () => void;
@@ -417,10 +467,14 @@ function WorkspaceShell({
   onDeleteSection,
   showCompletedToday,
   onToggleShowCompletedToday,
+  cloudConfigured,
+  cloudSession,
+  lastSyncError,
   isSyncing,
   isResettingCloud,
   isResettingCache,
   lastCloudSyncAt,
+  onDisconnectCloud,
   isQuickAddOpen,
   onOpenQuickAdd,
   onCloseQuickAdd,
@@ -428,6 +482,13 @@ function WorkspaceShell({
   const location = useLocation();
   const title = getRouteTitle(location.pathname, payload);
   const projects = getActiveProjects(payload);
+  const cloudStatus = getCloudStatus({
+    cloudConfigured,
+    cloudSession,
+    lastSyncError,
+    isSyncing,
+    lastCloudSyncAt,
+  });
 
   return (
     <div className="min-h-screen bg-[#F7F4F0] text-[#221E1C]">
@@ -470,18 +531,30 @@ function WorkspaceShell({
           </div>
 
           <div className="mt-auto rounded-[28px] border border-[#E1D5CA] bg-white/90 p-4 shadow-sm">
-            <p className="text-sm font-semibold text-[#1E2D2F]">Cloud sync</p>
-            <p className="mt-2 text-sm text-[#6D5C50]">
-              {lastCloudSyncAt ? `Last synced ${formatDateTime(lastCloudSyncAt)}.` : 'No recent cloud sync yet.'}
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-[#1E2D2F]">Cloud sync</p>
+              <StatusPill label={cloudStatus.label} tone={cloudStatus.tone} />
+            </div>
+            <p className="mt-3 text-sm text-[#1E2D2F]">
+              {cloudSession?.email ?? 'No Google account connected in this tab'}
             </p>
+            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">{cloudStatus.detail}</p>
             <button
               onClick={onCloudSync}
-              disabled={isSyncing}
+              disabled={isSyncing || !cloudConfigured}
               className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
               <span>{isSyncing ? 'Syncing...' : 'Sync now'}</span>
             </button>
+            {cloudSession ? (
+              <button
+                onClick={onDisconnectCloud}
+                className="mt-3 w-full rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Disconnect
+              </button>
+            ) : null}
           </div>
         </aside>
 
@@ -580,9 +653,13 @@ function WorkspaceShell({
                 path="/settings"
                 element={
                   <SettingsPage
+                    cloudConfigured={cloudConfigured}
+                    cloudSession={cloudSession}
+                    lastSyncError={lastSyncError}
                     showCompletedToday={showCompletedToday}
                     onToggleShowCompletedToday={onToggleShowCompletedToday}
                     onCloudSync={onCloudSync}
+                    onDisconnectCloud={onDisconnectCloud}
                     onResetCloudSync={onResetCloudSync}
                     onResetLocalCache={onResetLocalCache}
                     onImport={onImport}
@@ -1374,9 +1451,13 @@ function TaskEditor({
 }
 
 function SettingsPage({
+  cloudConfigured,
+  cloudSession,
+  lastSyncError,
   showCompletedToday,
   onToggleShowCompletedToday,
   onCloudSync,
+  onDisconnectCloud,
   onResetCloudSync,
   onResetLocalCache,
   onImport,
@@ -1385,9 +1466,13 @@ function SettingsPage({
   isResettingCache,
   lastCloudSyncAt,
 }: {
+  cloudConfigured: boolean;
+  cloudSession: CloudSession | null;
+  lastSyncError: string | null;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
   onCloudSync: () => void;
+  onDisconnectCloud: () => void;
   onResetCloudSync: () => void;
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -1396,31 +1481,56 @@ function SettingsPage({
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
 }) {
+  const cloudStatus = getCloudStatus({
+    cloudConfigured,
+    cloudSession,
+    lastSyncError,
+    isSyncing,
+    lastCloudSyncAt,
+  });
+
   return (
     <div className="space-y-6">
       <HeroCard
         eyebrow="Settings"
         title="Web sync and workspace"
-        description="Manage cloud sync, local recovery, and the display options that only affect the web app."
+        description="Manage Google Drive sync, this browser's local workspace, and the display options that stay local to the web app."
       />
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Cloud sync</p>
           <div className="mt-4 space-y-3">
-            <InfoRow label="Google Drive" value="Connected on demand through Google Identity Services" />
+            <InfoRow label="Status" value={cloudStatus.label} />
+            <InfoRow label="Account" value={cloudSession?.email ?? 'No Google account connected in this tab'} />
             <InfoRow label="Last sync" value={lastCloudSyncAt ? formatDateTime(lastCloudSyncAt) : 'No recent sync'} />
+            <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
+              {cloudStatus.detail}
+            </p>
+            {lastSyncError ? (
+              <p className="rounded-[18px] bg-[#FFF1EB] px-4 py-3 text-sm leading-6 text-[#A24628]">
+                Last error: {lastSyncError}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-3 pt-2">
               <button
                 onClick={onCloudSync}
-                disabled={isSyncing}
+                disabled={isSyncing || !cloudConfigured}
                 className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSyncing ? 'Syncing...' : 'Sync now'}
               </button>
+              {cloudSession ? (
+                <button
+                  onClick={onDisconnectCloud}
+                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                >
+                  Disconnect
+                </button>
+              ) : null}
               <button
                 onClick={onResetCloudSync}
-                disabled={isResettingCloud}
+                disabled={isResettingCloud || !cloudConfigured}
                 className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-3 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isResettingCloud ? 'Resetting cloud sync...' : 'Reset cloud sync'}
@@ -1869,6 +1979,14 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function StatusPill({ label, tone }: { label: string; tone: CloudStatusTone }) {
+  return (
+    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusPillClasses(tone)}`}>
+      {label}
+    </span>
+  );
+}
+
 function bannerClasses(tone: Banner['tone']): string {
   switch (tone) {
     case 'success':
@@ -1893,6 +2011,82 @@ function priorityClasses(priority: Priority): string {
     default:
       return 'bg-[#EFE6DD] text-[#6D5C50]';
   }
+}
+
+function statusPillClasses(tone: CloudStatusTone): string {
+  switch (tone) {
+    case 'ready':
+      return 'bg-[#F1F8F3] text-[#24553A]';
+    case 'warning':
+      return 'bg-[#FFF1EB] text-[#A24628]';
+    case 'idle':
+      return 'bg-[#F1F7F9] text-[#315566]';
+    case 'muted':
+    default:
+      return 'bg-[#EFE6DD] text-[#6D5C50]';
+  }
+}
+
+function getCloudStatus({
+  cloudConfigured,
+  cloudSession,
+  lastSyncError,
+  isSyncing,
+  lastCloudSyncAt,
+}: {
+  cloudConfigured: boolean;
+  cloudSession: CloudSession | null;
+  lastSyncError: string | null;
+  isSyncing: boolean;
+  lastCloudSyncAt: number | null;
+}): { label: string; detail: string; tone: CloudStatusTone } {
+  if (!cloudConfigured) {
+    return {
+      label: 'Unavailable',
+      detail: 'This deployment is missing its Google client ID, so cloud sync is disabled until the site is redeployed with VITE_GOOGLE_CLIENT_ID.',
+      tone: 'warning',
+    };
+  }
+
+  if (isSyncing) {
+    return {
+      label: 'Syncing',
+      detail: 'Emberlist is merging your local workspace with the latest Google Drive appData snapshot right now.',
+      tone: 'idle',
+    };
+  }
+
+  if (lastSyncError) {
+    return {
+      label: 'Attention',
+      detail: 'The last cloud sync attempt failed. Review the last error below and retry after fixing the issue.',
+      tone: 'warning',
+    };
+  }
+
+  if (cloudSession?.email) {
+    return {
+      label: 'Connected',
+      detail: lastCloudSyncAt
+        ? `Signed in as ${cloudSession.email}. Last successful sync was ${formatDateTime(lastCloudSyncAt)}.`
+        : `Signed in as ${cloudSession.email}. Run Sync now whenever you want to push or pull changes.`,
+      tone: 'ready',
+    };
+  }
+
+  if (lastCloudSyncAt) {
+    return {
+      label: 'Ready',
+      detail: `Cloud sync is configured. The last successful sync was ${formatDateTime(lastCloudSyncAt)}. Google may ask you to sign in again in this browser.`,
+      tone: 'idle',
+    };
+  }
+
+  return {
+    label: 'Ready',
+    detail: 'Cloud sync is configured. The first sync in this browser session will prompt for Google sign-in if needed.',
+    tone: 'muted',
+  };
 }
 
 function getRouteTitle(pathname: string, payload: SyncPayload): string {
@@ -1959,4 +2153,29 @@ function readStoredNumber(key: string): number | null {
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readStoredCloudSession(): CloudSession | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem('emberlist.cloudSession');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: string | null; name?: string | null };
+    return {
+      email: typeof parsed.email === 'string' ? parsed.email : null,
+      name: typeof parsed.name === 'string' ? parsed.name : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredCloudSession(session: CloudSession | null) {
+  if (typeof window === 'undefined') return;
+  if (!session) {
+    window.localStorage.removeItem('emberlist.cloudSession');
+    return;
+  }
+  window.localStorage.setItem('emberlist.cloudSession', JSON.stringify(session));
 }

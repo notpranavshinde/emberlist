@@ -18,6 +18,7 @@ declare const google: {
                 callback: (response: TokenResponse) => void;
                 error_callback?: (error: { type: string }) => void;
             }): TokenClient;
+            revoke(token: string, done?: () => void): void;
         };
     };
 };

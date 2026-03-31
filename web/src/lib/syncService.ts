@@ -3,7 +3,7 @@ import { ensureSyncPayload } from './syncPayload';
 import { SyncEngine } from './syncEngine';
 import { db } from './db';
 
-const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
+const SCOPES = 'openid email https://www.googleapis.com/auth/drive.appdata';
 const GIS_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const SYNC_FILE_NAME = 'emberlist_sync.json';
 const AUTH_TIMEOUT_MS = 60_000;
@@ -12,11 +12,17 @@ type DriveFileListResponse = {
     files?: Array<{ id?: string | null; modifiedTime?: string | null }>;
 };
 
+export type CloudSession = {
+    email: string | null;
+    name: string | null;
+};
+
 export class DriveSyncService {
     private static gisScriptPromise: Promise<void> | null = null;
 
     private tokenClient: TokenClient | null = null;
     private accessToken: string | null = null;
+    private session: CloudSession | null = null;
     private readonly syncEngine = new SyncEngine();
     private readonly clientId: string;
 
@@ -40,6 +46,8 @@ export class DriveSyncService {
     async login() {
         if (!this.tokenClient) await this.init();
         this.accessToken = await this.requestAccessToken(this.accessToken ? '' : 'consent');
+        this.session = await this.fetchSessionProfile();
+        return this.session;
     }
 
     async sync() {
@@ -74,6 +82,29 @@ export class DriveSyncService {
         await this.uploadPayload(fileId, finalPayload);
         await db.savePayload(finalPayload);
         return finalPayload;
+    }
+
+    async disconnect() {
+        if (!this.accessToken) {
+            this.session = null;
+            return;
+        }
+
+        const token = this.accessToken;
+        this.accessToken = null;
+        this.session = null;
+
+        await new Promise<void>((resolve) => {
+            google.accounts.oauth2.revoke(token, () => resolve());
+        });
+    }
+
+    getSession(): CloudSession | null {
+        return this.session;
+    }
+
+    hasActiveSession(): boolean {
+        return Boolean(this.accessToken);
     }
 
     async resetRemoteSyncFile() {
@@ -221,6 +252,23 @@ export class DriveSyncService {
             return `${fallback} - ${detail}`;
         } catch {
             return fallback;
+        }
+    }
+
+    private async fetchSessionProfile(): Promise<CloudSession> {
+        try {
+            const response = await this.authorizedFetch('https://www.googleapis.com/oauth2/v3/userinfo', {}, false);
+            if (!response.ok) {
+                return { email: null, name: null };
+            }
+
+            const body = await response.json() as { email?: string; name?: string };
+            return {
+                email: typeof body.email === 'string' ? body.email : null,
+                name: typeof body.name === 'string' ? body.name : null,
+            };
+        } catch {
+            return { email: null, name: null };
         }
     }
 
