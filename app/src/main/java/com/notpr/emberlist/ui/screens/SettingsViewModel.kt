@@ -117,6 +117,26 @@ class SettingsViewModel(
         }
     }
 
+    fun resetCloudSync() {
+        viewModelScope.launch {
+            if (_syncUiState.value.isSyncing) return@launch
+            if (!driveAuthState.value.hasDriveScope) {
+                _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
+                return@launch
+            }
+            _syncUiState.value = SyncUiState(isSyncing = true, status = "Resetting cloud sync…")
+            when (val result = driveSyncService.resetRemoteSyncFile()) {
+                is SyncResult.Success -> {
+                    settingsRepository.updateLastSyncedAt(null)
+                    _syncUiState.value = SyncUiState(status = "Cloud sync file deleted. Sync again to recreate it.")
+                }
+                is SyncResult.Failure -> {
+                    _syncUiState.value = SyncUiState(error = result.message)
+                }
+            }
+        }
+    }
+
     fun clearCompleted() {
         viewModelScope.launch { repository.clearCompletedTasks() }
     }

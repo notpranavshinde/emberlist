@@ -188,6 +188,7 @@ Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/dat
   - app-startup sync when sync is enabled and Drive access is available
   - debounced sync after local DB changes while the app is running
   - periodic background sync via WorkManager
+- Settings also includes a `Reset cloud sync` action that deletes the hidden Drive appData sync file if it becomes corrupted during testing. Local data is left untouched; the next sync recreates the file.
 - Sync writes one hidden file named `emberlist_sync.json` to the user's Google Drive appData folder.
 - Setup required:
   - Enable the Google Drive API in your Google Cloud project.

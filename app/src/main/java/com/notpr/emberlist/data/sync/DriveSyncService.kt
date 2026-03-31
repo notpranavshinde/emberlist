@@ -61,6 +61,27 @@ class DriveSyncService(
         }
     }
 
+    suspend fun resetRemoteSyncFile(): SyncResult = mutex.withLock {
+        val driveClient = driveClientProvider() ?: return SyncResult.Failure("Google Drive is not connected.")
+        return runCatching {
+            val existingFiles = driveClient.listSyncFiles(SYNC_FILE_NAME)
+            existingFiles.forEach { driveClient.deleteFile(it.id) }
+            SyncResult.Success(
+                payload = SyncPayload(
+                    exportedAt = nowProvider(),
+                    source = "android-reset"
+                ),
+                syncedAt = nowProvider(),
+                remoteCreated = false
+            )
+        }.getOrElse { error ->
+            SyncResult.Failure(
+                message = error.message ?: "Failed to reset cloud sync file.",
+                cause = error
+            )
+        }
+    }
+
     companion object {
         const val SYNC_FILE_NAME = "emberlist_sync.json"
     }

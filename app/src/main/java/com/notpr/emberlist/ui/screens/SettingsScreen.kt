@@ -58,6 +58,7 @@ fun SettingsScreen(padding: PaddingValues) {
 
     var importModeReplace by remember { mutableStateOf(true) }
     var showClearCompleted by remember { mutableStateOf(false) }
+    var showResetCloudSync by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
     var showConfirmRestore by remember { mutableStateOf(false) }
     var selectedBackup by remember { mutableStateOf<File?>(null) }
@@ -181,6 +182,11 @@ fun SettingsScreen(padding: PaddingValues) {
                 }
             }
         }
+        if (driveAuthState.hasDriveScope) {
+            TextButton(onClick = { showResetCloudSync = true }) {
+                Text("Reset cloud sync", color = MaterialTheme.colorScheme.error)
+            }
+        }
         RowSwitch(
             label = "Enable sync",
             checked = settings.syncEnabled,
@@ -243,6 +249,23 @@ fun SettingsScreen(padding: PaddingValues) {
             },
             dismissButton = {
                 TextButton(onClick = { showClearCompleted = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showResetCloudSync) {
+        AlertDialog(
+            onDismissRequest = { showResetCloudSync = false },
+            title = { Text("Reset cloud sync") },
+            text = { Text("This deletes Emberlist's sync file from Google Drive. Your local data stays untouched. Sync again afterward to recreate the cloud file.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.resetCloudSync()
+                    showResetCloudSync = false
+                }) { Text("Delete cloud file") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetCloudSync = false }) { Text("Cancel") }
             }
         )
     }

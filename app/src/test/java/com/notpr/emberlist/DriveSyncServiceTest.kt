@@ -126,6 +126,28 @@ class DriveSyncServiceTest {
         assertEquals(1, drive.maxConcurrentCalls)
     }
 
+    @Test
+    fun resetRemoteSyncFileDeletesAllMatchingCloudFiles() = runBlocking {
+        val drive = FakeDriveAppDataClient(
+            files = mutableListOf(
+                DriveFileRef("file-1", modifiedTimeMs = 10L),
+                DriveFileRef("file-2", modifiedTimeMs = 20L)
+            )
+        )
+        val service = DriveSyncService(
+            context = context,
+            payloadStore = FakeSyncPayloadStore(payload(taskTitle = "Local")),
+            syncManager = SyncManager(nowProvider = { 100L }, payloadIdFactory = { "merged" }),
+            driveClientProvider = { drive },
+            nowProvider = { 100L }
+        )
+
+        val result = service.resetRemoteSyncFile()
+
+        assertTrue(result is SyncResult.Success)
+        assertEquals(listOf("file-1", "file-2"), drive.deletedFileIds)
+    }
+
     private fun payload(
         taskTitle: String,
         updatedAt: Long = 1L
@@ -226,6 +248,7 @@ private open class FakeDriveAppDataClient(
     private val payloads: MutableMap<String, SyncPayload> = mutableMapOf()
 ) : DriveAppDataClient {
     var lastUploadedPayload: SyncPayload? = null
+    val deletedFileIds = mutableListOf<String>()
 
     override suspend fun listSyncFiles(name: String): List<DriveFileRef> = files.toList()
 
@@ -239,6 +262,12 @@ private open class FakeDriveAppDataClient(
         }
         lastUploadedPayload = payload
         return fileId
+    }
+
+    override suspend fun deleteFile(fileId: String) {
+        deletedFileIds += fileId
+        files.removeAll { it.id == fileId }
+        payloads.remove(fileId)
     }
 }
 
@@ -260,6 +289,7 @@ private class BlockingDriveAppDataClient(
 
     override suspend fun downloadPayload(fileId: String): SyncPayload? = null
 
-    override suspend fun uploadPayload(name: String, payload: SyncPayload, existingFileId: String?): String =
-        existingFileId ?: "file"
+    override suspend fun uploadPayload(name: String, payload: SyncPayload, existingFileId: String?): String = "new-file"
+
+    override suspend fun deleteFile(fileId: String) = Unit
 }

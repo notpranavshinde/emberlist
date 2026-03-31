@@ -24,6 +24,7 @@ interface DriveAppDataClient {
     suspend fun listSyncFiles(name: String): List<DriveFileRef>
     suspend fun downloadPayload(fileId: String): SyncPayload?
     suspend fun uploadPayload(name: String, payload: SyncPayload, existingFileId: String?): String
+    suspend fun deleteFile(fileId: String)
 }
 
 class GoogleDriveAppDataClient(
@@ -78,4 +79,10 @@ class GoogleDriveAppDataClient(
             }
             request.setFields("id").execute().id
         }
+
+    override suspend fun deleteFile(fileId: String) {
+        withContext(Dispatchers.IO) {
+        service.files().delete(fileId).execute()
+        }
+    }
 }
