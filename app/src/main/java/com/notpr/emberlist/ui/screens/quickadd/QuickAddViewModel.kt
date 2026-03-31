@@ -18,9 +18,11 @@ import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.ObjectType
+import com.notpr.emberlist.ui.screens.resolveTaskDetailParsedResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -55,14 +57,18 @@ class QuickAddViewModel(
     private val remindersOverride = MutableStateFlow<List<ReminderSpec>?>(null)
 
     val projects = repository.observeProjects()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val sections = repository.observeAllSections()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun updateInput(text: String) {
+    fun updateInput(
+        text: String,
+        availableProjects: List<ProjectEntity> = projects.value,
+        availableSections: List<com.notpr.emberlist.data.model.SectionEntity> = sections.value
+    ) {
         _input.value = text
-        _parsed.value = mergeOverrides(parser.parse(text))
+        _parsed.value = mergeOverrides(resolveParsedInput(text, availableProjects, availableSections))
     }
 
     fun updateDescription(text: String) {
@@ -137,8 +143,10 @@ class QuickAddViewModel(
 
     fun saveTask(onSaved: () -> Unit) {
         viewModelScope.launch {
+            val availableProjects = repository.observeProjects().first()
+            val availableSections = repository.observeAllSections().first()
             createTaskFromParsed(
-                result = _parsed.value,
+                result = mergeOverrides(resolveParsedInput(_input.value, availableProjects, availableSections)),
                 description = _description.value.trim()
             )
             resetInput()
@@ -149,9 +157,11 @@ class QuickAddViewModel(
     fun saveBulkTasks(lines: List<String>, onSaved: () -> Unit) {
         viewModelScope.launch {
             val description = _description.value.trim()
+            val availableProjects = repository.observeProjects().first()
+            val availableSections = repository.observeAllSections().first()
             lines.forEach { line ->
                 createTaskFromParsed(
-                    result = mergeBulkDefaults(line, parser.parse(line)),
+                    result = mergeBulkDefaults(line, resolveParsedInput(line, availableProjects, availableSections)),
                     description = description
                 )
             }
@@ -173,6 +183,19 @@ class QuickAddViewModel(
     }
 
     fun bulkTaskLines(text: String = _input.value): List<String> = extractBulkQuickAddLines(text)
+
+    private fun resolveParsedInput(
+        text: String,
+        availableProjects: List<ProjectEntity>,
+        availableSections: List<com.notpr.emberlist.data.model.SectionEntity>
+    ): QuickAddResult {
+        return resolveTaskDetailParsedResult(
+            parser = parser,
+            input = text,
+            projects = availableProjects,
+            sections = availableSections
+        )
+    }
 
     private suspend fun createTaskFromParsed(
         result: QuickAddResult,

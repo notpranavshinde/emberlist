@@ -1,0 +1,113 @@
+- generic [ref=e677]:
+  - complementary [ref=e678]:
+    - generic [ref=e679]:
+      - generic [ref=e680]:
+        - generic [ref=e681]: E
+        - generic [ref=e683]: Emberlist
+      - generic [ref=e684]:
+        - button "Notifications" [ref=e685]:
+          - img [ref=e686]
+        - button "Display options" [ref=e689]:
+          - img [ref=e690]
+    - button "Add task" [ref=e692]:
+      - img [ref=e693]
+      - generic [ref=e694]: Add task
+    - navigation [ref=e695]:
+      - link "Search" [ref=e696] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e697]
+        - generic [ref=e700]: Search
+      - link "Inbox 0" [ref=e701] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e702]
+        - generic [ref=e705]: Inbox
+        - generic [ref=e706]: "0"
+      - link "Today 0" [ref=e707] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e708]
+        - generic [ref=e711]: Today
+        - generic [ref=e712]: "0"
+      - link "Upcoming" [ref=e713] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e714]
+        - generic [ref=e716]: Upcoming
+      - link "Browse" [ref=e717] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e718]
+        - generic [ref=e722]: Browse
+      - link "Settings" [ref=e723] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e724]
+        - generic [ref=e727]: Settings
+    - generic [ref=e728]:
+      - paragraph [ref=e729]: Favorites
+      - link "Tasks without due dates 0" [ref=e731] [cursor=pointer]:
+        - /url: "#/search/no-due"
+        - img [ref=e732]
+        - generic [ref=e734]: Tasks without due dates
+        - generic [ref=e735]: "0"
+    - generic [ref=e737]:
+      - paragraph [ref=e738]: My Projects
+      - generic [ref=e739]: "USED: 0/5"
+    - generic [ref=e741]:
+      - generic [ref=e742]:
+        - paragraph [ref=e743]: Cloud sync
+        - generic [ref=e744]: Ready
+      - paragraph [ref=e745]: No Google account connected in this tab
+      - button "Sync now" [ref=e746]:
+        - img [ref=e747]
+        - generic [ref=e749]: Sync now
+  - generic [ref=e750]:
+    - banner [ref=e751]:
+      - generic [ref=e752]:
+        - heading "Settings" [level=2] [ref=e754]
+        - generic [ref=e755]:
+          - button "Sync" [ref=e756]:
+            - img [ref=e757]
+            - generic [ref=e759]: Sync
+          - button "Quick add" [ref=e760]:
+            - img [ref=e761]
+            - generic [ref=e762]: Quick add
+      - generic [ref=e763]:
+        - paragraph [ref=e764]: Local web cache cleared. A fresh workspace was created.
+        - button "Dismiss status message" [ref=e765]:
+          - img [ref=e766]
+    - main [ref=e769]:
+      - generic [ref=e771]:
+        - generic [ref=e774]:
+          - paragraph [ref=e775]: Settings
+          - heading "Web sync and workspace" [level=2] [ref=e776]
+          - paragraph [ref=e777]: Manage Google Drive sync, this browser's local workspace, and the display options that stay local to the web app.
+        - generic [ref=e778]:
+          - generic [ref=e779]:
+            - paragraph [ref=e780]: Cloud sync
+            - generic [ref=e781]:
+              - generic [ref=e782]:
+                - generic [ref=e783]: Status
+                - generic [ref=e784]: Ready
+              - generic [ref=e785]:
+                - generic [ref=e786]: Account
+                - generic [ref=e787]: No Google account connected in this tab
+              - generic [ref=e788]:
+                - generic [ref=e789]: Last sync
+                - generic [ref=e790]: No recent sync
+              - paragraph [ref=e791]: Cloud sync is configured. The first sync in this browser session will prompt for Google sign-in if needed.
+              - generic [ref=e792]:
+                - button "Sync now" [ref=e793]
+                - button "Reset cloud sync" [ref=e794]
+          - generic [ref=e795]:
+            - paragraph [ref=e796]: Workspace recovery
+            - generic [ref=e797]:
+              - paragraph [ref=e798]: Reset the local web cache if IndexedDB gets stuck or import a JSON backup into the current workspace.
+              - generic [ref=e799]:
+                - button "Reset web cache" [ref=e800]
+                - generic [ref=e801] [cursor=pointer]:
+                  - img [ref=e802]
+                  - text: Import JSON
+        - generic [ref=e805]:
+          - paragraph [ref=e806]: Display
+          - generic [ref=e807]:
+            - generic [ref=e808]:
+              - paragraph [ref=e809]: Show completed tasks in Today
+              - paragraph [ref=e810]: This toggle is local to the web app and does not affect Android.
+            - checkbox "Show completed tasks in Today This toggle is local to the web app and does not affect Android." [checked] [ref=e811]

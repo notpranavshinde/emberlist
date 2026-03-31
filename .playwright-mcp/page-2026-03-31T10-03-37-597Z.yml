@@ -1,0 +1,166 @@
+- generic [ref=e677]:
+  - complementary [ref=e678]:
+    - generic [ref=e679]:
+      - generic [ref=e680]:
+        - generic [ref=e681]: E
+        - generic [ref=e683]: Emberlist
+      - generic [ref=e684]:
+        - button "Notifications" [ref=e685]:
+          - img [ref=e686]
+        - button "Display options" [ref=e689]:
+          - img [ref=e690]
+    - button "Add task" [ref=e692]:
+      - img [ref=e693]
+      - generic [ref=e694]: Add task
+    - navigation [ref=e695]:
+      - link "Search" [ref=e696] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e697]
+        - generic [ref=e700]: Search
+      - link "Inbox 1" [ref=e978] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e702]
+        - generic [ref=e705]: Inbox
+        - generic [ref=e706]: "1"
+      - link "Today 5" [ref=e979] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e708]
+        - generic [ref=e711]: Today
+        - generic [ref=e712]: "5"
+      - link "Upcoming" [ref=e713] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e714]
+        - generic [ref=e716]: Upcoming
+      - link "Browse" [ref=e717] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e718]
+        - generic [ref=e722]: Browse
+      - link "Settings" [ref=e723] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e724]
+        - generic [ref=e727]: Settings
+    - generic [ref=e728]:
+      - paragraph [ref=e729]: Favorites
+      - generic [ref=e730]:
+        - link "Tasks without due dates 1" [ref=e814] [cursor=pointer]:
+          - /url: "#/search/no-due"
+          - img [ref=e732]
+          - generic [ref=e734]: Tasks without due dates
+          - generic [ref=e735]: "1"
+        - link "Home Ops 4" [ref=e815] [cursor=pointer]:
+          - /url: "#/project/project-home"
+          - img [ref=e816]
+          - generic [ref=e818]: Home Ops
+          - generic [ref=e819]: "4"
+        - link "Work 5" [ref=e820] [cursor=pointer]:
+          - /url: "#/project/project-work"
+          - img [ref=e821]
+          - generic [ref=e823]: Work
+          - generic [ref=e824]: "5"
+    - generic [ref=e737]:
+      - paragraph [ref=e738]: My Projects
+      - generic [ref=e739]: "USED: 6/5"
+    - generic [ref=e740]:
+      - link "Health 3" [ref=e825] [cursor=pointer]:
+        - /url: "#/project/project-health"
+        - img [ref=e826]
+        - generic [ref=e828]: Health
+        - generic [ref=e829]: "3"
+      - link "Family 2" [ref=e830] [cursor=pointer]:
+        - /url: "#/project/project-family"
+        - img [ref=e831]
+        - generic [ref=e833]: Family
+        - generic [ref=e834]: "2"
+      - link "Writing 2" [ref=e835] [cursor=pointer]:
+        - /url: "#/project/project-writing"
+        - img [ref=e836]
+        - generic [ref=e838]: Writing
+        - generic [ref=e839]: "2"
+      - link "Travel 0" [ref=e1530] [cursor=pointer]:
+        - /url: "#/project/2def8334-154f-4fff-b9cc-531b36a7c221"
+        - img [ref=e1531]
+        - generic [ref=e1533]: Travel
+        - generic [ref=e1534]: "0"
+    - generic [ref=e741]:
+      - generic [ref=e742]:
+        - paragraph [ref=e743]: Cloud sync
+        - generic [ref=e744]: Ready
+      - paragraph [ref=e745]: No Google account connected in this tab
+      - button "Sync now" [ref=e746]:
+        - img [ref=e747]
+        - generic [ref=e749]: Sync now
+  - generic [ref=e750]:
+    - banner [ref=e751]:
+      - generic [ref=e752]:
+        - heading "Browse" [level=2] [ref=e1475]
+        - generic [ref=e755]:
+          - button "Sync" [ref=e756]:
+            - img [ref=e757]
+            - generic [ref=e759]: Sync
+          - button "Quick add" [ref=e760]:
+            - img [ref=e761]
+            - generic [ref=e762]: Quick add
+      - generic [ref=e763]:
+        - paragraph [ref=e764]: Project "Travel" created.
+        - button "Dismiss status message" [ref=e765]:
+          - img [ref=e766]
+    - main [ref=e769]:
+      - generic [ref=e1476]:
+        - generic [ref=e1479]:
+          - paragraph [ref=e1480]: Browse
+          - heading "Projects" [level=2] [ref=e1481]
+          - paragraph [ref=e1482]: Use Inbox for unsorted tasks, create projects for focused work, and jump into a project to manage sections.
+        - generic [ref=e1483]:
+          - generic [ref=e1484]:
+            - link "Inbox 1 open task" [ref=e1485] [cursor=pointer]:
+              - /url: "#/inbox"
+              - generic [ref=e1486]:
+                - paragraph [ref=e1487]: Inbox
+                - paragraph [ref=e1488]: 1 open task
+              - img [ref=e1489]
+            - generic [ref=e1491]:
+              - link "Home Ops 4 active tasks" [ref=e1492] [cursor=pointer]:
+                - /url: "#/project/project-home"
+                - generic [ref=e1493]:
+                  - paragraph [ref=e1494]: Home Ops
+                  - paragraph [ref=e1495]: 4 active tasks
+                - img [ref=e1496]
+              - link "Work 5 active tasks" [ref=e1498] [cursor=pointer]:
+                - /url: "#/project/project-work"
+                - generic [ref=e1499]:
+                  - paragraph [ref=e1500]: Work
+                  - paragraph [ref=e1501]: 5 active tasks
+                - img [ref=e1502]
+              - link "Health 3 active tasks" [ref=e1504] [cursor=pointer]:
+                - /url: "#/project/project-health"
+                - generic [ref=e1505]:
+                  - paragraph [ref=e1506]: Health
+                  - paragraph [ref=e1507]: 3 active tasks
+                - img [ref=e1508]
+              - link "Family 2 active tasks" [ref=e1510] [cursor=pointer]:
+                - /url: "#/project/project-family"
+                - generic [ref=e1511]:
+                  - paragraph [ref=e1512]: Family
+                  - paragraph [ref=e1513]: 2 active tasks
+                - img [ref=e1514]
+              - link "Writing 2 active tasks" [ref=e1516] [cursor=pointer]:
+                - /url: "#/project/project-writing"
+                - generic [ref=e1517]:
+                  - paragraph [ref=e1518]: Writing
+                  - paragraph [ref=e1519]: 2 active tasks
+                - img [ref=e1520]
+              - link "Travel 0 active tasks" [ref=e1535] [cursor=pointer]:
+                - /url: "#/project/2def8334-154f-4fff-b9cc-531b36a7c221"
+                - generic [ref=e1536]:
+                  - paragraph [ref=e1537]: Travel
+                  - paragraph [ref=e1538]: 0 active tasks
+                - img [ref=e1539]
+          - generic [ref=e1522]:
+            - paragraph [ref=e1523]: New project
+            - heading "Create a workspace lane" [level=3] [ref=e1524]
+            - paragraph [ref=e1525]: Projects sync directly to Android. Archive or delete them later from the project view.
+            - generic [ref=e1526]:
+              - textbox "Project name" [ref=e1527]
+              - button "Create project" [active] [ref=e1528]:
+                - img [ref=e1529]
+                - text: Create project

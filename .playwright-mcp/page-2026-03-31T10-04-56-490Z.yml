@@ -1,0 +1,154 @@
+- generic [ref=e677]:
+  - complementary [ref=e678]:
+    - generic [ref=e679]:
+      - generic [ref=e680]:
+        - generic [ref=e681]: E
+        - generic [ref=e683]: Emberlist
+      - generic [ref=e684]:
+        - button "Notifications" [ref=e685]:
+          - img [ref=e686]
+        - button "Display options" [ref=e689]:
+          - img [ref=e690]
+    - button "Add task" [ref=e692]:
+      - img [ref=e693]
+      - generic [ref=e694]: Add task
+    - navigation [ref=e695]:
+      - link "Search" [ref=e696] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e697]
+        - generic [ref=e700]: Search
+      - link "Inbox 1" [ref=e978] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e702]
+        - generic [ref=e705]: Inbox
+        - generic [ref=e706]: "1"
+      - link "Today 5" [ref=e979] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e708]
+        - generic [ref=e711]: Today
+        - generic [ref=e712]: "5"
+      - link "Upcoming" [ref=e713] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e714]
+        - generic [ref=e716]: Upcoming
+      - link "Browse" [ref=e717] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e718]
+        - generic [ref=e722]: Browse
+      - link "Settings" [ref=e723] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e724]
+        - generic [ref=e727]: Settings
+    - generic [ref=e728]:
+      - paragraph [ref=e729]: Favorites
+      - generic [ref=e730]:
+        - link "Tasks without due dates 1" [ref=e814] [cursor=pointer]:
+          - /url: "#/search/no-due"
+          - img [ref=e732]
+          - generic [ref=e734]: Tasks without due dates
+          - generic [ref=e735]: "1"
+        - link "Home Ops 4" [ref=e815] [cursor=pointer]:
+          - /url: "#/project/project-home"
+          - img [ref=e816]
+          - generic [ref=e818]: Home Ops
+          - generic [ref=e819]: "4"
+        - link "Work 5" [ref=e820] [cursor=pointer]:
+          - /url: "#/project/project-work"
+          - img [ref=e821]
+          - generic [ref=e823]: Work
+          - generic [ref=e824]: "5"
+    - generic [ref=e737]:
+      - paragraph [ref=e738]: My Projects
+      - generic [ref=e739]: "USED: 6/5"
+    - generic [ref=e740]:
+      - link "Health 3" [ref=e825] [cursor=pointer]:
+        - /url: "#/project/project-health"
+        - img [ref=e826]
+        - generic [ref=e828]: Health
+        - generic [ref=e829]: "3"
+      - link "Family 2" [ref=e830] [cursor=pointer]:
+        - /url: "#/project/project-family"
+        - img [ref=e831]
+        - generic [ref=e833]: Family
+        - generic [ref=e834]: "2"
+      - link "Writing 2" [ref=e835] [cursor=pointer]:
+        - /url: "#/project/project-writing"
+        - img [ref=e836]
+        - generic [ref=e838]: Writing
+        - generic [ref=e839]: "2"
+      - link "Travel 2" [ref=e1578] [cursor=pointer]:
+        - /url: "#/project/2def8334-154f-4fff-b9cc-531b36a7c221"
+        - img [ref=e1531]
+        - generic [ref=e1533]: Travel
+        - generic [ref=e1534]: "2"
+    - generic [ref=e741]:
+      - generic [ref=e742]:
+        - paragraph [ref=e743]: Cloud sync
+        - generic [ref=e744]: Ready
+      - paragraph [ref=e745]: No Google account connected in this tab
+      - button "Sync now" [ref=e746]:
+        - img [ref=e747]
+        - generic [ref=e749]: Sync now
+  - generic [ref=e750]:
+    - banner [ref=e751]:
+      - generic [ref=e752]:
+        - heading "Travel" [level=2] [ref=e1580]
+        - generic [ref=e755]:
+          - button "Sync" [ref=e756]:
+            - img [ref=e757]
+            - generic [ref=e759]: Sync
+          - button "Quick add" [ref=e760]:
+            - img [ref=e761]
+            - generic [ref=e762]: Quick add
+      - generic [ref=e763]:
+        - paragraph [ref=e764]: Task "Pack chargers saturday" created.
+        - button "Dismiss status message" [ref=e765]:
+          - img [ref=e766]
+    - main [ref=e769]:
+      - generic [ref=e1581]:
+        - generic [ref=e1583]:
+          - generic [ref=e1584]:
+            - paragraph [ref=e1585]: Project
+            - heading "Travel" [level=2] [ref=e1586]
+            - paragraph [ref=e1587]: Manage tasks, sections, and project metadata. New tasks can be added from Quick add and assigned here.
+          - generic [ref=e1589]:
+            - button "Rename" [ref=e1590]
+            - button "Archive" [ref=e1591]
+            - button "Delete" [ref=e1592]
+            - button "Quick add" [ref=e1593]
+        - generic [ref=e1594]:
+          - generic [ref=e1596]:
+            - generic [ref=e1597]:
+              - generic [ref=e1598]:
+                - heading "Loose tasks" [level=3] [ref=e1599]
+                - paragraph [ref=e1600]: Tasks in this project without a section.
+              - generic [ref=e1601]: 2 tasks
+            - generic [ref=e1602]:
+              - button "Book flights friday Apr 3 · 3:00 PM Travel" [ref=e1603]:
+                - button [ref=e1604]:
+                  - img [ref=e1605]
+                - generic [ref=e1607]:
+                  - paragraph [ref=e1608]: Book flights friday
+                  - generic [ref=e1610]:
+                    - img [ref=e1611]
+                    - generic [ref=e1613]: Apr 3 · 3:00 PM
+                - generic [ref=e1614]: Travel
+              - button "Pack chargers saturday Apr 4 · 9:00 AM Travel" [ref=e1615]:
+                - button [ref=e1616]:
+                  - img [ref=e1617]
+                - generic [ref=e1619]:
+                  - paragraph [ref=e1620]: Pack chargers saturday
+                  - generic [ref=e1622]:
+                    - img [ref=e1623]
+                    - generic [ref=e1625]: Apr 4 · 9:00 AM
+                - generic [ref=e1626]: Travel
+          - generic [ref=e1627]:
+            - paragraph [ref=e1628]: Sections
+            - heading "Organize this project" [level=3] [ref=e1629]
+            - paragraph [ref=e1630]: Sections help break a project into swimlanes without changing the synced task model.
+            - generic [ref=e1631]:
+              - textbox "New section" [ref=e1632]
+              - button "Add" [ref=e1633]
+            - generic [ref=e1635]:
+              - paragraph [ref=e1636]: No sections yet
+              - paragraph [ref=e1637]: Add a section to break this project into parts.

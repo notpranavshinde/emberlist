@@ -326,7 +326,7 @@ private fun buildDueLabel(item: TaskListItem): String? {
 private fun priorityColor(priority: Priority): Color {
     return when (priority) {
         Priority.P1 -> Color(0xFFE05A4F)
-        Priority.P2 -> Color(0xFFEE6A3C)
+        Priority.P2 -> Color(0xFFE0B422)
         Priority.P3 -> Color(0xFF4B7BEC)
         Priority.P4 -> Color(0xFFA8A29E)
     }

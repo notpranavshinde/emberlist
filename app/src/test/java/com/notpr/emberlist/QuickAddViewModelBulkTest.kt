@@ -3,6 +3,7 @@ package com.notpr.emberlist
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.notpr.emberlist.data.model.Priority
+import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddViewModel
@@ -201,5 +202,36 @@ class QuickAddViewModelBulkTest {
         assertEquals(19, due.hour)
         assertEquals(15, due.minute)
         assertEquals(timedTask.dueAt, timedReminder.timeAt)
+    }
+
+    @Test
+    fun saveTaskUsesExistingSpacedProjectWithoutLeakingProjectTextIntoTitle() = runTest(dispatcher) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val viewModel = QuickAddViewModel(repository, scheduler)
+        repository.upsertProject(
+            ProjectEntity(
+                id = "project-to-buy",
+                name = "to buy",
+                color = "#EE6A3C",
+                favorite = false,
+                order = 0,
+                archived = false,
+                viewPreference = null,
+                createdAt = 0L,
+                updatedAt = 0L,
+                deletedAt = null
+            )
+        )
+        advanceUntilIdle()
+
+        viewModel.updateInput("pillows #to buy")
+        viewModel.saveTask {}
+        advanceUntilIdle()
+
+        val task = repository.tasks.values.single()
+        assertEquals("pillows", task.title)
+        assertEquals("project-to-buy", task.projectId)
     }
 }

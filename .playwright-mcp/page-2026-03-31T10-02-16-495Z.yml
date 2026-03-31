@@ -1,0 +1,263 @@
+- generic [ref=e677]:
+  - complementary [ref=e678]:
+    - generic [ref=e679]:
+      - generic [ref=e680]:
+        - generic [ref=e681]: E
+        - generic [ref=e683]: Emberlist
+      - generic [ref=e684]:
+        - button "Notifications" [ref=e685]:
+          - img [ref=e686]
+        - button "Display options" [ref=e689]:
+          - img [ref=e690]
+    - button "Add task" [ref=e692]:
+      - img [ref=e693]
+      - generic [ref=e694]: Add task
+    - navigation [ref=e695]:
+      - link "Search" [ref=e696] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e697]
+        - generic [ref=e700]: Search
+      - link "Inbox 1" [ref=e978] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e702]
+        - generic [ref=e705]: Inbox
+        - generic [ref=e706]: "1"
+      - link "Today 5" [ref=e979] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e708]
+        - generic [ref=e711]: Today
+        - generic [ref=e712]: "5"
+      - link "Upcoming" [active] [ref=e713] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e714]
+        - generic [ref=e716]: Upcoming
+      - link "Browse" [ref=e717] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e718]
+        - generic [ref=e722]: Browse
+      - link "Settings" [ref=e723] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e724]
+        - generic [ref=e727]: Settings
+    - generic [ref=e728]:
+      - paragraph [ref=e729]: Favorites
+      - generic [ref=e730]:
+        - link "Tasks without due dates 1" [ref=e814] [cursor=pointer]:
+          - /url: "#/search/no-due"
+          - img [ref=e732]
+          - generic [ref=e734]: Tasks without due dates
+          - generic [ref=e735]: "1"
+        - link "Home Ops 4" [ref=e815] [cursor=pointer]:
+          - /url: "#/project/project-home"
+          - img [ref=e816]
+          - generic [ref=e818]: Home Ops
+          - generic [ref=e819]: "4"
+        - link "Work 5" [ref=e820] [cursor=pointer]:
+          - /url: "#/project/project-work"
+          - img [ref=e821]
+          - generic [ref=e823]: Work
+          - generic [ref=e824]: "5"
+    - generic [ref=e737]:
+      - paragraph [ref=e738]: My Projects
+      - generic [ref=e739]: "USED: 5/5"
+    - generic [ref=e740]:
+      - link "Health 3" [ref=e825] [cursor=pointer]:
+        - /url: "#/project/project-health"
+        - img [ref=e826]
+        - generic [ref=e828]: Health
+        - generic [ref=e829]: "3"
+      - link "Family 2" [ref=e830] [cursor=pointer]:
+        - /url: "#/project/project-family"
+        - img [ref=e831]
+        - generic [ref=e833]: Family
+        - generic [ref=e834]: "2"
+      - link "Writing 2" [ref=e835] [cursor=pointer]:
+        - /url: "#/project/project-writing"
+        - img [ref=e836]
+        - generic [ref=e838]: Writing
+        - generic [ref=e839]: "2"
+    - generic [ref=e741]:
+      - generic [ref=e742]:
+        - paragraph [ref=e743]: Cloud sync
+        - generic [ref=e744]: Ready
+      - paragraph [ref=e745]: No Google account connected in this tab
+      - button "Sync now" [ref=e746]:
+        - img [ref=e747]
+        - generic [ref=e749]: Sync now
+  - generic [ref=e750]:
+    - banner [ref=e751]:
+      - generic [ref=e752]:
+        - heading "Upcoming" [level=2] [ref=e993]
+        - generic [ref=e755]:
+          - button "Sync" [ref=e756]:
+            - img [ref=e757]
+            - generic [ref=e759]: Sync
+          - button "Quick add" [ref=e760]:
+            - img [ref=e761]
+            - generic [ref=e762]: Quick add
+      - generic [ref=e763]:
+        - paragraph [ref=e764]: Imported JSON was merged into your local workspace.
+        - button "Dismiss status message" [ref=e765]:
+          - img [ref=e766]
+    - main [ref=e769]:
+      - generic [ref=e994]:
+        - generic [ref=e997]:
+          - paragraph [ref=e998]: Timeline
+          - heading "Upcoming" [level=2] [ref=e999]
+          - paragraph [ref=e1000]: Look ahead at upcoming deadlines and future work across the workspace.
+        - generic [ref=e1001]:
+          - generic [ref=e1002]:
+            - generic [ref=e1003]:
+              - heading "Still overdue" [level=3] [ref=e1004]
+              - paragraph [ref=e1005]: These are past due and still open.
+            - generic [ref=e1006]: 2 tasks
+          - generic [ref=e1007]:
+            - button "Mail care package Snacks, tea, and the handwritten note are already packed. Mar 29 · 9:00 AM Family" [ref=e1008]:
+              - button [ref=e1009]:
+                - img [ref=e1010]
+              - generic [ref=e1012]:
+                - paragraph [ref=e1013]: Mail care package
+                - paragraph [ref=e1014]: Snacks, tea, and the handwritten note are already packed.
+                - generic [ref=e1016]:
+                  - img [ref=e1017]
+                  - generic [ref=e1019]: Mar 29 · 9:00 AM
+              - generic [ref=e1020]: Family
+            - button "Return library books The travel memoir and the design systems book are both overdue. Yesterday · 4:30 PM Inbox" [ref=e1021]:
+              - button [ref=e1022]:
+                - img [ref=e1023]
+              - generic [ref=e1025]:
+                - paragraph [ref=e1026]: Return library books
+                - paragraph [ref=e1027]: The travel memoir and the design systems book are both overdue.
+                - generic [ref=e1029]:
+                  - img [ref=e1030]
+                  - generic [ref=e1032]: Yesterday · 4:30 PM
+              - generic [ref=e1033]: Inbox
+        - generic [ref=e1034]:
+          - generic [ref=e1035]:
+            - heading "Wednesday, Apr 1" [level=3] [ref=e1037]
+            - generic [ref=e1038]: 2 tasks
+          - generic [ref=e1039]:
+            - button "Interval run Six hill repeats, easy cooldown, and a quick stretch after. Tomorrow · 7:30 AM ↻ Health / Training" [ref=e1040]:
+              - button [ref=e1041]:
+                - img [ref=e1042]
+              - generic [ref=e1044]:
+                - paragraph [ref=e1045]: Interval run
+                - paragraph [ref=e1046]: Six hill repeats, easy cooldown, and a quick stretch after.
+                - generic [ref=e1047]:
+                  - generic [ref=e1048]:
+                    - img [ref=e1049]
+                    - generic [ref=e1051]: Tomorrow · 7:30 AM
+                  - generic [ref=e1052]: ↻
+              - generic [ref=e1053]: Health / Training
+            - button "Pay April rent Confirm transfer cleared and save a receipt PDF. Tomorrow · 9:00 PM ↻ Home Ops / Admin" [ref=e1054]:
+              - button [ref=e1055]:
+                - img [ref=e1056]
+              - generic [ref=e1058]:
+                - paragraph [ref=e1059]: Pay April rent
+                - paragraph [ref=e1060]: Confirm transfer cleared and save a receipt PDF.
+                - generic [ref=e1061]:
+                  - generic [ref=e1062]:
+                    - img [ref=e1063]
+                    - generic [ref=e1065]: Tomorrow · 9:00 PM
+                  - generic [ref=e1066]: ↻
+              - generic [ref=e1067]: Home Ops / Admin
+        - generic [ref=e1068]:
+          - generic [ref=e1069]:
+            - heading "Thursday, Apr 2" [level=3] [ref=e1071]
+            - generic [ref=e1072]: 1 task
+          - button "Follow up with vendor Ask for the revised security questionnaire and implementation dates. Apr 2 · 9:00 AM Work / Waiting" [ref=e1074]:
+            - button [ref=e1075]:
+              - img [ref=e1076]
+            - generic [ref=e1078]:
+              - paragraph [ref=e1079]: Follow up with vendor
+              - paragraph [ref=e1080]: Ask for the revised security questionnaire and implementation dates.
+              - generic [ref=e1082]:
+                - img [ref=e1083]
+                - generic [ref=e1085]: Apr 2 · 9:00 AM
+            - generic [ref=e1086]: Work / Waiting
+        - generic [ref=e1087]:
+          - generic [ref=e1088]:
+            - heading "Friday, Apr 3" [level=3] [ref=e1090]
+            - generic [ref=e1091]: 1 task
+          - button "Book dentist appointment Call the office and request an early morning cleaning slot. Apr 3 · 6:00 PM Health" [ref=e1093]:
+            - button [ref=e1094]:
+              - img [ref=e1095]
+            - generic [ref=e1097]:
+              - paragraph [ref=e1098]: Book dentist appointment
+              - paragraph [ref=e1099]: Call the office and request an early morning cleaning slot.
+              - generic [ref=e1101]:
+                - img [ref=e1102]
+                - generic [ref=e1104]: Apr 3 · 6:00 PM
+            - generic [ref=e1105]: Health
+        - generic [ref=e1106]:
+          - generic [ref=e1107]:
+            - heading "Saturday, Apr 4" [level=3] [ref=e1109]
+            - generic [ref=e1110]: 1 task
+          - button "Replace AC filter The hallway unit has been running hard all week. Apr 4 ↻ Home Ops / Weekend" [ref=e1112]:
+            - button [ref=e1113]:
+              - img [ref=e1114]
+            - generic [ref=e1116]:
+              - paragraph [ref=e1117]: Replace AC filter
+              - paragraph [ref=e1118]: The hallway unit has been running hard all week.
+              - generic [ref=e1119]:
+                - generic [ref=e1120]:
+                  - img [ref=e1121]
+                  - generic [ref=e1123]: Apr 4
+                - generic [ref=e1124]: ↻
+            - generic [ref=e1125]: Home Ops / Weekend
+        - generic [ref=e1126]:
+          - generic [ref=e1127]:
+            - heading "Sunday, Apr 5" [level=3] [ref=e1129]
+            - generic [ref=e1130]: 1 task
+          - button "Plan mom birthday dinner Confirm guest count, reserve a patio table, and order flowers. Apr 5 · 5:00 PM Family" [ref=e1132]:
+            - button [ref=e1133]:
+              - img [ref=e1134]
+            - generic [ref=e1136]:
+              - paragraph [ref=e1137]: Plan mom birthday dinner
+              - paragraph [ref=e1138]: Confirm guest count, reserve a patio table, and order flowers.
+              - generic [ref=e1140]:
+                - img [ref=e1141]
+                - generic [ref=e1143]: Apr 5 · 5:00 PM
+            - generic [ref=e1144]: Family
+        - generic [ref=e1145]:
+          - generic [ref=e1146]:
+            - heading "Tuesday, Apr 7" [level=3] [ref=e1148]
+            - generic [ref=e1149]: 1 task
+          - button "File quarterly taxes Export expense report, reconcile mileage, and submit payment. Apr 7 · 9:00 AM Home Ops / Admin" [ref=e1151]:
+            - button [ref=e1152]:
+              - img [ref=e1153]
+            - generic [ref=e1155]:
+              - paragraph [ref=e1156]: File quarterly taxes
+              - paragraph [ref=e1157]: Export expense report, reconcile mileage, and submit payment.
+              - generic [ref=e1159]:
+                - img [ref=e1160]
+                - generic [ref=e1162]: Apr 7 · 9:00 AM
+            - generic [ref=e1163]: Home Ops / Admin
+        - generic [ref=e1164]:
+          - generic [ref=e1165]:
+            - heading "Wednesday, Apr 8" [level=3] [ref=e1167]
+            - generic [ref=e1168]: 1 task
+          - button "Draft April newsletter Lead with the product launch story and link the customer interview clip. Apr 8 · 11:00 AM Writing / Ideas" [ref=e1170]:
+            - button [ref=e1171]:
+              - img [ref=e1172]
+            - generic [ref=e1174]:
+              - paragraph [ref=e1175]: Draft April newsletter
+              - paragraph [ref=e1176]: Lead with the product launch story and link the customer interview clip.
+              - generic [ref=e1178]:
+                - img [ref=e1179]
+                - generic [ref=e1181]: Apr 8 · 11:00 AM
+            - generic [ref=e1182]: Writing / Ideas
+        - generic [ref=e1183]:
+          - generic [ref=e1184]:
+            - heading "Friday, Apr 10" [level=3] [ref=e1186]
+            - generic [ref=e1187]: 1 task
+          - button "Publish blog recap Add screenshots, tighten the intro, and push the final copy. Apr 10 · 3:00 PM Writing" [ref=e1189]:
+            - button [ref=e1190]:
+              - img [ref=e1191]
+            - generic [ref=e1193]:
+              - paragraph [ref=e1194]: Publish blog recap
+              - paragraph [ref=e1195]: Add screenshots, tighten the intro, and push the final copy.
+              - generic [ref=e1197]:
+                - img [ref=e1198]
+                - generic [ref=e1200]: Apr 10 · 3:00 PM
+            - generic [ref=e1201]: Writing

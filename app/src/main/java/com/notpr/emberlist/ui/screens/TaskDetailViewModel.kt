@@ -86,14 +86,16 @@ class TaskDetailViewModel(
         viewModelScope.launch {
             val now = System.currentTimeMillis()
             val siblings = repository.observeSubtasks(parent.id).first()
+            val availableProjects = repository.observeProjects().first()
+            val availableSections = repository.observeAllSections().first()
             var nextOrder = (siblings.maxOfOrNull { it.order } ?: 0) + 1
             entries.forEach { entry ->
                 val normalized = normalizeParsedResult(entry)
-                val projectId = resolveProjectId(normalized.projectName, now) ?: parent.projectId
+                val projectId = resolveProjectId(normalized.projectName, now, availableProjects) ?: parent.projectId
                 val sectionId = if (projectId == parent.projectId) {
-                    resolveSectionId(projectId, normalized.sectionName, now) ?: parent.sectionId
+                    resolveSectionId(projectId, normalized.sectionName, now, availableSections) ?: parent.sectionId
                 } else {
-                    resolveSectionId(projectId, normalized.sectionName, now)
+                    resolveSectionId(projectId, normalized.sectionName, now, availableSections)
                 }
                 val subtask = TaskEntity(
                     id = UUID.randomUUID().toString(),
@@ -250,90 +252,55 @@ class TaskDetailViewModel(
         }
     }
 
-    fun applyParsedTaskChanges(
+    suspend fun applyParsedTaskChanges(
         current: TaskEntity,
         description: String,
         parsed: QuickAddResult,
-        existingReminders: List<ReminderEntity>
-    ) {
-        viewModelScope.launch {
-            beginEditSessionIfNeeded(current, existingReminders)
+        existingReminders: List<ReminderEntity>,
+        availableProjects: List<ProjectEntity>,
+        availableSections: List<SectionEntity>
+    ): TaskEntity {
+        beginEditSessionIfNeeded(current, existingReminders)
 
-            val normalized = normalizeParsedResult(parsed)
-            val now = System.currentTimeMillis()
-            val projectId = normalized.projectName?.let { name ->
-                val existing = repository.getProjectByName(name)
-                if (existing != null) {
-                    existing.id
-                } else {
-                    val newProject = ProjectEntity(
-                        id = UUID.randomUUID().toString(),
-                        name = name,
-                        color = "#EE6A3C",
-                        favorite = false,
-                        order = 0,
-                        archived = false,
-                        viewPreference = null,
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                    repository.upsertProject(newProject)
-                    logActivity(repository, ActivityType.CREATED, ObjectType.PROJECT, newProject.id)
-                    newProject.id
-                }
-            }
-            val sectionId = if (!normalized.sectionName.isNullOrBlank() && projectId != null) {
-                val existing = repository.getSectionByName(projectId, normalized.sectionName)
-                if (existing != null) {
-                    existing.id
-                } else {
-                    val newSection = SectionEntity(
-                        id = UUID.randomUUID().toString(),
-                        projectId = projectId,
-                        name = normalized.sectionName,
-                        order = 0,
-                        createdAt = now,
-                        updatedAt = now
-                    )
-                    repository.upsertSection(newSection)
-                    newSection.id
-                }
-            } else {
-                null
-            }
+        val normalized = normalizeParsedResult(parsed)
+        val now = System.currentTimeMillis()
+        val projectId = resolveProjectId(normalized.projectName, now, availableProjects)
+        val sectionId = resolveSectionId(projectId, normalized.sectionName, now, availableSections)
 
-            val updatedTask = current.copy(
-                title = normalized.title,
-                description = description.trim(),
-                projectId = projectId,
-                sectionId = sectionId,
-                priority = normalized.priority,
-                dueAt = normalized.dueAt,
-                allDay = normalized.allDay,
-                deadlineAt = normalized.deadlineAt,
-                deadlineAllDay = normalized.deadlineAllDay,
-                recurringRule = normalized.recurrenceRule,
-                deadlineRecurringRule = normalized.deadlineRecurringRule,
-                updatedAt = now
-            )
+        val updatedTask = current.copy(
+            title = normalized.title,
+            description = description.trim(),
+            projectId = projectId,
+            sectionId = sectionId,
+            priority = normalized.priority,
+            dueAt = normalized.dueAt,
+            allDay = normalized.allDay,
+            deadlineAt = normalized.deadlineAt,
+            deadlineAllDay = normalized.deadlineAllDay,
+            recurringRule = normalized.recurrenceRule,
+            deadlineRecurringRule = normalized.deadlineRecurringRule,
+            updatedAt = now
+        )
 
-            val taskChanged = updatedTask != current
-            if (taskChanged) {
-                repository.upsertTask(updatedTask)
-            }
-
-            val syncedReminders = syncReminders(
-                task = if (taskChanged) updatedTask else current,
-                existingReminders = existingReminders,
-                desiredSpecs = desiredReminderSpecs(normalized)
-            )
-
-            if (taskChanged || canonicalReminders(existingReminders) != canonicalReminders(syncedReminders)) {
-                pendingLoggedTask = if (taskChanged) updatedTask else current
-                pendingLoggedReminders = canonicalReminders(syncedReminders)
-                schedulePendingActivityFlush()
-            }
+        val taskChanged = updatedTask != current
+        if (taskChanged) {
+            repository.upsertTask(updatedTask)
         }
+
+        val syncedTask = if (taskChanged) updatedTask else current
+        val syncedReminders = syncReminders(
+            task = syncedTask,
+            existingReminders = existingReminders,
+            desiredSpecs = desiredReminderSpecs(normalized)
+        )
+
+        if (taskChanged || canonicalReminders(existingReminders) != canonicalReminders(syncedReminders)) {
+            pendingLoggedTask = syncedTask
+            pendingLoggedReminders = canonicalReminders(syncedReminders)
+            schedulePendingActivityFlush()
+        }
+
+        return syncedTask
     }
 
     fun flushPendingActivity() {
@@ -409,11 +376,19 @@ class TaskDetailViewModel(
         return result
     }
 
-    private suspend fun resolveProjectId(projectName: String?, now: Long): String? {
+    private suspend fun resolveProjectId(
+        projectName: String?,
+        now: Long,
+        availableProjects: List<ProjectEntity>
+    ): String? {
         return projectName?.let { name ->
-            val existing = repository.getProjectByName(name)
+            val existing = availableProjects.firstOrNull {
+                it.deletedAt == null && !it.archived && it.name.equals(name, ignoreCase = true)
+            } ?: repository.getProjectByName(name)
             if (existing != null) {
                 existing.id
+            } else if (name.any(Char::isWhitespace)) {
+                null
             } else {
                 val newProject = ProjectEntity(
                     id = UUID.randomUUID().toString(),
@@ -433,10 +408,20 @@ class TaskDetailViewModel(
         }
     }
 
-    private suspend fun resolveSectionId(projectId: String?, sectionName: String?, now: Long): String? {
+    private suspend fun resolveSectionId(
+        projectId: String?,
+        sectionName: String?,
+        now: Long,
+        availableSections: List<SectionEntity>
+    ): String? {
         if (projectId == null || sectionName.isNullOrBlank()) return null
-        val existing = repository.getSectionByName(projectId, sectionName)
+        val existing = availableSections.firstOrNull {
+            it.deletedAt == null &&
+                it.projectId == projectId &&
+                it.name.equals(sectionName, ignoreCase = true)
+        } ?: repository.getSectionByName(projectId, sectionName)
         if (existing != null) return existing.id
+        if (sectionName.any(Char::isWhitespace)) return null
         val newSection = SectionEntity(
             id = UUID.randomUUID().toString(),
             projectId = projectId,

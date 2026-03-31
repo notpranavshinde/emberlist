@@ -1,6 +1,6 @@
 package com.notpr.emberlist.ui.screens
 
-import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,10 +39,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +50,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -78,6 +79,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -93,9 +95,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     val allSections by remember { viewModel.observeAllSections() }.collectAsState()
     val activity by remember(taskId) { viewModel.observeActivity(taskId) }.collectAsState()
 
-    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val zone = ZoneId.systemDefault()
     val parser = remember { QuickAddParser(zone) }
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
     val projectById = remember(projects) { projects.associateBy { it.id } }
     val sectionById = remember(allSections) { allSections.associateBy { it.id } }
 
@@ -110,21 +113,10 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     var hasUserEdited by remember(taskId) { mutableStateOf(false) }
     val parserFocusRequester = remember { FocusRequester() }
 
-    val hashToken = remember(inputState.text) {
-        val hashIndex = inputState.text.lastIndexOf('#')
-        if (hashIndex == -1) {
-            null
-        } else {
-            inputState.text.substring(hashIndex + 1).takeWhile { !it.isWhitespace() }
-        }
-    }
-    val hasSlash = hashToken?.contains("/") == true
-    val projectQuery = remember(hashToken) {
-        hashToken?.substringBefore("/")?.trim()?.ifBlank { null }
-    }
-    val sectionQuery = remember(hashToken) {
-        if (!hasSlash) null else hashToken?.substringAfter("/")?.trim()?.ifBlank { "" }
-    }
+    val hashContext = remember(inputState.text) { parseTaskDetailHashContext(inputState.text) }
+    val hasSlash = hashContext?.hasSlash == true
+    val projectQuery = hashContext?.projectQuery
+    val sectionQuery = hashContext?.sectionQuery
     val projectNames = remember(projects) { projects.map { it.name } }
     val projectMatches = remember(projectQuery, projectNames) {
         val query = projectQuery?.trim().orEmpty()
@@ -169,23 +161,42 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
         hasUserEdited = false
     }
 
-    val parsed by remember(inputState.text) { derivedStateOf { parser.parse(inputState.text) } }
-
-    DisposableEffect(taskId) {
-        onDispose { viewModel.flushPendingActivity() }
-    }
-
-    LaunchedEffect(task?.id, inputState.text, description, parsed, reminders) {
-        val current = task ?: return@LaunchedEffect
-        if (seededTaskId != current.id) return@LaunchedEffect
-        if (!hasUserEdited) return@LaunchedEffect
-        if (inputState.text.trim().isBlank()) return@LaunchedEffect
-        viewModel.applyParsedTaskChanges(
+    suspend fun commitPendingChanges(): TaskEntity? {
+        val current = task ?: return null
+        if (seededTaskId != current.id || !hasUserEdited) return current
+        if (inputState.text.trim().isBlank()) return current
+        hasUserEdited = false
+        val parsed = resolveTaskDetailParsedResult(
+            parser = parser,
+            input = inputState.text,
+            projects = projects,
+            sections = allSections
+        )
+        val committed = viewModel.applyParsedTaskChanges(
             current = current,
             description = description,
             parsed = parsed,
-            existingReminders = reminders
+            existingReminders = reminders,
+            availableProjects = projects,
+            availableSections = allSections
         )
+        return committed
+    }
+
+    DisposableEffect(taskId) {
+        onDispose {
+            if (hasUserEdited) {
+                coroutineScope.launch { commitPendingChanges() }
+            }
+            viewModel.flushPendingActivity()
+        }
+    }
+
+    BackHandler {
+        coroutineScope.launch {
+            commitPendingChanges()
+            navController.popBackStack()
+        }
     }
 
     Column(
@@ -204,7 +215,12 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                     Box(modifier = Modifier.padding(top = 10.dp)) {
                         TaskDetailToggle(
                             task = it,
-                            onToggle = viewModel::toggleComplete
+                            onToggle = { toggled ->
+                                coroutineScope.launch {
+                                    val current = commitPendingChanges() ?: toggled
+                                    viewModel.toggleComplete(current)
+                                }
+                            }
                         )
                     }
                 }
@@ -218,16 +234,17 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                         onValueChange = { value ->
                             hasUserEdited = true
                             inputState = value
-                            val hashIndex = value.text.lastIndexOf('#')
-                            val token = if (hashIndex == -1) "" else value.text.substring(hashIndex + 1).takeWhile { !it.isWhitespace() }
-                            val tokenHasSlash = token.contains("/")
-                            projectMenuOpen = hashIndex != -1 && !tokenHasSlash
-                            sectionMenuOpen = hashIndex != -1 && tokenHasSlash
+                            val nextHashContext = parseTaskDetailHashContext(value.text)
+                            projectMenuOpen = nextHashContext != null && !nextHashContext.hasSlash
+                            sectionMenuOpen = nextHashContext?.hasSlash == true
                         },
                         placeholder = { Text("Edit task") },
-                        visualTransformation = rememberTaskDetailTokenHighlighter(),
+                        visualTransformation = rememberTaskDetailTokenHighlighter(projects, allSections),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { }),
+                        keyboardActions = KeyboardActions(onDone = {
+                            focusManager.clearFocus()
+                            coroutineScope.launch { commitPendingChanges() }
+                        }),
                         textStyle = MaterialTheme.typography.titleLarge,
                         minLines = 1,
                         maxLines = 3,
@@ -257,16 +274,19 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                                 text = { Text(name) },
                                 onClick = {
                                     val currentText = inputState.text
-                                    val hashIndex = currentText.lastIndexOf('#')
-                                    if (hashIndex != -1) {
-                                        val before = currentText.substring(0, hashIndex + 1)
-                                        val after = currentText.substring(hashIndex + 1)
-                                        val remainder = after.dropWhile { !it.isWhitespace() }
-                                        val spacer = if (remainder.isEmpty()) " " else ""
-                                        val newText = "$before$name$spacer$remainder"
-                                        val cursor = before.length + name.length + spacer.length
-                                        inputState = TextFieldValue(newText, selection = TextRange(cursor))
+                                    val currentHashContext = parseTaskDetailHashContext(currentText)
+                                    val hashIndex = currentHashContext?.hashIndex
+                                    if (hashIndex != null) {
+                                        val suffix = if (currentHashContext.hasSlash) {
+                                            "/" + (currentHashContext.sectionQuery ?: "")
+                                        } else {
+                                            ""
+                                        }
+                                        val newText = currentText.substring(0, hashIndex + 1) + name + suffix
+                                        inputState = TextFieldValue(newText, selection = TextRange(newText.length))
+                                        hasUserEdited = true
                                         projectMenuOpen = false
+                                        coroutineScope.launch { commitPendingChanges() }
                                     }
                                 }
                             )
@@ -283,22 +303,15 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                                 text = { Text(name) },
                                 onClick = {
                                     val currentText = inputState.text
-                                    val hashIndex = currentText.lastIndexOf('#')
-                                    if (hashIndex != -1) {
-                                        val afterHash = currentText.substring(hashIndex + 1)
-                                        val token = afterHash.takeWhile { !it.isWhitespace() }
-                                        val slashIndex = token.indexOf('/')
-                                        if (slashIndex != -1) {
-                                            val tokenStart = hashIndex + 1
-                                            val before = currentText.substring(0, tokenStart + slashIndex + 1)
-                                            val after = currentText.substring(tokenStart + slashIndex + 1)
-                                            val remainder = after.dropWhile { !it.isWhitespace() }
-                                            val spacer = if (remainder.isEmpty()) " " else ""
-                                            val newText = "$before$name$spacer$remainder"
-                                            val cursor = before.length + name.length + spacer.length
-                                            inputState = TextFieldValue(newText, selection = TextRange(cursor))
-                                            sectionMenuOpen = false
-                                        }
+                                    val currentHashContext = parseTaskDetailHashContext(currentText)
+                                    val hashIndex = currentHashContext?.hashIndex
+                                    val projectPart = currentHashContext?.projectQuery
+                                    if (hashIndex != null && !projectPart.isNullOrBlank()) {
+                                        val newText = currentText.substring(0, hashIndex + 1) + projectPart + "/" + name
+                                        inputState = TextFieldValue(newText, selection = TextRange(newText.length))
+                                        hasUserEdited = true
+                                        sectionMenuOpen = false
+                                        coroutineScope.launch { commitPendingChanges() }
                                     }
                                 }
                             )
@@ -323,16 +336,22 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                         DropdownMenuItem(
                             text = { Text(if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive") },
                             onClick = {
-                                task?.let(viewModel::toggleArchive)
                                 actionsMenuOpen = false
+                                coroutineScope.launch {
+                                    val current = commitPendingChanges() ?: task
+                                    current?.let(viewModel::toggleArchive)
+                                }
                             }
                         )
                         if (task?.recurringRule != null || task?.deadlineRecurringRule != null) {
                             DropdownMenuItem(
                                 text = { Text("Complete forever") },
                                 onClick = {
-                                    task?.let(viewModel::completeForever)
                                     actionsMenuOpen = false
+                                    coroutineScope.launch {
+                                        val current = commitPendingChanges() ?: task
+                                        current?.let(viewModel::completeForever)
+                                    }
                                 }
                             )
                         }
@@ -540,7 +559,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                     onClick = {
                         task?.let { viewModel.deleteTask(it.id) }
                         showDeleteDialog = false
-                        backDispatcher?.onBackPressed()
+                        navController.popBackStack()
                     }
                 ) {
                     Text("Delete")
@@ -581,7 +600,7 @@ private fun TaskDetailToggle(task: TaskEntity, onToggle: (TaskEntity) -> Unit) {
 private fun taskDetailPriorityColor(priority: Priority): Color {
     return when (priority) {
         Priority.P1 -> Color(0xFFE05A4F)
-        Priority.P2 -> Color(0xFFEE6A3C)
+        Priority.P2 -> Color(0xFFE0B422)
         Priority.P3 -> Color(0xFF4B7BEC)
         Priority.P4 -> Color(0xFFA8A29E)
     }
@@ -698,19 +717,27 @@ private fun ordinal(value: Int): String {
 }
 
 @Composable
-private fun rememberTaskDetailTokenHighlighter(): VisualTransformation {
+private fun rememberTaskDetailTokenHighlighter(
+    projects: List<com.notpr.emberlist.data.model.ProjectEntity>,
+    sections: List<com.notpr.emberlist.data.model.SectionEntity>
+): VisualTransformation {
     val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-    return remember(highlight) {
+    return remember(highlight, projects, sections) {
         VisualTransformation { text ->
             TransformedText(
-                highlightTaskDetailTokens(text.text, highlight),
+                highlightTaskDetailTokens(text.text, highlight, projects, sections),
                 OffsetMapping.Identity
             )
         }
     }
 }
 
-private fun highlightTaskDetailTokens(text: String, color: Color): AnnotatedString {
+private fun highlightTaskDetailTokens(
+    text: String,
+    color: Color,
+    projects: List<com.notpr.emberlist.data.model.ProjectEntity>,
+    sections: List<com.notpr.emberlist.data.model.SectionEntity>
+): AnnotatedString {
     if (text.isBlank()) return AnnotatedString(text)
     val patterns = listOf(
         Regex("#\\S+"),
@@ -730,9 +757,11 @@ private fun highlightTaskDetailTokens(text: String, color: Color): AnnotatedStri
         Regex("\\{deadline:[^}]+\\}", RegexOption.IGNORE_CASE),
         Regex("\\bremind me\\b[^#]+", RegexOption.IGNORE_CASE)
     )
-    val ranges = patterns.flatMap { regex ->
+    val regexRanges = patterns.flatMap { regex ->
         regex.findAll(text).map { it.range }
     }
+    val explicitProjectRanges = existingSpacedProjectSectionHighlightRanges(text, projects, sections)
+    val ranges = (regexRanges + explicitProjectRanges)
         .map { it.first to (it.last + 1) }
         .sortedBy { it.first }
         .fold(mutableListOf<Pair<Int, Int>>()) { acc, range ->

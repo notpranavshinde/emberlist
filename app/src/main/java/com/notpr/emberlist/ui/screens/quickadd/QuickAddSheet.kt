@@ -67,6 +67,8 @@ import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.parsing.QuickAddResult
 import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import com.notpr.emberlist.ui.screens.existingSpacedProjectSectionHighlightRanges
+import com.notpr.emberlist.ui.screens.parseTaskDetailHashContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -108,20 +110,10 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
             var inputState by remember { mutableStateOf(TextFieldValue(input)) }
             var projectMenuOpen by remember { mutableStateOf(false) }
             var sectionMenuOpen by remember { mutableStateOf(false) }
-            val hashToken = remember(inputState.text) {
-                val hashIndex = inputState.text.lastIndexOf('#')
-                if (hashIndex == -1) return@remember null
-                val after = inputState.text.substring(hashIndex + 1)
-                after.takeWhile { !it.isWhitespace() }
-            }
-            val hasSlash = hashToken?.contains("/") == true
-            val projectQuery = remember(hashToken) {
-                hashToken?.substringBefore("/")?.trim()?.ifBlank { null }
-            }
-            val sectionQuery = remember(hashToken) {
-                if (!hasSlash) return@remember null
-                hashToken?.substringAfter("/")?.trim()?.ifBlank { "" }
-            }
+            val hashContext = remember(inputState.text) { parseTaskDetailHashContext(inputState.text) }
+            val hasSlash = hashContext?.hasSlash == true
+            val projectQuery = hashContext?.projectQuery
+            val sectionQuery = hashContext?.sectionQuery
             val shouldSuggestProject = projectQuery != null && !hasSlash
             val projectMatches = remember(projectQuery, projectNames) {
                 val query = projectQuery?.trim().orEmpty()
@@ -204,18 +196,16 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                             value = inputState,
                             onValueChange = { value ->
                                 inputState = value
-                                viewModel.updateInput(value.text)
-                                val hashIndex = value.text.lastIndexOf('#')
-                                val token = if (hashIndex == -1) "" else value.text.substring(hashIndex + 1).takeWhile { !it.isWhitespace() }
-                                val hasSlash = token.contains("/")
-                                projectMenuOpen = hashIndex != -1 && !hasSlash
-                                sectionMenuOpen = hashIndex != -1 && hasSlash
+                                viewModel.updateInput(value.text, projects, sections)
+                                val nextHashContext = parseTaskDetailHashContext(value.text)
+                                projectMenuOpen = nextHashContext != null && !nextHashContext.hasSlash
+                                sectionMenuOpen = nextHashContext?.hasSlash == true
                             },
                             placeholder = { Text("Task name") },
                             singleLine = false,
                             minLines = 1,
                             maxLines = 5,
-                            visualTransformation = rememberTokenHighlighter(),
+                            visualTransformation = rememberTokenHighlighter(projects, sections),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(
                                 onDone = {
@@ -269,16 +259,18 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                                 text = { Text(name) },
                                 onClick = {
                                     val currentText = inputState.text
-                                    val hashIndex = currentText.lastIndexOf('#')
-                                    if (hashIndex != -1) {
-                                        val before = currentText.substring(0, hashIndex + 1)
-                                        val after = currentText.substring(hashIndex + 1)
-                                        val remainder = after.dropWhile { !it.isWhitespace() }
-                                        val spacer = if (remainder.isEmpty()) " " else ""
-                                        val newText = "$before$name$spacer$remainder"
-                                        val cursor = (before.length + name.length + spacer.length)
+                                    val currentHashContext = parseTaskDetailHashContext(currentText)
+                                    val hashIndex = currentHashContext?.hashIndex
+                                    if (hashIndex != null) {
+                                        val suffix = if (currentHashContext.hasSlash) {
+                                            "/" + (currentHashContext.sectionQuery ?: "")
+                                        } else {
+                                            ""
+                                        }
+                                        val newText = currentText.substring(0, hashIndex + 1) + name + suffix
+                                        val cursor = hashIndex + 1 + name.length + suffix.length
                                         inputState = TextFieldValue(newText, selection = TextRange(cursor))
-                                        viewModel.updateInput(newText)
+                                        viewModel.updateInput(newText, projects, sections)
                                         viewModel.setProjectOverride(name)
                                         viewModel.setSectionOverride(null)
                                         projectMenuOpen = false
@@ -298,24 +290,16 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                                 text = { Text(name) },
                                 onClick = {
                                     val currentText = inputState.text
-                                    val hashIndex = currentText.lastIndexOf('#')
-                                    if (hashIndex != -1) {
-                                        val afterHash = currentText.substring(hashIndex + 1)
-                                        val token = afterHash.takeWhile { !it.isWhitespace() }
-                                        val slashIndex = token.indexOf('/')
-                                        if (slashIndex != -1) {
-                                            val tokenStart = hashIndex + 1
-                                            val before = currentText.substring(0, tokenStart + slashIndex + 1)
-                                            val after = currentText.substring(tokenStart + slashIndex + 1)
-                                            val remainder = after.dropWhile { !it.isWhitespace() }
-                                            val spacer = if (remainder.isEmpty()) " " else ""
-                                            val newText = "$before$name$spacer$remainder"
-                                            val cursor = before.length + name.length + spacer.length
-                                            inputState = TextFieldValue(newText, selection = TextRange(cursor))
-                                            viewModel.updateInput(newText)
-                                            viewModel.setSectionOverride(name)
-                                            sectionMenuOpen = false
-                                        }
+                                    val currentHashContext = parseTaskDetailHashContext(currentText)
+                                    val hashIndex = currentHashContext?.hashIndex
+                                    val projectPart = currentHashContext?.projectQuery
+                                    if (hashIndex != null && !projectPart.isNullOrBlank()) {
+                                        val newText = currentText.substring(0, hashIndex + 1) + projectPart + "/" + name
+                                        val cursor = hashIndex + 1 + projectPart.length + name.length + 1
+                                        inputState = TextFieldValue(newText, selection = TextRange(cursor))
+                                        viewModel.updateInput(newText, projects, sections)
+                                        viewModel.setSectionOverride(name)
+                                        sectionMenuOpen = false
                                     }
                                 }
                             )
@@ -577,19 +561,27 @@ private sealed class QuickAddChip {
 }
 
 @Composable
-private fun rememberTokenHighlighter(): VisualTransformation {
+private fun rememberTokenHighlighter(
+    projects: List<com.notpr.emberlist.data.model.ProjectEntity>,
+    sections: List<com.notpr.emberlist.data.model.SectionEntity>
+): VisualTransformation {
     val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-    return remember(highlight) {
+    return remember(highlight, projects, sections) {
         VisualTransformation { text ->
             TransformedText(
-                highlightTokens(text.text, highlight),
+                highlightTokens(text.text, highlight, projects, sections),
                 OffsetMapping.Identity
             )
         }
     }
 }
 
-private fun highlightTokens(text: String, color: androidx.compose.ui.graphics.Color): AnnotatedString {
+private fun highlightTokens(
+    text: String,
+    color: androidx.compose.ui.graphics.Color,
+    projects: List<com.notpr.emberlist.data.model.ProjectEntity>,
+    sections: List<com.notpr.emberlist.data.model.SectionEntity>
+): AnnotatedString {
     if (text.isBlank()) return AnnotatedString(text)
     val patterns = listOf(
         Regex("#\\S+"),
@@ -609,9 +601,11 @@ private fun highlightTokens(text: String, color: androidx.compose.ui.graphics.Co
         Regex("\\{deadline:[^}]+\\}", RegexOption.IGNORE_CASE),
         Regex("\\bremind me\\b[^#]+", RegexOption.IGNORE_CASE)
     )
-    val ranges = patterns.flatMap { regex ->
+    val regexRanges = patterns.flatMap { regex ->
         regex.findAll(text).map { it.range }
     }
+    val explicitProjectRanges = existingSpacedProjectSectionHighlightRanges(text, projects, sections)
+    val ranges = (regexRanges + explicitProjectRanges)
         .map { it.first to (it.last + 1) }
         .sortedBy { it.first }
         .fold(mutableListOf<Pair<Int, Int>>()) { acc, range ->
