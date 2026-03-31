@@ -12,8 +12,10 @@ fun observeNetworkConnectivity(context: Context): Flow<Boolean> = callbackFlow {
     val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
     fun isConnected(): Boolean {
-        val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
-        return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        return runCatching {
+            val capabilities = connectivityManager.getNetworkCapabilities(connectivityManager.activeNetwork)
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        }.getOrDefault(true)
     }
 
     val callback = object : ConnectivityManager.NetworkCallback() {
@@ -31,6 +33,12 @@ fun observeNetworkConnectivity(context: Context): Flow<Boolean> = callbackFlow {
     }
 
     trySend(isConnected()).isSuccess
-    connectivityManager.registerDefaultNetworkCallback(callback)
-    awaitClose { connectivityManager.unregisterNetworkCallback(callback) }
+    val registered = runCatching {
+        connectivityManager.registerDefaultNetworkCallback(callback)
+    }.isSuccess
+    awaitClose {
+        if (registered) {
+            runCatching { connectivityManager.unregisterNetworkCallback(callback) }
+        }
+    }
 }
