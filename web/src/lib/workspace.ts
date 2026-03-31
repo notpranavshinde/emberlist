@@ -200,7 +200,7 @@ export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload 
         parentTaskId: draft.parentTaskId,
         locationId: null,
         locationTriggerType: null,
-        order: nextTaskOrder(payload, draft.projectId, draft.sectionId),
+        order: nextTaskOrder(payload, projectId, sectionId),
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -433,13 +433,17 @@ function nextTaskOrder(payload: SyncPayload, projectId: string | null, sectionId
 
 function resolveProject(payload: SyncPayload, draft: TaskDraft, now: number): Project | null {
     if (draft.projectId) {
-        return payload.projects.find(project => project.id === draft.projectId && !project.deletedAt) ?? null;
+        return payload.projects.find(project => project.id === draft.projectId && !project.deletedAt && !project.archived) ?? null;
     }
 
     const projectName = draft.projectName?.trim();
     if (!projectName) return null;
 
-    const existing = payload.projects.find(project => !project.deletedAt && project.name.localeCompare(projectName, undefined, { sensitivity: 'base' }) === 0);
+    const existing = payload.projects.find(project =>
+        !project.deletedAt &&
+        !project.archived &&
+        project.name.localeCompare(projectName, undefined, { sensitivity: 'base' }) === 0
+    );
     if (existing) return existing;
 
     return {

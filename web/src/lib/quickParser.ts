@@ -131,7 +131,9 @@ function parseDue(input: string, now: Date): number | null {
     }
   }
 
-  return date ? toEpochMillis(date, time) : null;
+  if (!date) return null;
+  const epochMillis = toEpochMillis(date, time);
+  return Number.isNaN(epochMillis) ? null : epochMillis;
 }
 
 function parseDeadline(phrase: string, now: Date): number | null {
@@ -158,7 +160,9 @@ function parseDeadline(phrase: string, now: Date): number | null {
     }
   }
 
-  return date ? toEpochMillis(date, time) : null;
+  if (!date) return null;
+  const epochMillis = toEpochMillis(date, time);
+  return Number.isNaN(epochMillis) ? null : epochMillis;
 }
 
 function parseReminders(input: string, now: Date, dueAt: number | null): ReminderSpec[] {
@@ -179,7 +183,10 @@ function parseReminders(input: string, now: Date, dueAt: number | null): Reminde
     }
 
     if (time) {
-      reminders.push({ kind: 'ABSOLUTE', timeAt: toEpochMillis(date, time) });
+      const epochMillis = toEpochMillis(date, time);
+      if (!Number.isNaN(epochMillis)) {
+        reminders.push({ kind: 'ABSOLUTE', timeAt: epochMillis });
+      }
     }
   }
 
@@ -276,6 +283,9 @@ function parseTime(input: string): LocalTime | null {
   const hourRaw = Number.parseInt(match[1], 10);
   const minuteRaw = Number.parseInt(match[2] || '0', 10);
   const ampm = match[3].toLowerCase();
+  if (!Number.isInteger(hourRaw) || !Number.isInteger(minuteRaw)) return null;
+  if (hourRaw < 1 || hourRaw > 12) return null;
+  if (minuteRaw < 0 || minuteRaw > 59) return null;
   const hour = ampm === 'am' && hourRaw === 12
     ? 0
     : ampm === 'pm' && hourRaw < 12
@@ -306,12 +316,18 @@ function parseExplicitDate(input: string, base: LocalDate): LocalDate | null {
   const match = EXPLICIT_DATE_REGEX.exec(input);
   if (!match) return null;
   if (match[1]) {
-    return { year: Number.parseInt(match[1], 10), month: Number.parseInt(match[2], 10), day: Number.parseInt(match[3], 10) };
+    const date = {
+      year: Number.parseInt(match[1], 10),
+      month: Number.parseInt(match[2], 10),
+      day: Number.parseInt(match[3], 10),
+    };
+    return isValidLocalDate(date) ? date : null;
   }
 
   const yearRaw = match[6] ? Number.parseInt(match[6], 10) : base.year;
   const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
-  return { year, month: Number.parseInt(match[4], 10), day: Number.parseInt(match[5], 10) };
+  const date = { year, month: Number.parseInt(match[4], 10), day: Number.parseInt(match[5], 10) };
+  return isValidLocalDate(date) ? date : null;
 }
 
 function parseMonthNameDate(input: string, base: LocalDate): LocalDate | null {
@@ -338,6 +354,7 @@ function parseMonthNameDate(input: string, base: LocalDate): LocalDate | null {
   const year = yearToken ? Number.parseInt(yearToken, 10) : base.year;
   if (!month || Number.isNaN(day)) return null;
   const date = { year, month, day };
+  if (!isValidLocalDate(date)) return null;
   return yearToken ? date : compareLocalDate(date, base) < 0 ? { year: year + 1, month, day } : date;
 }
 
@@ -395,6 +412,9 @@ function localDateFromDate(value: Date): LocalDate {
 }
 
 function toEpochMillis(date: LocalDate, time: LocalTime): number {
+  if (!isValidLocalDate(date) || !isValidLocalTime(time)) {
+    return Number.NaN;
+  }
   return new Date(date.year, date.month - 1, date.day, time.hour, time.minute, 0, 0).getTime();
 }
 
@@ -481,4 +501,25 @@ function compareLocalDate(left: LocalDate, right: LocalDate): number {
   if (left.year !== right.year) return left.year - right.year;
   if (left.month !== right.month) return left.month - right.month;
   return left.day - right.day;
+}
+
+function isValidLocalDate(date: LocalDate): boolean {
+  if (!Number.isInteger(date.year) || !Number.isInteger(date.month) || !Number.isInteger(date.day)) {
+    return false;
+  }
+  if (date.month < 1 || date.month > 12) return false;
+  if (date.day < 1) return false;
+  const candidate = new Date(date.year, date.month - 1, date.day);
+  return candidate.getFullYear() === date.year
+    && candidate.getMonth() === date.month - 1
+    && candidate.getDate() === date.day;
+}
+
+function isValidLocalTime(time: LocalTime): boolean {
+  return Number.isInteger(time.hour)
+    && Number.isInteger(time.minute)
+    && time.hour >= 0
+    && time.hour <= 23
+    && time.minute >= 0
+    && time.minute <= 59;
 }
