@@ -9,7 +9,9 @@ import android.content.Intent
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveAuthState
 import com.notpr.emberlist.data.sync.DriveSyncService
+import com.notpr.emberlist.data.sync.SyncRuntimeStatus
 import com.notpr.emberlist.data.sync.SyncResult
+import com.notpr.emberlist.data.sync.SyncStatusTracker
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +23,8 @@ class SettingsViewModel(
     private val settingsRepository: SettingsRepository,
     private val repository: TaskRepository,
     private val driveAuthManager: DriveAuthManager,
-    private val driveSyncService: DriveSyncService
+    private val driveSyncService: DriveSyncService,
+    private val syncStatusTracker: SyncStatusTracker
 ) : ViewModel() {
     val settings: StateFlow<SettingsState> = settingsRepository.settings
         .stateIn(
@@ -30,6 +33,7 @@ class SettingsViewModel(
             SettingsState(1, false, "Ember", false, false, false, null)
         )
     val driveAuthState: StateFlow<DriveAuthState> = driveAuthManager.state
+    val syncRuntimeStatus: StateFlow<SyncRuntimeStatus> = syncStatusTracker.state
     private val _syncUiState = MutableStateFlow(SyncUiState())
     val syncUiState: StateFlow<SyncUiState> = _syncUiState.asStateFlow()
 
@@ -102,18 +106,23 @@ class SettingsViewModel(
                 _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
                 return@launch
             }
+            syncStatusTracker.setSyncing(true)
+            syncStatusTracker.clearError()
             _syncUiState.value = SyncUiState(isSyncing = true, status = "Syncing…")
             when (val result = driveSyncService.sync()) {
                 is SyncResult.Success -> {
                     settingsRepository.updateLastSyncedAt(result.syncedAt)
+                    syncStatusTracker.onSyncSuccess()
                     _syncUiState.value = SyncUiState(
                         status = if (result.remoteCreated) "Synced to Google Drive." else "Sync complete."
                     )
                 }
                 is SyncResult.Failure -> {
+                    syncStatusTracker.onSyncFailure(result.message)
                     _syncUiState.value = SyncUiState(error = result.message)
                 }
             }
+            syncStatusTracker.setSyncing(false)
         }
     }
 
@@ -128,9 +137,11 @@ class SettingsViewModel(
             when (val result = driveSyncService.resetRemoteSyncFile()) {
                 is SyncResult.Success -> {
                     settingsRepository.updateLastSyncedAt(null)
+                    syncStatusTracker.clearError()
                     _syncUiState.value = SyncUiState(status = "Cloud sync file deleted. Sync again to recreate it.")
                 }
                 is SyncResult.Failure -> {
+                    syncStatusTracker.onSyncFailure(result.message)
                     _syncUiState.value = SyncUiState(error = result.message)
                 }
             }

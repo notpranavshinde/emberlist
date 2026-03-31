@@ -2,6 +2,7 @@ package com.notpr.emberlist.data.sync
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.BackoffPolicy
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -23,6 +24,7 @@ object SyncScheduler : SyncJobScheduler {
     private const val DEBOUNCED_WORK_NAME = "cloud_sync_debounced"
     private const val PERIODIC_WORK_NAME = "cloud_sync_periodic"
     private const val PERIODIC_HOURS = 6L
+    private const val BACKOFF_SECONDS = 30L
 
     private fun connectedConstraints(): Constraints =
         Constraints.Builder()
@@ -32,6 +34,7 @@ object SyncScheduler : SyncJobScheduler {
     override fun scheduleStartup(context: Context) {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(connectedConstraints())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
             .addTag(STARTUP_WORK_NAME)
             .build()
         WorkManager.getInstance(context)
@@ -42,6 +45,7 @@ object SyncScheduler : SyncJobScheduler {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(connectedConstraints())
             .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
             .addTag(DEBOUNCED_WORK_NAME)
             .build()
         WorkManager.getInstance(context)
@@ -51,6 +55,7 @@ object SyncScheduler : SyncJobScheduler {
     override fun schedulePeriodic(context: Context) {
         val request = PeriodicWorkRequestBuilder<SyncWorker>(PERIODIC_HOURS, TimeUnit.HOURS)
             .setConstraints(connectedConstraints())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
             .addTag(PERIODIC_WORK_NAME)
             .build()
         WorkManager.getInstance(context)

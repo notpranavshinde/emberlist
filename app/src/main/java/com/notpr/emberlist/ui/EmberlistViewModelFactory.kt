@@ -42,7 +42,8 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
                     container.settingsRepository,
                     container.repository,
                     container.driveAuthManager,
-                    container.driveSyncService
+                    container.driveSyncService,
+                    container.syncStatusTracker
                 )
             modelClass.isAssignableFrom(ActivityViewModel::class.java) ->
                 ActivityViewModel(container.repository, container.reminderScheduler)

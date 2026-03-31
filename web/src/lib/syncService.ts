@@ -17,6 +17,10 @@ export type CloudSession = {
     name: string | null;
 };
 
+export type SyncOptions = {
+    interactiveAuth?: boolean;
+};
+
 export class DriveSyncService {
     private static gisScriptPromise: Promise<void> | null = null;
 
@@ -43,21 +47,31 @@ export class DriveSyncService {
         });
     }
 
-    async login() {
+    async login(interactive: boolean = true) {
         if (!this.tokenClient) await this.init();
-        this.accessToken = await this.requestAccessToken(this.accessToken ? '' : 'consent');
-        this.session = await this.fetchSessionProfile();
+        if (!interactive && !this.accessToken) {
+            throw new Error('Google Drive sign-in is required in this browser.');
+        }
+        const prompt = interactive && !this.accessToken ? 'consent' : '';
+        this.accessToken = await this.requestAccessToken(prompt);
+        this.session = await this.fetchSessionProfile(interactive);
         return this.session;
     }
 
-    async sync() {
-        if (!this.accessToken) await this.login();
+    async sync(options: SyncOptions = {}) {
+        const interactiveAuth = options.interactiveAuth ?? true;
+        if (!this.accessToken) await this.login(interactiveAuth);
 
-        const fileId = await this.findSyncFileId();
+        const fileId = await this.findSyncFileId(interactiveAuth);
 
         let remotePayload: SyncPayload | null = null;
         if (fileId) {
-            const response = await this.authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+            const response = await this.authorizedFetch(
+                `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+                {},
+                true,
+                interactiveAuth
+            );
             if (response.ok) {
                 try {
                     remotePayload = ensureSyncPayload(await response.json(), 'Cloud sync file');
@@ -79,7 +93,7 @@ export class DriveSyncService {
             ? this.syncEngine.mergePayloads(localPayload, remotePayload)
             : localPayload;
 
-        await this.uploadPayload(fileId, finalPayload);
+        await this.uploadPayload(fileId, finalPayload, interactiveAuth);
         await db.savePayload(finalPayload);
         return finalPayload;
     }
@@ -110,7 +124,7 @@ export class DriveSyncService {
     async resetRemoteSyncFile() {
         if (!this.accessToken) await this.login();
 
-        const fileIds = await this.findSyncFileIds();
+        const fileIds = await this.findSyncFileIds(true);
         if (!fileIds.length) {
             return;
         }
@@ -118,26 +132,31 @@ export class DriveSyncService {
         for (const fileId of fileIds) {
             const response = await this.authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
                 method: 'DELETE',
-            });
+            }, true, true);
             if (!response.ok) {
                 throw new Error(await this.buildGoogleApiError('reset cloud sync file', response));
             }
         }
     }
 
-    private async findSyncFileId(): Promise<string | null> {
-        const fileIds = await this.findSyncFileIds();
+    private async findSyncFileId(interactiveAuth: boolean): Promise<string | null> {
+        const fileIds = await this.findSyncFileIds(interactiveAuth);
         return fileIds[0] ?? null;
     }
 
-    private async findSyncFileIds(): Promise<string[]> {
+    private async findSyncFileIds(interactiveAuth: boolean): Promise<string[]> {
         const params = new URLSearchParams({
             spaces: 'appDataFolder',
             fields: 'files(id,modifiedTime)',
             q: `name = '${SYNC_FILE_NAME}' and trashed = false`,
         });
 
-        const response = await this.authorizedFetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`);
+        const response = await this.authorizedFetch(
+            `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
+            {},
+            true,
+            interactiveAuth
+        );
         if (!response.ok) {
             throw new Error(await this.buildGoogleApiError('query Drive sync file', response));
         }
@@ -156,7 +175,7 @@ export class DriveSyncService {
             .map(file => file.id);
     }
 
-    private async uploadPayload(fileId: string | null, payload: SyncPayload) {
+    private async uploadPayload(fileId: string | null, payload: SyncPayload, interactiveAuth: boolean) {
         const metadata: {
             name: string;
             mimeType: string;
@@ -192,7 +211,7 @@ export class DriveSyncService {
                 'Content-Type': `multipart/related; boundary=${boundary}`,
             },
             body: multipartRequestBody,
-        });
+        }, true, interactiveAuth);
         if (!response.ok) {
             throw new Error(await this.buildGoogleApiError('upload sync payload', response));
         }
@@ -205,9 +224,14 @@ export class DriveSyncService {
         return { Authorization: `Bearer ${this.accessToken}` };
     }
 
-    private async authorizedFetch(input: string, init: RequestInit = {}, allowRefresh: boolean = true): Promise<Response> {
+    private async authorizedFetch(
+        input: string,
+        init: RequestInit = {},
+        allowRefresh: boolean = true,
+        interactiveAuth: boolean = true
+    ): Promise<Response> {
         if (!this.accessToken) {
-            await this.login();
+            await this.login(interactiveAuth);
         }
 
         const response = await fetch(input, {
@@ -218,10 +242,10 @@ export class DriveSyncService {
             },
         });
 
-        if (response.status === 401 && allowRefresh) {
+        if (response.status === 401 && allowRefresh && interactiveAuth) {
             this.accessToken = null;
-            await this.login();
-            return this.authorizedFetch(input, init, false);
+            await this.login(interactiveAuth);
+            return this.authorizedFetch(input, init, false, interactiveAuth);
         }
 
         return response;
@@ -255,9 +279,14 @@ export class DriveSyncService {
         }
     }
 
-    private async fetchSessionProfile(): Promise<CloudSession> {
+    private async fetchSessionProfile(interactiveAuth: boolean): Promise<CloudSession> {
         try {
-            const response = await this.authorizedFetch('https://www.googleapis.com/oauth2/v3/userinfo', {}, false);
+            const response = await this.authorizedFetch(
+                'https://www.googleapis.com/oauth2/v3/userinfo',
+                {},
+                false,
+                interactiveAuth
+            );
             if (!response.ok) {
                 return { email: null, name: null };
             }

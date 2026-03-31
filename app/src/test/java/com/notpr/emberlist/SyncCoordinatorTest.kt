@@ -6,6 +6,7 @@ import com.notpr.emberlist.data.settings.SettingsState
 import com.notpr.emberlist.data.sync.DriveAuthState
 import com.notpr.emberlist.data.sync.SyncCoordinator
 import com.notpr.emberlist.data.sync.SyncJobScheduler
+import com.notpr.emberlist.data.sync.SyncStatusTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -107,6 +108,36 @@ class SyncCoordinatorTest {
     }
 
     @Test
+    fun remoteImportInvalidationDoesNotMarkPendingOrScheduleDebounce() = runTest {
+        val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
+        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
+        val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
+        val scheduler = FakeSyncJobScheduler()
+        val statusTracker = SyncStatusTracker().apply {
+            setApplyingRemoteChanges(true)
+        }
+        val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
+        val coordinator = SyncCoordinator(
+            context = context,
+            settingsFlow = settings,
+            authFlow = auth,
+            invalidationFlow = invalidations,
+            statusTracker = statusTracker,
+            scheduler = scheduler,
+            scope = coordinatorScope
+        )
+
+        coordinator.start()
+        advanceUntilIdle()
+        invalidations.tryEmit(Unit)
+        advanceUntilIdle()
+
+        assertEquals(0, scheduler.debouncedDelays.size)
+        assertEquals(false, statusTracker.state.value.hasPendingLocalChanges)
+        coordinator.stop()
+    }
+
+    @Test
     fun disablingSyncCancelsPendingAndPeriodicWork() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
         val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
@@ -129,6 +160,68 @@ class SyncCoordinatorTest {
 
         assertEquals(1, scheduler.cancelPendingCount)
         assertEquals(1, scheduler.cancelPeriodicCount)
+        coordinator.stop()
+    }
+
+    @Test
+    fun returningToForegroundSchedulesImmediateSync() = runTest {
+        val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
+        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
+        val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
+        val foreground = MutableStateFlow(true)
+        val scheduler = FakeSyncJobScheduler()
+        val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
+        val coordinator = SyncCoordinator(
+            context = context,
+            settingsFlow = settings,
+            authFlow = auth,
+            invalidationFlow = invalidations,
+            foregroundFlow = foreground,
+            scheduler = scheduler,
+            scope = coordinatorScope
+        )
+
+        coordinator.start()
+        advanceUntilIdle()
+        assertEquals(1, scheduler.startupCount)
+
+        foreground.value = false
+        advanceUntilIdle()
+        foreground.value = true
+        advanceUntilIdle()
+
+        assertEquals(2, scheduler.startupCount)
+        coordinator.stop()
+    }
+
+    @Test
+    fun connectivityRegainSchedulesImmediateSync() = runTest {
+        val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
+        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
+        val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
+        val online = MutableStateFlow(true)
+        val scheduler = FakeSyncJobScheduler()
+        val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
+        val coordinator = SyncCoordinator(
+            context = context,
+            settingsFlow = settings,
+            authFlow = auth,
+            invalidationFlow = invalidations,
+            onlineFlow = online,
+            scheduler = scheduler,
+            scope = coordinatorScope
+        )
+
+        coordinator.start()
+        advanceUntilIdle()
+        assertEquals(1, scheduler.startupCount)
+
+        online.value = false
+        advanceUntilIdle()
+        online.value = true
+        advanceUntilIdle()
+
+        assertEquals(2, scheduler.startupCount)
         coordinator.stop()
     }
 

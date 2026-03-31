@@ -27,6 +27,18 @@
   - [x] App startup sync
   - [x] Debounced local-change sync
   - [x] Periodic background sync
+- [x] Add foreground/reconnect sync automation.
+  - [x] Android sync on app foreground resume
+  - [x] Android sync on connectivity regain
+  - [x] Web sync on load
+  - [x] Web sync on focus / visibility regain
+  - [x] Web sync on reconnect
+  - [x] Web debounced local-change sync
+  - [x] Web visible-tab polling fallback
+- [x] Add clearer sync runtime status.
+  - [x] Pending local changes
+  - [x] Offline waiting to sync
+  - [x] Background/manual error state
 
 ## Phase 4: Web Client [DONE]
 - [x] Build the web app in `/web` using React + TypeScript.
@@ -54,3 +66,6 @@
 - Added Android `SyncWorker`, `SyncScheduler`, and `SyncCoordinator`.
 - Implemented Android startup sync, debounced local-change sync, and periodic background sync.
 - Added coordinator tests covering activation, local invalidation scheduling, suppression after recent sync, and disable cleanup.
+- Added Android foreground/resume and reconnect sync scheduling.
+- Added web auto-sync orchestration with debounce, silent auto-auth attempts, reconnect/focus/visibility triggers, and visible-tab polling.
+- Added sync runtime status tracking for pending local changes, offline state, sync in progress, and errors.

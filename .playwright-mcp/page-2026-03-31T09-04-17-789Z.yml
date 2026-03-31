@@ -1,0 +1,131 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - generic [ref=e6]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: E
+          - generic [ref=e10]: Emberlist
+        - generic [ref=e11]:
+          - button "Notifications" [ref=e12]:
+            - img [ref=e13]
+          - button "Display options" [ref=e16]:
+            - img [ref=e17]
+      - button "Add task" [ref=e19]:
+        - img [ref=e20]
+        - generic [ref=e21]: Add task
+      - navigation [ref=e22]:
+        - link "Search" [ref=e23] [cursor=pointer]:
+          - /url: "#/search"
+          - img [ref=e24]
+          - generic [ref=e27]: Search
+        - link "Inbox 0" [ref=e28] [cursor=pointer]:
+          - /url: "#/inbox"
+          - img [ref=e29]
+          - generic [ref=e32]: Inbox
+          - generic [ref=e33]: "0"
+        - link "Today 0" [ref=e34] [cursor=pointer]:
+          - /url: "#/today"
+          - img [ref=e35]
+          - generic [ref=e38]: Today
+          - generic [ref=e39]: "0"
+        - link "Upcoming" [ref=e40] [cursor=pointer]:
+          - /url: "#/upcoming"
+          - img [ref=e41]
+          - generic [ref=e43]: Upcoming
+        - link "Browse" [ref=e44] [cursor=pointer]:
+          - /url: "#/browse"
+          - img [ref=e45]
+          - generic [ref=e49]: Browse
+        - link "Settings" [ref=e50] [cursor=pointer]:
+          - /url: "#/settings"
+          - img [ref=e51]
+          - generic [ref=e54]: Settings
+      - generic [ref=e55]:
+        - paragraph [ref=e56]: Favorites
+        - link "Tasks without due dates 0" [ref=e58] [cursor=pointer]:
+          - /url: "#/search/no-due"
+          - img [ref=e59]
+          - generic [ref=e61]: Tasks without due dates
+          - generic [ref=e62]: "0"
+      - generic [ref=e64]:
+        - paragraph [ref=e65]: My Projects
+        - generic [ref=e66]: "USED: 0/5"
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - paragraph [ref=e70]: Cloud sync
+          - generic [ref=e71]: Ready
+        - paragraph [ref=e72]: No Google account connected in this tab
+        - button "Sync now" [ref=e73]:
+          - img [ref=e74]
+          - generic [ref=e76]: Sync now
+    - generic [ref=e77]:
+      - banner [ref=e78]:
+        - generic [ref=e79]:
+          - heading "Today" [level=2] [ref=e91]
+          - generic [ref=e82]:
+            - button "Sync" [ref=e83]:
+              - img [ref=e84]
+              - generic [ref=e86]: Sync
+            - button "Quick add" [ref=e87]:
+              - img [ref=e88]
+              - generic [ref=e89]: Quick add
+      - main [ref=e90]:
+        - generic [ref=e93]:
+          - generic [ref=e95]:
+            - generic [ref=e96]:
+              - paragraph [ref=e97]: Focus
+              - heading "Today" [level=2] [ref=e98]
+              - paragraph [ref=e99]: Review what is due now, what slipped past due, and what you already finished today.
+            - generic [ref=e101]:
+              - checkbox "Show completed today" [checked] [ref=e102]
+              - text: Show completed today
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - generic [ref=e105]:
+                - heading "Overdue" [level=3] [ref=e106]
+                - paragraph [ref=e107]: Open tasks that should already be done.
+              - generic [ref=e108]: 0 tasks
+            - paragraph [ref=e109]: Nothing overdue.
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - generic [ref=e112]:
+                - heading "Due today" [level=3] [ref=e113]
+                - paragraph [ref=e114]: Tasks scheduled for today.
+              - generic [ref=e115]: 0 tasks
+            - paragraph [ref=e116]: No tasks due today.
+          - generic [ref=e117]:
+            - generic [ref=e118]:
+              - generic [ref=e119]:
+                - heading "Completed today" [level=3] [ref=e120]
+                - paragraph [ref=e121]: Recently finished work.
+              - generic [ref=e122]: 0 tasks
+            - paragraph [ref=e123]: Nothing completed yet today.
+  - generic [ref=e125]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - paragraph [ref=e128]: Quick add
+        - heading "Create a task" [level=3] [ref=e129]
+      - button [ref=e130]:
+        - img [ref=e131]
+    - generic [ref=e134]:
+      - generic [ref=e135]:
+        - text: Task parser
+        - textbox "Task parser" [active] [ref=e136]:
+          - /placeholder: "Try: pay rent p1 tomorrow 9pm #bills\\nOr paste a whole list"
+      - generic [ref=e137]:
+        - text: Notes
+        - textbox "Notes" [ref=e138]:
+          - /placeholder: Add notes
+      - generic [ref=e139]:
+        - generic [ref=e140]:
+          - generic [ref=e141]:
+            - paragraph [ref=e142]: Parsed metadata
+            - paragraph [ref=e143]: "Quick Add uses the same parser rules as Android: projects, dates, priorities, recurrence, and reminders."
+          - generic [ref=e144]: Defaults to Today
+        - generic [ref=e145]:
+          - generic [ref=e146]: "#Inbox"
+          - generic [ref=e147]: P4
+          - generic [ref=e148]: Today
+      - generic [ref=e149]:
+        - button "Cancel" [ref=e150]
+        - button "Create task" [disabled] [ref=e151]

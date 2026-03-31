@@ -1,0 +1,84 @@
+- generic [ref=e3]:
+  - generic [ref=e77]:
+    - banner [ref=e78]:
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - paragraph [ref=e318]: Emberlist
+          - heading "Pay rent" [level=2] [ref=e599]
+        - generic [ref=e82]:
+          - button [ref=e319]:
+            - img [ref=e84]
+          - button [ref=e320]:
+            - img [ref=e88]
+      - generic [ref=e161]:
+        - paragraph [ref=e162]: Task "Pay rent" created.
+        - button "Dismiss status message" [ref=e163]:
+          - img [ref=e164]
+    - main [ref=e90]:
+      - generic [ref=e600]:
+        - generic [ref=e602]:
+          - generic [ref=e603]:
+            - paragraph [ref=e604]: Task
+            - heading "Pay rent" [level=2] [ref=e605]
+            - paragraph [ref=e606]: Edit the task details that sync between Android and web.
+          - generic [ref=e608]:
+            - button "Archive" [ref=e609]
+            - button "Delete" [ref=e610]
+        - generic [ref=e611]:
+          - generic [ref=e612]:
+            - generic [ref=e613]:
+              - text: Title
+              - textbox "Title" [ref=e614]: Pay rent
+            - generic [ref=e615]:
+              - text: Description
+              - textbox "Description" [ref=e616]
+            - generic [ref=e617]:
+              - generic [ref=e618]:
+                - text: Project
+                - combobox "Project" [ref=e619]:
+                  - option "Inbox"
+                  - option "Bills" [selected]
+              - generic [ref=e620]:
+                - text: Section
+                - combobox "Section" [ref=e621]:
+                  - option "No section" [selected]
+          - generic [ref=e622]:
+            - generic [ref=e623]:
+              - text: Priority
+              - combobox "Priority" [ref=e624]:
+                - option "P1 · Critical" [selected]
+                - option "P2 · High"
+                - option "P3 · Medium"
+                - option "P4 · Low"
+            - generic [ref=e625]:
+              - checkbox "Due date is all day" [ref=e626]
+              - text: Due date is all day
+            - generic [ref=e627]:
+              - text: Due date
+              - textbox "Due date" [ref=e628]: 2026-04-01T21:00
+            - generic [ref=e629]:
+              - checkbox "Track a deadline separately" [ref=e630]
+              - text: Track a deadline separately
+            - button "Save task" [ref=e631]
+  - navigation [ref=e321]:
+    - generic [ref=e322]:
+      - link "Today" [ref=e323] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e324]
+        - generic [ref=e327]: Today
+      - link "Upcoming" [ref=e328] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e329]
+        - generic [ref=e331]: Upcoming
+      - link "Search" [ref=e332] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e333]
+        - generic [ref=e336]: Search
+      - link "Browse" [ref=e337] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e338]
+        - generic [ref=e342]: Browse
+      - link "Settings" [ref=e343] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e344]
+        - generic [ref=e347]: Settings

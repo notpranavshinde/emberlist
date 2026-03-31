@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -19,6 +20,9 @@ class SyncCoordinator(
     private val settingsFlow: Flow<SettingsState>,
     private val authFlow: Flow<DriveAuthState>,
     private val invalidationFlow: Flow<Unit>,
+    private val foregroundFlow: Flow<Boolean> = flowOf(true),
+    private val onlineFlow: Flow<Boolean> = flowOf(true),
+    private val statusTracker: SyncStatusTracker = SyncStatusTracker(),
     private val scheduler: SyncJobScheduler = SyncScheduler,
     private val nowProvider: () -> Long = System::currentTimeMillis,
     private val syncQuietPeriodMs: Long = 15_000L,
@@ -33,6 +37,12 @@ class SyncCoordinator(
 
     private var invalidationJob: Job? = null
     private var hasEverBeenActive = false
+    @Volatile
+    private var currentActive = false
+    @Volatile
+    private var currentForeground = true
+    @Volatile
+    private var currentOnline = true
 
     fun start() {
         if (started) return
@@ -45,12 +55,36 @@ class SyncCoordinator(
         }
 
         scope.launch {
+            onlineFlow.distinctUntilChanged().collect { online ->
+                val wasOnline = currentOnline
+                currentOnline = online
+                statusTracker.setOnline(online)
+                if (!wasOnline && online && currentActive && currentForeground) {
+                    scheduler.scheduleStartup(context)
+                }
+            }
+        }
+
+        scope.launch {
+            foregroundFlow.distinctUntilChanged().collect { foreground ->
+                val wasForeground = currentForeground
+                currentForeground = foreground
+                if (!wasForeground && foreground && currentActive && currentOnline) {
+                    scheduler.scheduleStartup(context)
+                }
+            }
+        }
+
+        scope.launch {
             combine(
                 settingsFlow.mapDistinctSyncEnabled(),
                 authFlow.mapDistinctHasDriveScope()
             ) { syncEnabled, hasDriveScope -> syncEnabled && hasDriveScope }
                 .distinctUntilChanged()
-                .collect { active -> onActiveStateChanged(active) }
+                .collect { active ->
+                    currentActive = active
+                    onActiveStateChanged(active)
+                }
         }
     }
 
@@ -75,9 +109,13 @@ class SyncCoordinator(
         if (invalidationJob?.isActive == true) return
 
         scheduler.schedulePeriodic(context)
-        scheduler.scheduleStartup(context)
+        if (currentForeground && currentOnline) {
+            scheduler.scheduleStartup(context)
+        }
         invalidationJob = scope.launch {
             invalidationFlow.collect {
+                if (statusTracker.state.value.isApplyingRemoteChanges) return@collect
+                statusTracker.markPendingLocalChanges()
                 val lastSync = lastSyncedAt
                 if (lastSync != null && nowProvider() - lastSync < syncQuietPeriodMs) return@collect
                 scheduler.scheduleDebounced(context, debounceDelayMs)

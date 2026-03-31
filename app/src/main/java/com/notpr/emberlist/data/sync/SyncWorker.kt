@@ -14,18 +14,33 @@ class SyncWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as? EmberlistApp ?: return Result.failure()
         val container = app.container
+        container.syncStatusTracker.setSyncing(true)
         val settings = container.settingsRepository.settings.first()
-        if (!settings.syncEnabled) return Result.success()
+        if (!settings.syncEnabled) {
+            container.syncStatusTracker.setSyncing(false)
+            return Result.success()
+        }
 
         container.driveAuthManager.refreshState()
-        if (!container.driveAuthManager.state.value.hasDriveScope) return Result.success()
+        if (!container.driveAuthManager.state.value.hasDriveScope) {
+            container.syncStatusTracker.setSyncing(false)
+            return Result.success()
+        }
 
-        return when (val result = container.driveSyncService.sync()) {
-            is SyncResult.Success -> {
-                container.settingsRepository.updateLastSyncedAt(result.syncedAt)
-                Result.success()
+        return try {
+            when (val result = container.driveSyncService.sync()) {
+                is SyncResult.Success -> {
+                    container.settingsRepository.updateLastSyncedAt(result.syncedAt)
+                    container.syncStatusTracker.onSyncSuccess()
+                    Result.success()
+                }
+                is SyncResult.Failure -> {
+                    container.syncStatusTracker.onSyncFailure(result.message)
+                    Result.retry()
+                }
             }
-            is SyncResult.Failure -> Result.retry()
+        } finally {
+            container.syncStatusTracker.setSyncing(false)
         }
     }
 }

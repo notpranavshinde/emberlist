@@ -1,0 +1,71 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]: E
+        - generic [ref=e10]: Emberlist
+      - generic [ref=e11]:
+        - button "Notifications" [ref=e12]:
+          - img [ref=e13]
+        - button "Display options" [ref=e16]:
+          - img [ref=e17]
+    - button "Add task" [ref=e19]:
+      - img [ref=e20]
+      - generic [ref=e21]: Add task
+    - navigation [ref=e22]:
+      - link "Search" [ref=e23] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e24]
+        - generic [ref=e27]: Search
+      - link "Inbox 0" [ref=e28] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e29]
+        - generic [ref=e32]: Inbox
+        - generic [ref=e33]: "0"
+      - link "Today 0" [ref=e34] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e35]
+        - generic [ref=e38]: Today
+        - generic [ref=e39]: "0"
+      - link "Upcoming" [ref=e40] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e41]
+        - generic [ref=e43]: Upcoming
+      - link "Browse" [ref=e44] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e45]
+        - generic [ref=e49]: Browse
+      - link "Settings" [ref=e50] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e51]
+        - generic [ref=e54]: Settings
+    - generic [ref=e55]:
+      - paragraph [ref=e56]: Favorites
+      - link "Tasks without due dates 0" [ref=e58] [cursor=pointer]:
+        - /url: "#/search/no-due"
+        - img [ref=e59]
+        - generic [ref=e61]: Tasks without due dates
+        - generic [ref=e62]: "0"
+    - generic [ref=e64]:
+      - paragraph [ref=e65]: My Projects
+      - generic [ref=e66]: "USED: 0/5"
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - paragraph [ref=e70]: Cloud sync
+        - generic [ref=e71]: Ready
+      - paragraph [ref=e72]: No Google account connected in this tab
+      - button "Sync now" [ref=e73]:
+        - img [ref=e74]
+        - generic [ref=e76]: Sync now
+  - generic [ref=e77]:
+    - banner [ref=e78]:
+      - generic [ref=e79]:
+        - heading "Workspace" [level=2] [ref=e81]
+        - generic [ref=e82]:
+          - button "Sync" [ref=e83]:
+            - img [ref=e84]
+            - generic [ref=e86]: Sync
+          - button "Quick add" [ref=e87]:
+            - img [ref=e88]
+            - generic [ref=e89]: Quick add
+    - main [ref=e90]

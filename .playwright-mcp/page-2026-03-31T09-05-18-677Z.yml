@@ -1,0 +1,108 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]: E
+        - generic [ref=e10]: Emberlist
+      - generic [ref=e11]:
+        - button "Notifications" [ref=e12]:
+          - img [ref=e13]
+        - button "Display options" [active] [ref=e16]:
+          - img [ref=e17]
+    - button "Add task" [ref=e19]:
+      - img [ref=e20]
+      - generic [ref=e21]: Add task
+    - navigation [ref=e22]:
+      - link "Search" [ref=e23] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e24]
+        - generic [ref=e27]: Search
+      - link "Inbox 0" [ref=e28] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e29]
+        - generic [ref=e32]: Inbox
+        - generic [ref=e33]: "0"
+      - link "Today 0" [ref=e34] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e35]
+        - generic [ref=e38]: Today
+        - generic [ref=e39]: "0"
+      - link "Upcoming" [ref=e40] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e41]
+        - generic [ref=e43]: Upcoming
+      - link "Browse" [ref=e44] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e45]
+        - generic [ref=e49]: Browse
+      - link "Settings" [ref=e50] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e51]
+        - generic [ref=e54]: Settings
+    - generic [ref=e55]:
+      - paragraph [ref=e56]: Favorites
+      - link "Tasks without due dates 0" [ref=e58] [cursor=pointer]:
+        - /url: "#/search/no-due"
+        - img [ref=e59]
+        - generic [ref=e61]: Tasks without due dates
+        - generic [ref=e62]: "0"
+    - generic [ref=e64]:
+      - paragraph [ref=e65]: My Projects
+      - generic [ref=e66]: "USED: 1/5"
+    - link "Bills 1" [ref=e155] [cursor=pointer]:
+      - /url: "#/project/eae1841b-3fff-4e71-bbd1-17e9b4e42320"
+      - img [ref=e156]
+      - generic [ref=e158]: Bills
+      - generic [ref=e159]: "1"
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - paragraph [ref=e70]: Cloud sync
+        - generic [ref=e71]: Ready
+      - paragraph [ref=e72]: No Google account connected in this tab
+      - button "Sync now" [ref=e73]:
+        - img [ref=e74]
+        - generic [ref=e76]: Sync now
+  - generic [ref=e77]:
+    - banner [ref=e78]:
+      - generic [ref=e79]:
+        - heading "Browse" [level=2] [ref=e245]
+        - generic [ref=e82]:
+          - button "Sync" [ref=e83]:
+            - img [ref=e84]
+            - generic [ref=e86]: Sync
+          - button "Quick add" [ref=e87]:
+            - img [ref=e88]
+            - generic [ref=e89]: Quick add
+      - generic [ref=e161]:
+        - paragraph [ref=e162]: Task "Pay rent" created.
+        - button "Dismiss status message" [ref=e163]:
+          - img [ref=e164]
+    - main [ref=e90]:
+      - generic [ref=e246]:
+        - generic [ref=e249]:
+          - paragraph [ref=e250]: Browse
+          - heading "Projects" [level=2] [ref=e251]
+          - paragraph [ref=e252]: Use Inbox for unsorted tasks, create projects for focused work, and jump into a project to manage sections.
+        - generic [ref=e253]:
+          - generic [ref=e254]:
+            - link "Inbox 0 open tasks" [ref=e255] [cursor=pointer]:
+              - /url: "#/inbox"
+              - generic [ref=e256]:
+                - paragraph [ref=e257]: Inbox
+                - paragraph [ref=e258]: 0 open tasks
+              - img [ref=e259]
+            - link "Bills 1 active task" [ref=e262] [cursor=pointer]:
+              - /url: "#/project/eae1841b-3fff-4e71-bbd1-17e9b4e42320"
+              - generic [ref=e263]:
+                - paragraph [ref=e264]: Bills
+                - paragraph [ref=e265]: 1 active task
+              - img [ref=e266]
+          - generic [ref=e268]:
+            - paragraph [ref=e269]: New project
+            - heading "Create a workspace lane" [level=3] [ref=e270]
+            - paragraph [ref=e271]: Projects sync directly to Android. Archive or delete them later from the project view.
+            - generic [ref=e272]:
+              - textbox "Project name" [ref=e273]
+              - button "Create project" [ref=e274]:
+                - img [ref=e275]
+                - text: Create project

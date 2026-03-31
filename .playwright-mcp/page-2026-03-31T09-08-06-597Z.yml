@@ -1,0 +1,71 @@
+- generic [ref=e3]:
+  - generic [ref=e77]:
+    - banner [ref=e78]:
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - paragraph [ref=e318]: Emberlist
+          - heading "Search" [level=2] [ref=e481]
+        - generic [ref=e82]:
+          - button [ref=e319]:
+            - img [ref=e84]
+          - button [ref=e320]:
+            - img [ref=e88]
+      - generic [ref=e161]:
+        - paragraph [ref=e162]: Task "Pay rent" created.
+        - button "Dismiss status message" [ref=e163]:
+          - img [ref=e164]
+    - main [ref=e90]:
+      - generic [ref=e482]:
+        - generic [ref=e485]:
+          - paragraph [ref=e486]: Search
+          - heading "Find tasks" [level=2] [ref=e487]
+          - paragraph [ref=e488]: Search titles, descriptions, project names, and sections. Combine filters when you need to narrow the list fast.
+        - generic [ref=e489]:
+          - generic [ref=e490]:
+            - img [ref=e491]
+            - textbox "Search tasks, projects, and notes" [ref=e494]
+          - generic [ref=e495]:
+            - button "All" [ref=e496]
+            - button "Overdue" [ref=e497]
+            - button "Today" [ref=e498]
+            - button "This week" [ref=e499]
+            - button "High priority" [ref=e500]
+            - button "Inbox" [ref=e501]
+            - button "No due" [ref=e502]
+            - button "Has deadline" [ref=e503]
+            - button "Recurring" [ref=e504]
+            - button "Has reminder" [ref=e505]
+        - generic [ref=e506]:
+          - generic [ref=e507]:
+            - heading "1 result" [level=3] [ref=e509]
+            - generic [ref=e510]: 1 task
+          - button "Pay rent Tomorrow · 9:00 PM" [ref=e512]:
+            - button [ref=e513]:
+              - img [ref=e514]
+            - generic [ref=e516]:
+              - paragraph [ref=e517]: Pay rent
+              - generic [ref=e519]:
+                - img [ref=e520]
+                - generic [ref=e522]: Tomorrow · 9:00 PM
+  - navigation [ref=e321]:
+    - generic [ref=e322]:
+      - link "Today" [ref=e323] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e324]
+        - generic [ref=e327]: Today
+      - link "Upcoming" [ref=e328] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e329]
+        - generic [ref=e331]: Upcoming
+      - link "Search" [active] [ref=e332] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e333]
+        - generic [ref=e336]: Search
+      - link "Browse" [ref=e337] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e338]
+        - generic [ref=e342]: Browse
+      - link "Settings" [ref=e343] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e344]
+        - generic [ref=e347]: Settings

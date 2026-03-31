@@ -9,9 +9,12 @@ import com.notpr.emberlist.data.settings.SettingsRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveSyncService
 import com.notpr.emberlist.data.sync.GoogleDriveAppDataClient
+import com.notpr.emberlist.data.sync.observeAppForeground
+import com.notpr.emberlist.data.sync.observeNetworkConnectivity
 import com.notpr.emberlist.data.sync.observeSyncInvalidations
 import com.notpr.emberlist.data.sync.SyncCoordinator
 import com.notpr.emberlist.data.sync.SyncManager
+import com.notpr.emberlist.data.sync.SyncStatusTracker
 import com.notpr.emberlist.ui.UndoController
 
 class AppContainer(context: Context) {
@@ -37,6 +40,7 @@ class AppContainer(context: Context) {
     val backupManager = BackupManager(database)
     val driveAuthManager = DriveAuthManager(appContext)
     val syncManager = SyncManager()
+    val syncStatusTracker = SyncStatusTracker()
     val driveSyncService = DriveSyncService(
         context = appContext,
         payloadStore = backupManager,
@@ -45,13 +49,17 @@ class AppContainer(context: Context) {
             driveAuthManager.getAuthorizedAccount()?.let { account ->
                 GoogleDriveAppDataClient(appContext, account)
             }
-        }
+        },
+        statusTracker = syncStatusTracker
     )
     val syncCoordinator = SyncCoordinator(
         context = appContext,
         settingsFlow = settingsRepository.settings,
         authFlow = driveAuthManager.state,
-        invalidationFlow = database.observeSyncInvalidations()
+        invalidationFlow = database.observeSyncInvalidations(),
+        foregroundFlow = observeAppForeground(),
+        onlineFlow = observeNetworkConnectivity(appContext),
+        statusTracker = syncStatusTracker
     )
 
     val undoController = UndoController()

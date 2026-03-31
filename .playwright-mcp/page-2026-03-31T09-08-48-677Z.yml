@@ -1,0 +1,75 @@
+- generic [ref=e3]:
+  - generic [ref=e77]:
+    - banner [ref=e78]:
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - paragraph [ref=e318]: Emberlist
+          - heading "Bills" [level=2] [ref=e554]
+        - generic [ref=e82]:
+          - button [ref=e319]:
+            - img [ref=e84]
+          - button [ref=e320]:
+            - img [ref=e88]
+      - generic [ref=e161]:
+        - paragraph [ref=e162]: Task "Pay rent" created.
+        - button "Dismiss status message" [ref=e163]:
+          - img [ref=e164]
+    - main [ref=e90]:
+      - generic [ref=e555]:
+        - generic [ref=e557]:
+          - generic [ref=e558]:
+            - paragraph [ref=e559]: Project
+            - heading "Bills" [level=2] [ref=e560]
+            - paragraph [ref=e561]: Manage tasks, sections, and project metadata. New tasks can be added from Quick add and assigned here.
+          - generic [ref=e563]:
+            - button "Rename" [ref=e564]
+            - button "Archive" [ref=e565]
+            - button "Delete" [ref=e566]
+            - button "Quick add" [ref=e567]
+        - generic [ref=e568]:
+          - generic [ref=e570]:
+            - generic [ref=e571]:
+              - generic [ref=e572]:
+                - heading "Loose tasks" [level=3] [ref=e573]
+                - paragraph [ref=e574]: Tasks in this project without a section.
+              - generic [ref=e575]: 1 task
+            - button "Pay rent Tomorrow · 9:00 PM" [ref=e577]:
+              - button [ref=e578]:
+                - img [ref=e579]
+              - generic [ref=e581]:
+                - paragraph [ref=e582]: Pay rent
+                - generic [ref=e584]:
+                  - img [ref=e585]
+                  - generic [ref=e587]: Tomorrow · 9:00 PM
+          - generic [ref=e588]:
+            - paragraph [ref=e589]: Sections
+            - heading "Organize this project" [level=3] [ref=e590]
+            - paragraph [ref=e591]: Sections help break a project into swimlanes without changing the synced task model.
+            - generic [ref=e592]:
+              - textbox "New section" [ref=e593]
+              - button "Add" [ref=e594]
+            - generic [ref=e596]:
+              - paragraph [ref=e597]: No sections yet
+              - paragraph [ref=e598]: Add a section to break this project into parts.
+  - navigation [ref=e321]:
+    - generic [ref=e322]:
+      - link "Today" [ref=e323] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e324]
+        - generic [ref=e327]: Today
+      - link "Upcoming" [ref=e328] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e329]
+        - generic [ref=e331]: Upcoming
+      - link "Search" [ref=e332] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e333]
+        - generic [ref=e336]: Search
+      - link "Browse" [ref=e337] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e338]
+        - generic [ref=e342]: Browse
+      - link "Settings" [ref=e343] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e344]
+        - generic [ref=e347]: Settings

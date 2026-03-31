@@ -20,6 +20,7 @@ class DriveSyncService(
     private val payloadStore: SyncPayloadStore,
     private val syncManager: SyncManager,
     private val driveClientProvider: suspend () -> DriveAppDataClient?,
+    private val statusTracker: SyncStatusTracker = SyncStatusTracker(),
     private val nowProvider: () -> Long = System::currentTimeMillis
 ) {
     private val mutex = Mutex()
@@ -47,7 +48,12 @@ class DriveSyncService(
             } else {
                 val merged = syncManager.merge(localPayload, remotePayload)
                 driveClient.uploadPayload(SYNC_FILE_NAME, merged, existingFile.id)
-                payloadStore.importSyncPayload(merged, replace = false)
+                statusTracker.setApplyingRemoteChanges(true)
+                try {
+                    payloadStore.importSyncPayload(merged, replace = false)
+                } finally {
+                    statusTracker.setApplyingRemoteChanges(false)
+                }
                 SyncResult.Success(
                     payload = merged,
                     syncedAt = nowProvider(),

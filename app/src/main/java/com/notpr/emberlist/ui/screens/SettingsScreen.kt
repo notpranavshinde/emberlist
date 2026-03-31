@@ -51,6 +51,7 @@ fun SettingsScreen(padding: PaddingValues) {
     val viewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val settings by viewModel.settings.collectAsState()
     val driveAuthState by viewModel.driveAuthState.collectAsState()
+    val syncRuntimeStatus by viewModel.syncRuntimeStatus.collectAsState()
     val syncUiState by viewModel.syncUiState.collectAsState()
     val context = LocalContext.current
     val backupManager = remember { container.backupManager }
@@ -140,6 +141,16 @@ fun SettingsScreen(padding: PaddingValues) {
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
+        syncStatusText(
+            driveConnected = driveAuthState.hasDriveScope,
+            runtimeStatus = syncRuntimeStatus
+        )?.let { status ->
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
         syncUiState.status?.let { status ->
             Text(
                 text = status,
@@ -154,6 +165,16 @@ fun SettingsScreen(padding: PaddingValues) {
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp)
             )
+        }
+        if (syncUiState.error == null) {
+            syncRuntimeStatus.lastError?.let { error ->
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
         ActionRow {
             if (driveAuthState.hasDriveScope) {
@@ -321,6 +342,23 @@ fun SettingsScreen(padding: PaddingValues) {
                 TextButton(onClick = { showConfirmRestore = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+private fun syncStatusText(
+    driveConnected: Boolean,
+    runtimeStatus: com.notpr.emberlist.data.sync.SyncRuntimeStatus
+): String? {
+    if (!driveConnected) return null
+    return when {
+        runtimeStatus.isSyncing -> "Syncing…"
+        !runtimeStatus.isOnline && runtimeStatus.hasPendingLocalChanges ->
+            "Offline. Local changes are waiting to sync."
+        runtimeStatus.hasPendingLocalChanges ->
+            "Pending local changes."
+        !runtimeStatus.isOnline ->
+            "Offline."
+        else -> "Synced."
     }
 }
 

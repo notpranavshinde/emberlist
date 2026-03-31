@@ -89,11 +89,18 @@ Emberlist is an offline-first task manager built around fast capture, local-firs
   - enable/disable sync
   - manual `Sync now`
   - app-startup sync
+  - app foreground/resume sync
+  - reconnect sync
   - debounced local-change sync
   - periodic background sync
   - last synced timestamp
+  - pending/offline/error runtime status in Settings
   - one Drive appData file: `emberlist_sync.json`
-- Web client exists in `web/` and is being developed against the same sync contract.
+- Web client exists in `web/` and is being developed against the same sync contract:
+  - local IndexedDB cache
+  - sync on load, focus/visibility regain, reconnect, and debounced local changes
+  - visible-tab polling fallback while online
+  - manual `Sync now` and reset actions for recovery
 
 ### Not done yet
 - Full Android feature parity on web
@@ -119,7 +126,7 @@ These pieces are already in place on Android and should remain the contract for 
    - drop invalid location references
 
 ### Phase 2: Android cloud sync completion
-The Android app now supports manual sync plus automatic startup/background triggers. The next Android steps should focus on hardening and validation.
+The Android app now supports manual sync plus startup, foreground, reconnect, debounced local-change, and periodic background sync triggers. The next Android steps should focus on validation and UX polish.
 
 1. Harden Android sync UX:
    - clearer sync state text
@@ -150,9 +157,8 @@ The web client should follow the same payload and merge rules as Android. Do not
    - upload merged payload
    - persist merged result locally
 6. Build out the remaining web product surface:
-   - auth/session restore
-   - sync status UI
    - task/project editing parity where needed
+   - sync status UI polish
    - import/export tools for testing and recovery
 
 ### Phase 4: Cross-device validation
@@ -282,7 +288,7 @@ Emberlist’s web client is a static Vite app. That means you do not need a cust
 - Each computer has its own local browser cache.
 - Google Drive appData is the shared cloud state.
 - If you add/change tasks on one machine, sync there, then sync on the other machine, the other machine will pull the merged workspace.
-- Because sync is currently explicit on web, you should treat `Sync now` as part of the workflow when switching devices.
+- Web now syncs automatically on load, focus/visibility regain, reconnect, and after local edits. `Sync now` remains the manual recovery path.
 
 ## Tests
 
@@ -363,9 +369,9 @@ Run:
 
 ## Notes
 
-- The Android app now supports manual Google Drive sync plus automatic startup/background sync triggers.
+- The Android app now supports manual Google Drive sync plus startup, foreground, reconnect, debounced local-change, and periodic background sync triggers.
 - The sync architecture is now split cleanly:
   - `BackupPayload` for user backup/export/import
   - `SyncPayload` for replicated cloud state
-- The remaining sync work is mostly around automatic triggers, UX hardening, and end-to-end validation, not inventing a new merge model.
+- The remaining sync work is mostly around UX polish, browser/device validation, and end-to-end conflict testing, not inventing a new merge model.
 - Board view supports drag‑and‑drop between section columns.

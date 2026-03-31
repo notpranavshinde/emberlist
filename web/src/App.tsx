@@ -95,6 +95,8 @@ function App() {
   const [bootState, setBootState] = useState<BootState>('loading');
   const [bootError, setBootError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [hasPendingLocalChanges, setHasPendingLocalChanges] = useState(false);
   const [isResettingCache, setIsResettingCache] = useState(false);
   const [isResettingCloud, setIsResettingCloud] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
@@ -109,6 +111,16 @@ function App() {
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
 
   const payloadRef = useRef<SyncPayload | null>(null);
+  const cloudSessionRef = useRef<CloudSession | null>(cloudSession);
+  const isSyncingRef = useRef(false);
+  const isOnlineRef = useRef(isOnline);
+  const hasPendingLocalChangesRef = useRef(hasPendingLocalChanges);
+  const followUpSyncRequestedRef = useRef(false);
+  const debounceTimerRef = useRef<number | null>(null);
+  const backoffTimerRef = useRef<number | null>(null);
+  const backoffAttemptRef = useRef(0);
+  const backoffUntilRef = useRef<number | null>(null);
+  const hasAutoSyncedOnLoadRef = useRef(false);
   const syncService = useMemo(
     () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
     []
@@ -117,6 +129,22 @@ function App() {
   useEffect(() => {
     payloadRef.current = payload;
   }, [payload]);
+
+  useEffect(() => {
+    cloudSessionRef.current = cloudSession;
+  }, [cloudSession]);
+
+  useEffect(() => {
+    isSyncingRef.current = isSyncing;
+  }, [isSyncing]);
+
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    hasPendingLocalChangesRef.current = hasPendingLocalChanges;
+  }, [hasPendingLocalChanges]);
 
   useEffect(() => {
     window.localStorage.setItem('emberlist.showCompletedToday', JSON.stringify(showCompletedToday));
@@ -158,10 +186,106 @@ function App() {
     void loadData();
   }, [loadData]);
 
-  async function persistPayload(nextPayload: SyncPayload) {
+  function clearDebounceTimer() {
+    if (debounceTimerRef.current !== null) {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+  }
+
+  function clearBackoffTimer() {
+    if (backoffTimerRef.current !== null) {
+      window.clearTimeout(backoffTimerRef.current);
+      backoffTimerRef.current = null;
+    }
+  }
+
+  async function runCloudSync({
+    interactiveAuth,
+    automatic,
+  }: {
+    interactiveAuth: boolean;
+    automatic: boolean;
+  }) {
+    if (!syncService) {
+      if (!automatic) {
+        const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+        setLastSyncError(message);
+        setBanner({ tone: 'error', message });
+      }
+      return;
+    }
+
+    if (automatic && !cloudSessionRef.current) return;
+    if (!interactiveAuth && !isOnlineRef.current) return;
+
+    const backoffUntil = backoffUntilRef.current;
+    if (automatic && backoffUntil !== null && Date.now() < backoffUntil) {
+      return;
+    }
+
+    if (isSyncingRef.current) {
+      followUpSyncRequestedRef.current = true;
+      return;
+    }
+
+    clearDebounceTimer();
+    clearBackoffTimer();
+    setIsSyncing(true);
+    setLastSyncError(null);
+
+    try {
+      const mergedPayload = await syncService.sync({ interactiveAuth });
+      await persistPayload(mergedPayload, false);
+      setLastCloudSyncAt(Date.now());
+      setCloudSession(syncService.getSession());
+      setHasPendingLocalChanges(false);
+      backoffAttemptRef.current = 0;
+      backoffUntilRef.current = null;
+      if (!automatic) {
+        setBanner({ tone: 'success', message: 'Cloud sync completed.' });
+      }
+    } catch (error) {
+      console.error('Cloud sync failed', error);
+      const message = error instanceof Error ? error.message : 'Cloud sync failed.';
+      setLastSyncError(message);
+      if (!automatic) {
+        setBanner({ tone: 'error', message });
+      } else {
+        const delayMs = Math.min(5 * 60_000, 30_000 * 2 ** backoffAttemptRef.current);
+        backoffAttemptRef.current += 1;
+        backoffUntilRef.current = Date.now() + delayMs;
+        backoffTimerRef.current = window.setTimeout(() => {
+          void runCloudSync({ interactiveAuth: false, automatic: true });
+        }, delayMs);
+      }
+    } finally {
+      setIsSyncing(false);
+      if (followUpSyncRequestedRef.current && isOnlineRef.current) {
+        followUpSyncRequestedRef.current = false;
+        clearDebounceTimer();
+        debounceTimerRef.current = window.setTimeout(() => {
+          void runCloudSync({ interactiveAuth: false, automatic: true });
+        }, 5_000);
+      }
+    }
+  }
+
+  async function persistPayload(nextPayload: SyncPayload, markDirty: boolean = false) {
     await db.savePayload(nextPayload);
     payloadRef.current = nextPayload;
     setPayload(nextPayload);
+    if (markDirty) {
+      setHasPendingLocalChanges(true);
+      if (isSyncingRef.current) {
+        followUpSyncRequestedRef.current = true;
+      } else if (isOnlineRef.current && syncService && cloudSessionRef.current) {
+        clearDebounceTimer();
+        debounceTimerRef.current = window.setTimeout(() => {
+          void runCloudSync({ interactiveAuth: false, automatic: true });
+        }, 5_000);
+      }
+    }
   }
 
   async function applyPayloadUpdate(
@@ -170,7 +294,7 @@ function App() {
     const current = payloadRef.current;
     if (!current) return null;
     const nextPayload = updater(current);
-    await persistPayload(nextPayload);
+    await persistPayload(nextPayload, true);
     return nextPayload;
   }
 
@@ -198,7 +322,7 @@ function App() {
       const remotePayload = ensureSyncPayload(JSON.parse(await file.text()), 'Imported JSON file');
       const localPayload = payloadRef.current ?? (await db.getPayload());
       const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
-      await persistPayload(mergedPayload);
+      await persistPayload(mergedPayload, true);
       setBootState('ready');
       setBanner({ tone: 'success', message: 'Imported JSON was merged into your local workspace.' });
     } catch (error) {
@@ -211,33 +335,8 @@ function App() {
   }
 
   async function handleCloudSync() {
-    if (!syncService) {
-      const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
-      setLastSyncError(message);
-      setBanner({ tone: 'error', message });
-      return;
-    }
-
-    setIsSyncing(true);
-    setLastSyncError(null);
-    try {
-      const mergedPayload = await syncService.sync();
-      await persistPayload(mergedPayload);
-      setLastCloudSyncAt(Date.now());
-      setCloudSession(syncService.getSession());
-      setBootState('ready');
-      setBanner({ tone: 'success', message: 'Cloud sync completed.' });
-    } catch (error) {
-      console.error('Cloud sync failed', error);
-      const message = error instanceof Error ? error.message : 'Cloud sync failed.';
-      setLastSyncError(message);
-      setBanner({
-        tone: 'error',
-        message,
-      });
-    } finally {
-      setIsSyncing(false);
-    }
+    await runCloudSync({ interactiveAuth: true, automatic: false });
+    setBootState('ready');
   }
 
   async function handleResetCloudSync() {
@@ -279,6 +378,7 @@ function App() {
     try {
       await syncService.disconnect();
       setCloudSession(null);
+      setLastSyncError(null);
       setBanner({ tone: 'info', message: 'Signed out of Google Drive for this browser session.' });
     } catch (error) {
       setBanner({
@@ -341,7 +441,7 @@ function App() {
     const existingIds = new Set(current.tasks.map(task => task.id));
     const nextPayload = createTask(current, draft);
     const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
-    await persistPayload(nextPayload);
+    await persistPayload(nextPayload, true);
     setBanner({ tone: 'success', message: `Task "${draft.title.trim()}" created.` });
     return createdTask?.id ?? null;
   }
@@ -353,6 +453,63 @@ function App() {
       setBanner({ tone: 'success', message: `Saved "${savedTask.title}".` });
     }
   }
+
+  useEffect(() => {
+    if (bootState !== 'ready' || !syncService || !cloudSession || hasAutoSyncedOnLoadRef.current) return;
+    hasAutoSyncedOnLoadRef.current = true;
+    void runCloudSync({ interactiveAuth: false, automatic: true });
+  }, [bootState, cloudSession, syncService]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      void runCloudSync({ interactiveAuth: false, automatic: true });
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [cloudSession, syncService]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void runCloudSync({ interactiveAuth: false, automatic: true });
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void runCloudSync({ interactiveAuth: false, automatic: true });
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [cloudSession, syncService]);
+
+  useEffect(() => {
+    if (!syncService || !cloudSession) return;
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      void runCloudSync({ interactiveAuth: false, automatic: true });
+    }, 5 * 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, [cloudSession, syncService]);
+
+  useEffect(() => {
+    return () => {
+      clearDebounceTimer();
+      clearBackoffTimer();
+    };
+  }, []);
 
   if (bootState === 'loading') {
     return <LoadingScreen label="Loading your workspace..." />;
@@ -406,6 +563,8 @@ function App() {
         cloudConfigured={Boolean(syncService)}
         cloudSession={cloudSession}
         lastSyncError={lastSyncError}
+        hasPendingLocalChanges={hasPendingLocalChanges}
+        isOnline={isOnline}
         isSyncing={isSyncing}
         isResettingCloud={isResettingCloud}
         isResettingCache={isResettingCache}
@@ -445,6 +604,8 @@ type WorkspaceShellProps = {
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
+  hasPendingLocalChanges: boolean;
+  isOnline: boolean;
   isSyncing: boolean;
   isResettingCloud: boolean;
   isResettingCache: boolean;
@@ -479,6 +640,8 @@ function WorkspaceShell({
   cloudConfigured,
   cloudSession,
   lastSyncError,
+  hasPendingLocalChanges,
+  isOnline,
   isSyncing,
   isResettingCloud,
   isResettingCache,
@@ -503,6 +666,8 @@ function WorkspaceShell({
     cloudConfigured,
     cloudSession,
     lastSyncError,
+    hasPendingLocalChanges,
+    isOnline,
     isSyncing,
     lastCloudSyncAt,
   });
@@ -719,6 +884,8 @@ function WorkspaceShell({
                     cloudConfigured={cloudConfigured}
                     cloudSession={cloudSession}
                     lastSyncError={lastSyncError}
+                    hasPendingLocalChanges={hasPendingLocalChanges}
+                    isOnline={isOnline}
                     showCompletedToday={showCompletedToday}
                     onToggleShowCompletedToday={onToggleShowCompletedToday}
                     onCloudSync={onCloudSync}
@@ -1585,6 +1752,8 @@ function SettingsPage({
   cloudConfigured,
   cloudSession,
   lastSyncError,
+  hasPendingLocalChanges,
+  isOnline,
   showCompletedToday,
   onToggleShowCompletedToday,
   onCloudSync,
@@ -1600,6 +1769,8 @@ function SettingsPage({
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
+  hasPendingLocalChanges: boolean;
+  isOnline: boolean;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
   onCloudSync: () => void;
@@ -1616,6 +1787,8 @@ function SettingsPage({
     cloudConfigured,
     cloudSession,
     lastSyncError,
+    hasPendingLocalChanges,
+    isOnline,
     isSyncing,
     lastCloudSyncAt,
   });
@@ -2229,12 +2402,16 @@ function getCloudStatus({
   cloudConfigured,
   cloudSession,
   lastSyncError,
+  hasPendingLocalChanges,
+  isOnline,
   isSyncing,
   lastCloudSyncAt,
 }: {
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
+  hasPendingLocalChanges: boolean;
+  isOnline: boolean;
   isSyncing: boolean;
   lastCloudSyncAt: number | null;
 }): { label: string; detail: string; tone: CloudStatusTone } {
@@ -2250,6 +2427,30 @@ function getCloudStatus({
     return {
       label: 'Syncing',
       detail: 'Emberlist is merging your local workspace with the latest Google Drive appData snapshot right now.',
+      tone: 'idle',
+    };
+  }
+
+  if (lastSyncError && hasPendingLocalChanges) {
+    return {
+      label: 'Attention',
+      detail: 'The last cloud sync attempt failed and this browser still has local changes waiting to upload.',
+      tone: 'warning',
+    };
+  }
+
+  if (!isOnline && hasPendingLocalChanges) {
+    return {
+      label: 'Offline',
+      detail: 'This browser has local changes waiting to sync. Emberlist will retry when the connection comes back.',
+      tone: 'warning',
+    };
+  }
+
+  if (hasPendingLocalChanges) {
+    return {
+      label: 'Pending',
+      detail: 'Local changes are saved in this browser and queued for upload to Google Drive.',
       tone: 'idle',
     };
   }
