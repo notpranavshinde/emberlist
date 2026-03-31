@@ -1,0 +1,182 @@
+- generic [ref=e6]:
+  - complementary [ref=e7]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: E
+      - generic [ref=e12]: Emberlist
+    - button "Add task" [ref=e13]:
+      - img [ref=e14]
+      - generic [ref=e15]: Add task
+    - navigation [ref=e16]:
+      - link "Search" [ref=e17] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e18]
+        - generic [ref=e21]: Search
+      - link "Inbox 2" [ref=e161] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e23]
+        - generic [ref=e26]: Inbox
+        - generic [ref=e27]: "2"
+      - link "Today 6" [ref=e162] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e29]
+        - generic [ref=e32]: Today
+        - generic [ref=e33]: "6"
+      - link "Upcoming" [ref=e34] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e35]
+        - generic [ref=e37]: Upcoming
+      - link "Browse" [ref=e38] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e39]
+        - generic [ref=e43]: Browse
+      - link "Settings" [ref=e44] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e45]
+        - generic [ref=e48]: Settings
+    - generic [ref=e49]:
+      - paragraph [ref=e50]: Favorites
+      - generic [ref=e51]:
+        - link "Tasks without due dates 1" [ref=e163] [cursor=pointer]:
+          - /url: "#/search/no-due"
+          - img [ref=e53]
+          - generic [ref=e55]: Tasks without due dates
+          - generic [ref=e56]: "1"
+        - link "Home Ops 4" [ref=e164] [cursor=pointer]:
+          - /url: "#/project/project-home"
+          - img [ref=e165]
+          - generic [ref=e167]: Home Ops
+          - generic [ref=e168]: "4"
+        - link "Work 4" [ref=e169] [cursor=pointer]:
+          - /url: "#/project/project-work"
+          - img [ref=e170]
+          - generic [ref=e172]: Work
+          - generic [ref=e173]: "4"
+    - paragraph [ref=e59]: My Projects
+    - generic [ref=e60]:
+      - link "Health 2" [ref=e174] [cursor=pointer]:
+        - /url: "#/project/project-health"
+        - img [ref=e175]
+        - generic [ref=e177]: Health
+        - generic [ref=e178]: "2"
+      - link "Family 2" [ref=e179] [cursor=pointer]:
+        - /url: "#/project/project-family"
+        - img [ref=e180]
+        - generic [ref=e182]: Family
+        - generic [ref=e183]: "2"
+      - link "Writing 2" [ref=e184] [cursor=pointer]:
+        - /url: "#/project/project-writing"
+        - img [ref=e185]
+        - generic [ref=e187]: Writing
+        - generic [ref=e188]: "2"
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - paragraph [ref=e63]: Cloud sync
+        - generic [ref=e64]: Unavailable
+      - paragraph [ref=e65]: No Google account connected in this tab
+      - button "Sync now" [disabled] [ref=e66]:
+        - img [ref=e67]
+        - generic [ref=e69]: Sync now
+  - generic [ref=e70]:
+    - banner [ref=e71]:
+      - generic [ref=e72]:
+        - heading "Home Ops" [level=2] [ref=e250]
+        - generic [ref=e75]:
+          - button "Sync" [ref=e76]:
+            - img [ref=e77]
+            - generic [ref=e79]: Sync
+          - button "Quick add" [ref=e80]:
+            - img [ref=e81]
+            - generic [ref=e82]: Quick add
+    - main [ref=e83]:
+      - generic [ref=e251]:
+        - generic [ref=e253]:
+          - generic [ref=e254]:
+            - paragraph [ref=e255]: Project
+            - heading "Home Ops" [level=2] [ref=e256]
+            - paragraph [ref=e257]: Manage tasks, sections, and project metadata. New tasks can be added from Quick add and assigned here.
+          - generic [ref=e259]:
+            - button "Rename" [ref=e260]
+            - button "Archive" [ref=e261]
+            - button "Delete" [ref=e262]
+            - button "Quick add" [ref=e263]
+        - generic [ref=e264]:
+          - generic [ref=e265]:
+            - generic [ref=e266]:
+              - generic [ref=e267]:
+                - generic [ref=e268]:
+                  - heading "Loose tasks" [level=3] [ref=e269]
+                  - paragraph [ref=e270]: Open tasks in this project without a section.
+                - generic [ref=e272]: 0 tasks
+              - paragraph [ref=e273]: No unsectioned tasks here.
+            - generic [ref=e274]:
+              - generic [ref=e275]:
+                - generic [ref=e276]:
+                  - heading "Admin" [level=3] [ref=e277]
+                  - paragraph [ref=e278]: 3 tasks
+                - generic [ref=e279]:
+                  - button "Rename" [ref=e280]
+                  - button "Delete" [ref=e281]
+              - generic [ref=e282]:
+                - button "Pay April rent Confirm transfer cleared and save a receipt PDF. Tomorrow · 9:00 PM ↻ Home Ops / Admin" [ref=e283]:
+                  - button [ref=e284]:
+                    - img [ref=e285]
+                  - generic [ref=e287]:
+                    - paragraph [ref=e288]: Pay April rent
+                    - paragraph [ref=e289]: Confirm transfer cleared and save a receipt PDF.
+                    - generic [ref=e290]:
+                      - generic [ref=e291]:
+                        - img [ref=e292]
+                        - generic [ref=e294]: Tomorrow · 9:00 PM
+                      - generic [ref=e295]: ↻
+                  - generic [ref=e296]: Home Ops / Admin
+                - button "File quarterly taxes Export expense report, reconcile mileage, and submit payment. Apr 7 · 9:00 AM Home Ops / Admin" [ref=e297]:
+                  - button [ref=e298]:
+                    - img [ref=e299]
+                  - generic [ref=e301]:
+                    - paragraph [ref=e302]: File quarterly taxes
+                    - paragraph [ref=e303]: Export expense report, reconcile mileage, and submit payment.
+                    - generic [ref=e305]:
+                      - img [ref=e306]
+                      - generic [ref=e308]: Apr 7 · 9:00 AM
+                  - generic [ref=e309]: Home Ops / Admin
+                - button "Renew passport paperwork Print the application, attach the new photo, and find the old passport book. Home Ops / Admin" [ref=e310]:
+                  - button [ref=e311]:
+                    - img [ref=e312]
+                  - generic [ref=e314]:
+                    - paragraph [ref=e315]: Renew passport paperwork
+                    - paragraph [ref=e316]: Print the application, attach the new photo, and find the old passport book.
+                  - generic [ref=e317]: Home Ops / Admin
+            - generic [ref=e318]:
+              - generic [ref=e319]:
+                - generic [ref=e320]:
+                  - heading "Weekend" [level=3] [ref=e321]
+                  - paragraph [ref=e322]: 1 task
+                - generic [ref=e323]:
+                  - button "Rename" [ref=e324]
+                  - button "Delete" [ref=e325]
+              - button "Replace AC filter The hallway unit has been running hard all week. Apr 4 ↻ Home Ops / Weekend" [ref=e327]:
+                - button [ref=e328]:
+                  - img [ref=e329]
+                - generic [ref=e331]:
+                  - paragraph [ref=e332]: Replace AC filter
+                  - paragraph [ref=e333]: The hallway unit has been running hard all week.
+                  - generic [ref=e334]:
+                    - generic [ref=e335]:
+                      - img [ref=e336]
+                      - generic [ref=e338]: Apr 4
+                    - generic [ref=e339]: ↻
+                - generic [ref=e340]: Home Ops / Weekend
+          - generic [ref=e341]:
+            - paragraph [ref=e342]: Sections
+            - heading "Organize this project" [level=3] [ref=e343]
+            - paragraph [ref=e344]: Sections help break a project into swimlanes without changing the synced task model.
+            - generic [ref=e345]:
+              - textbox "New section" [ref=e346]
+              - button "Add" [ref=e347]
+            - generic [ref=e348]:
+              - generic [ref=e349]:
+                - paragraph [ref=e350]: Admin
+                - paragraph [ref=e351]: 3 tasks
+              - generic [ref=e352]:
+                - paragraph [ref=e353]: Weekend
+                - paragraph [ref=e354]: 1 task

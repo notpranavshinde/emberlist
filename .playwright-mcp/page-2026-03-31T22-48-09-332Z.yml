@@ -1,0 +1,132 @@
+- generic [ref=e6]:
+  - complementary [ref=e7]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: E
+      - generic [ref=e12]: Emberlist
+    - button "Add task" [ref=e13]:
+      - img [ref=e14]
+      - generic [ref=e15]: Add task
+    - navigation [ref=e16]:
+      - link "Search" [ref=e17] [cursor=pointer]:
+        - /url: "#/search"
+        - img [ref=e18]
+        - generic [ref=e21]: Search
+      - link "Inbox 2" [ref=e161] [cursor=pointer]:
+        - /url: "#/inbox"
+        - img [ref=e23]
+        - generic [ref=e26]: Inbox
+        - generic [ref=e27]: "2"
+      - link "Today 6" [ref=e162] [cursor=pointer]:
+        - /url: "#/today"
+        - img [ref=e29]
+        - generic [ref=e32]: Today
+        - generic [ref=e33]: "6"
+      - link "Upcoming" [ref=e34] [cursor=pointer]:
+        - /url: "#/upcoming"
+        - img [ref=e35]
+        - generic [ref=e37]: Upcoming
+      - link "Browse" [ref=e38] [cursor=pointer]:
+        - /url: "#/browse"
+        - img [ref=e39]
+        - generic [ref=e43]: Browse
+      - link "Settings" [ref=e44] [cursor=pointer]:
+        - /url: "#/settings"
+        - img [ref=e45]
+        - generic [ref=e48]: Settings
+    - generic [ref=e49]:
+      - paragraph [ref=e50]: Favorites
+      - generic [ref=e51]:
+        - link "Tasks without due dates 1" [ref=e163] [cursor=pointer]:
+          - /url: "#/search/no-due"
+          - img [ref=e53]
+          - generic [ref=e55]: Tasks without due dates
+          - generic [ref=e56]: "1"
+        - link "Home Ops 4" [ref=e164] [cursor=pointer]:
+          - /url: "#/project/project-home"
+          - img [ref=e165]
+          - generic [ref=e167]: Home Ops
+          - generic [ref=e168]: "4"
+        - link "Work 4" [ref=e169] [cursor=pointer]:
+          - /url: "#/project/project-work"
+          - img [ref=e170]
+          - generic [ref=e172]: Work
+          - generic [ref=e173]: "4"
+    - paragraph [ref=e59]: My Projects
+    - generic [ref=e60]:
+      - link "Health 2" [ref=e174] [cursor=pointer]:
+        - /url: "#/project/project-health"
+        - img [ref=e175]
+        - generic [ref=e177]: Health
+        - generic [ref=e178]: "2"
+      - link "Family 2" [ref=e179] [cursor=pointer]:
+        - /url: "#/project/project-family"
+        - img [ref=e180]
+        - generic [ref=e182]: Family
+        - generic [ref=e183]: "2"
+      - link "Writing 2" [ref=e184] [cursor=pointer]:
+        - /url: "#/project/project-writing"
+        - img [ref=e185]
+        - generic [ref=e187]: Writing
+        - generic [ref=e188]: "2"
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - paragraph [ref=e63]: Cloud sync
+        - generic [ref=e64]: Unavailable
+      - paragraph [ref=e65]: No Google account connected in this tab
+      - button "Sync now" [disabled] [ref=e66]:
+        - img [ref=e67]
+        - generic [ref=e69]: Sync now
+  - generic [ref=e70]:
+    - banner [ref=e71]:
+      - generic [ref=e72]:
+        - heading "Settings" [level=2] [ref=e119]
+        - generic [ref=e75]:
+          - button "Sync" [ref=e76]:
+            - img [ref=e77]
+            - generic [ref=e79]: Sync
+          - button "Quick add" [ref=e80]:
+            - img [ref=e81]
+            - generic [ref=e82]: Quick add
+      - generic [ref=e189]:
+        - paragraph [ref=e190]: Imported JSON was merged into your local workspace.
+        - button "Dismiss status message" [ref=e191]:
+          - img [ref=e192]
+    - main [ref=e83]:
+      - generic [ref=e120]:
+        - generic [ref=e123]:
+          - paragraph [ref=e124]: Settings
+          - heading "Web sync and workspace" [level=2] [ref=e125]
+          - paragraph [ref=e126]: Manage Google Drive sync, this browser's local workspace, and the display options that stay local to the web app.
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - paragraph [ref=e129]: Cloud sync
+            - generic [ref=e130]:
+              - generic [ref=e131]:
+                - generic [ref=e132]: Status
+                - generic [ref=e133]: Unavailable
+              - generic [ref=e134]:
+                - generic [ref=e135]: Account
+                - generic [ref=e136]: No Google account connected in this tab
+              - generic [ref=e137]:
+                - generic [ref=e138]: Last sync
+                - generic [ref=e139]: No recent sync
+              - paragraph [ref=e140]: This deployment is missing its Google client ID, so cloud sync is disabled until the site is redeployed with VITE_GOOGLE_CLIENT_ID.
+              - generic [ref=e141]:
+                - button "Sync now" [disabled] [ref=e142]
+                - button "Reset cloud sync" [disabled] [ref=e143]
+          - generic [ref=e144]:
+            - paragraph [ref=e145]: Workspace recovery
+            - generic [ref=e146]:
+              - paragraph [ref=e147]: Reset the local web cache if IndexedDB gets stuck or import a JSON backup into the current workspace.
+              - generic [ref=e148]:
+                - button "Reset web cache" [ref=e149]
+                - generic [ref=e150] [cursor=pointer]:
+                  - img [ref=e151]
+                  - text: Import JSON
+        - generic [ref=e154]:
+          - paragraph [ref=e155]: Display
+          - generic [ref=e156]:
+            - generic [ref=e157]:
+              - paragraph [ref=e158]: Show completed tasks in Today
+              - paragraph [ref=e159]: This toggle is local to the web app and does not affect Android.
+            - checkbox "Show completed tasks in Today This toggle is local to the web app and does not affect Android." [checked] [ref=e160]
