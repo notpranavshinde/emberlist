@@ -1480,7 +1480,7 @@ function ProjectPage({
         <div className="space-y-4">
           <TaskGroup
             title="Loose tasks"
-            subtitle="Tasks in this project without a section."
+            subtitle="Open tasks in this project without a section."
             payload={payload}
             todayStartMs={todayStartMs}
             tasks={unsectionedTasks}
@@ -1584,7 +1584,12 @@ function ProjectPage({
                 );
               })
             ) : (
-              <EmptyState title="No sections yet" description="Add a section to break this project into parts." />
+              <div className="rounded-[18px] border border-dashed border-[#D9CABC] bg-[#FBF7F3] px-4 py-6 text-center">
+                <p className="text-sm font-semibold text-[#1E2D2F]">No sections yet</p>
+                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+                  Add a section to break this project into parts.
+                </p>
+              </div>
             )}
           </div>
         </section>

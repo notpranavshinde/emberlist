@@ -112,11 +112,11 @@ export function getProjectSections(payload: SyncPayload, projectId: string): Sec
 
 export function getProjectTasks(payload: SyncPayload, projectId: string, includeArchived: boolean = false): Task[] {
     return payload.tasks
-        .filter(task =>
-            task.projectId === projectId &&
-            !task.deletedAt &&
-            (includeArchived || task.status !== 'ARCHIVED')
-        )
+        .filter(task => {
+            if (task.projectId !== projectId || task.deletedAt) return false;
+            if (includeArchived) return task.status !== 'COMPLETED';
+            return task.status === 'OPEN';
+        })
         .sort(compareTasks);
 }
 
