@@ -43,6 +43,8 @@ import {
   deleteProject,
   deleteSection,
   deleteTask,
+  getCompletedInboxTasks,
+  getCompletedProjectTasks,
   getActiveProjects,
   getInboxTasks,
   getProjectById,
@@ -50,8 +52,10 @@ import {
   getProjectTasks,
   getTaskById,
   getTodayViewData,
+  getUpcomingCompletedTasks,
   getUpcomingGroups,
   searchTasks,
+  searchCompletedTasks,
   type TaskReminderDraft,
   toggleTaskCompletion,
   type SearchFilter,
@@ -64,8 +68,7 @@ import type { Priority, Project, Section, SyncPayload, Task } from './types/sync
 
 const syncEngine = new SyncEngine();
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
-const QUICK_ADD_PLACEHOLDER = `Try: pay rent p1 tomorrow 9pm #bills
-Or paste a whole list`;
+const QUICK_ADD_PLACEHOLDER = 'Try: pay rent p1 tomorrow 9pm #bills';
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: 'All', value: 'ALL' },
   { label: 'Overdue', value: 'OVERDUE' },
@@ -81,6 +84,7 @@ const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
 
 type BootState = 'loading' | 'ready' | 'error';
 type Banner = {
+  id: number;
   tone: 'success' | 'error' | 'info';
   message: string;
 };
@@ -121,10 +125,16 @@ function App() {
   const backoffAttemptRef = useRef(0);
   const backoffUntilRef = useRef<number | null>(null);
   const hasAutoSyncedOnLoadRef = useRef(false);
+  const bannerIdRef = useRef(0);
   const syncService = useMemo(
     () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
     []
   );
+
+  function showBanner(tone: Banner['tone'], message: string) {
+    bannerIdRef.current += 1;
+    setBanner({ id: bannerIdRef.current, tone, message });
+  }
 
   useEffect(() => {
     payloadRef.current = payload;
@@ -165,7 +175,7 @@ function App() {
   useEffect(() => {
     if (!banner || banner.tone === 'error') return;
     const timeoutId = window.setTimeout(() => {
-      setBanner(current => (current === banner ? null : current));
+      setBanner(current => (current?.id === banner.id ? null : current));
     }, 4_000);
     return () => window.clearTimeout(timeoutId);
   }, [banner]);
@@ -219,7 +229,7 @@ function App() {
       if (!automatic) {
         const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
         setLastSyncError(message);
-        setBanner({ tone: 'error', message });
+        showBanner('error', message);
       }
       return;
     }
@@ -251,14 +261,14 @@ function App() {
       backoffAttemptRef.current = 0;
       backoffUntilRef.current = null;
       if (!automatic) {
-        setBanner({ tone: 'success', message: 'Cloud sync completed.' });
+        showBanner('success', 'Cloud sync completed.');
       }
     } catch (error) {
       console.error('Cloud sync failed', error);
       const message = error instanceof Error ? error.message : 'Cloud sync failed.';
       setLastSyncError(message);
       if (!automatic) {
-        setBanner({ tone: 'error', message });
+        showBanner('error', message);
       } else {
         const delayMs = Math.min(5 * 60_000, 30_000 * 2 ** backoffAttemptRef.current);
         backoffAttemptRef.current += 1;
@@ -310,7 +320,7 @@ function App() {
     setIsResettingCache(true);
     try {
       await db.reset();
-      setBanner({ tone: 'info', message: 'Local web cache cleared. A fresh workspace was created.' });
+      showBanner('info', 'Local web cache cleared. A fresh workspace was created.');
       await loadData();
     } catch (error) {
       console.error('Failed to reset local web cache', error);
@@ -332,13 +342,10 @@ function App() {
       const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
       await persistPayload(mergedPayload, true);
       setBootState('ready');
-      setBanner({ tone: 'success', message: 'Imported JSON was merged into your local workspace.' });
+      showBanner('success', 'Imported JSON was merged into your local workspace.');
     } catch (error) {
       console.error('Failed to import JSON', error);
-      setBanner({
-        tone: 'error',
-        message: error instanceof Error ? error.message : 'Failed to import JSON.',
-      });
+      showBanner('error', error instanceof Error ? error.message : 'Failed to import JSON.');
     }
   }
 
@@ -351,7 +358,7 @@ function App() {
     if (!syncService) {
       const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
       setLastSyncError(message);
-      setBanner({ tone: 'error', message });
+      showBanner('error', message);
       return;
     }
 
@@ -365,16 +372,10 @@ function App() {
       await syncService.resetRemoteSyncFile();
       setLastCloudSyncAt(null);
       setLastSyncError(null);
-      setBanner({
-        tone: 'success',
-        message: 'Cloud sync storage was reset. Sync again from the side with the data you want to keep.',
-      });
+      showBanner('success', 'Cloud sync storage was reset. Sync again from the side with the data you want to keep.');
     } catch (error) {
       console.error('Failed to reset cloud sync', error);
-      setBanner({
-        tone: 'error',
-        message: error instanceof Error ? error.message : 'Failed to reset cloud sync.',
-      });
+      showBanner('error', error instanceof Error ? error.message : 'Failed to reset cloud sync.');
     } finally {
       setIsResettingCloud(false);
     }
@@ -387,12 +388,9 @@ function App() {
       await syncService.disconnect();
       setCloudSession(null);
       setLastSyncError(null);
-      setBanner({ tone: 'info', message: 'Signed out of Google Drive for this browser session.' });
+      showBanner('info', 'Signed out of Google Drive for this browser session.');
     } catch (error) {
-      setBanner({
-        tone: 'error',
-        message: error instanceof Error ? error.message : 'Failed to disconnect Google Drive.',
-      });
+      showBanner('error', error instanceof Error ? error.message : 'Failed to disconnect Google Drive.');
     }
   }
 
@@ -400,7 +398,7 @@ function App() {
     const trimmed = name.trim();
     if (!trimmed) return;
     await applyPayloadUpdate(current => createProject(current, trimmed));
-    setBanner({ tone: 'success', message: `Project "${trimmed}" created.` });
+    showBanner('success', `Project "${trimmed}" created.`);
   }
 
   async function handleUpdateProject(projectId: string, updater: (project: Project) => Project) {
@@ -437,9 +435,12 @@ function App() {
     await applyPayloadUpdate(current => deleteTask(current, taskId));
   }
 
-  async function handleCreateTask(draft: TaskDraft): Promise<string | null> {
+  async function handleCreateTask(
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string }
+  ): Promise<string | null> {
     if (!draft.title.trim()) {
-      setBanner({ tone: 'error', message: 'Task title is required.' });
+      showBanner('error', 'Task title is required.');
       return null;
     }
 
@@ -450,7 +451,9 @@ function App() {
     const nextPayload = createTask(current, draft);
     const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
     await persistPayload(nextPayload, true);
-    setBanner({ tone: 'success', message: `Task "${draft.title.trim()}" created.` });
+    if (!options?.silent) {
+      showBanner('success', options?.successMessage ?? `Task "${draft.title.trim()}" created.`);
+    }
     return createdTask?.id ?? null;
   }
 
@@ -458,7 +461,7 @@ function App() {
     const nextPayload = await applyPayloadUpdate(current => updateTask(current, taskId, updater));
     const savedTask = nextPayload?.tasks.find(task => task.id === taskId);
     if (savedTask) {
-      setBanner({ tone: 'success', message: `Saved "${savedTask.title}".` });
+      showBanner('success', `Saved "${savedTask.title}".`);
     }
   }
 
@@ -551,6 +554,7 @@ function App() {
         payload={payload}
         banner={banner}
         onDismissBanner={() => setBanner(null)}
+        onShowBanner={showBanner}
         onCloudSync={() => void handleCloudSync()}
         onResetCloudSync={() => void handleResetCloudSync()}
         onResetLocalCache={() => void handleResetLocalCache()}
@@ -592,11 +596,12 @@ type WorkspaceShellProps = {
   payload: SyncPayload;
   banner: Banner | null;
   onDismissBanner: () => void;
+  onShowBanner: (tone: Banner['tone'], message: string) => void;
   onCloudSync: () => void;
   onResetCloudSync: () => void;
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
-  onCreateTask: (draft: TaskDraft) => Promise<string | null>;
+  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -628,6 +633,7 @@ function WorkspaceShell({
   payload,
   banner,
   onDismissBanner,
+  onShowBanner,
   onCloudSync,
   onResetCloudSync,
   onResetLocalCache,
@@ -661,7 +667,7 @@ function WorkspaceShell({
 }: WorkspaceShellProps) {
   const location = useLocation();
   const todayStartMs = useTodayStartMs();
-  const previousPathRef = useRef(location.pathname);
+  const previousPathRef = useRef(location.key);
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -688,11 +694,11 @@ function WorkspaceShell({
   }, [title]);
 
   useEffect(() => {
-    if (previousPathRef.current !== location.pathname) {
+    if (previousPathRef.current !== location.key) {
       onDismissBanner();
-      previousPathRef.current = location.pathname;
+      previousPathRef.current = location.key;
     }
-  }, [location.pathname, onDismissBanner]);
+  }, [location.key, onDismissBanner]);
 
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
@@ -747,9 +753,6 @@ function WorkspaceShell({
           <div className="mt-8 flex items-center justify-between px-3">
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-[#5f5b57]">My Projects</p>
-              <span className="rounded bg-[#f1ece7] px-1.5 py-0.5 text-[10px] font-semibold text-[#7e7a76]">
-                USED: {projects.filter(project => !project.archived).length}/5
-              </span>
             </div>
           </div>
           <div className="mt-2 flex-1 space-y-0.5 overflow-y-auto">
@@ -795,7 +798,7 @@ function WorkspaceShell({
 
         <div className="flex min-h-screen flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-[#ece7e3] bg-[#faf8f6]/95 px-4 py-4 backdrop-blur md:px-8">
-            <div className="mx-auto flex w-full max-w-[1080px] items-center justify-between gap-3">
+            <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">Emberlist</p>
                 <h2 className="text-2xl font-semibold text-[#202020]">{title}</h2>
@@ -820,7 +823,7 @@ function WorkspaceShell({
               </div>
             </div>
             {banner ? (
-              <div className={`mx-auto mt-4 flex w-full max-w-[1080px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
+              <div className={`mx-auto mt-4 flex w-full max-w-[1240px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
                 <p>{banner.message}</p>
                 <button onClick={onDismissBanner} className="rounded-full p-1 transition hover:bg-black/5" aria-label="Dismiss status message">
                   <X size={16} />
@@ -829,8 +832,8 @@ function WorkspaceShell({
             ) : null}
           </header>
 
-          <main className="flex-1 px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10">
-            <div className="mx-auto w-full max-w-[1080px]">
+          <main className="flex-1 scroll-pb-32 px-4 pb-[calc(8.75rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10">
+            <div className="mx-auto w-full max-w-[1240px]">
             <Routes>
               <Route path="/" element={<Navigate to="/today" replace />} />
               <Route
@@ -919,9 +922,10 @@ function WorkspaceShell({
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F7F4F0]/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F7F4F0]/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-xl grid-cols-6 gap-1">
           <BottomLink to="/today" icon={Home} label="Today" />
+          <BottomLink to="/inbox" icon={ListTodo} label="Inbox" />
           <BottomLink to="/upcoming" icon={Calendar} label="Upcoming" />
           <BottomLink to="/search" icon={Search} label="Search" />
           <BottomLink to="/browse" icon={Layers3} label="Browse" />
@@ -935,6 +939,7 @@ function WorkspaceShell({
           context={quickAddContext}
           onClose={onCloseQuickAdd}
           onCreateTask={onCreateTask}
+          onShowBanner={onShowBanner}
         />
       ) : null}
     </div>
@@ -1010,6 +1015,8 @@ function TodayPage({
           emptyMessage="Nothing completed yet today."
           onToggleTask={onToggleTask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          collapsible
+          defaultCollapsed
         />
       ) : null}
     </div>
@@ -1030,6 +1037,7 @@ function UpcomingPage({
     [payload, todayStartMs]
   );
   const groups = getUpcomingGroups(payload);
+  const completedTasks = getUpcomingCompletedTasks(payload);
 
   return (
     <div className="space-y-6">
@@ -1071,6 +1079,21 @@ function UpcomingPage({
           description="Future-dated tasks will show up here as soon as you add due dates."
         />
       )}
+
+      {completedTasks.length ? (
+        <TaskGroup
+          title="Completed"
+          subtitle="Finished tasks with future due dates."
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={completedTasks}
+          emptyMessage="No completed tasks."
+          onToggleTask={onToggleTask}
+          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          collapsible
+          defaultCollapsed
+        />
+      ) : null}
     </div>
   );
 }
@@ -1114,6 +1137,10 @@ function SearchPage({
   }, [forcedFilter, userFilters]);
   const results = useMemo(
     () => searchTasks(payload, deferredQuery, filters),
+    [deferredQuery, filters, payload]
+  );
+  const completedResults = useMemo(
+    () => searchCompletedTasks(payload, deferredQuery, filters),
     [deferredQuery, filters, payload]
   );
 
@@ -1189,6 +1216,21 @@ function SearchPage({
         onToggleTask={onToggleTask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
       />
+
+      {completedResults.length ? (
+        <TaskGroup
+          title="Completed"
+          subtitle="Finished tasks matching this search."
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={completedResults}
+          emptyMessage="No completed tasks match this search."
+          onToggleTask={onToggleTask}
+          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          collapsible
+          defaultCollapsed
+        />
+      ) : null}
     </div>
   );
 }
@@ -1297,6 +1339,7 @@ function InboxPage({
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const tasks = getInboxTasks(payload);
+  const completedTasks = getCompletedInboxTasks(payload);
 
   return (
     <div className="space-y-6">
@@ -1314,6 +1357,21 @@ function InboxPage({
         onToggleTask={onToggleTask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
       />
+
+      {completedTasks.length ? (
+        <TaskGroup
+          title="Completed"
+          subtitle="Finished Inbox tasks."
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={completedTasks}
+          emptyMessage="No completed Inbox tasks."
+          onToggleTask={onToggleTask}
+          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          collapsible
+          defaultCollapsed
+        />
+      ) : null}
     </div>
   );
 }
@@ -1353,6 +1411,7 @@ function ProjectPage({
 
   const currentProject = project;
   const tasks = getProjectTasks(payload, projectId);
+  const completedTasks = getCompletedProjectTasks(payload, projectId);
   const sections = getProjectSections(payload, projectId);
   const unsectionedTasks = tasks.filter(task => !task.sectionId);
 
@@ -1473,6 +1532,21 @@ function ProjectPage({
               </div>
             );
           })}
+
+          {completedTasks.length ? (
+            <TaskGroup
+              title="Completed"
+              subtitle="Finished tasks in this project."
+              payload={payload}
+              todayStartMs={todayStartMs}
+              tasks={completedTasks}
+              emptyMessage="No completed tasks in this project."
+              onToggleTask={onToggleTask}
+              onOpenTask={taskId => navigate(`/task/${taskId}`)}
+              collapsible
+              defaultCollapsed
+            />
+          ) : null}
         </div>
 
         <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
@@ -1904,11 +1978,13 @@ function QuickAddDialog({
   context,
   onClose,
   onCreateTask,
+  onShowBanner,
 }: {
   payload: SyncPayload;
   context: QuickAddContext;
   onClose: () => void;
-  onCreateTask: (draft: TaskDraft) => Promise<string | null>;
+  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onShowBanner: (tone: Banner['tone'], message: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1949,7 +2025,7 @@ function QuickAddDialog({
     try {
       if (mode === 'single') {
         const mergedDraft = createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs);
-        const taskId = await onCreateTask(mergedDraft);
+        const taskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 task.' });
         if (taskId) {
           onClose();
           navigate(`/task/${taskId}`);
@@ -1960,8 +2036,9 @@ function QuickAddDialog({
       for (const line of bulkLines) {
         const parsedLine = parseQuickAdd(line);
         const draft = buildDraftFromParsed(payload, parsedLine, description, context, todayStartMs);
-        await onCreateTask(draft);
+        await onCreateTask(draft, { silent: true });
       }
+      onShowBanner('success', `${bulkLines.length} tasks created.`);
       onClose();
     } finally {
       setIsSaving(false);
@@ -1997,6 +2074,7 @@ function QuickAddDialog({
               placeholder={QUICK_ADD_PLACEHOLDER}
               className="w-full rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
             />
+            <p className="mt-2 text-xs text-[#8a8076]">Or paste a whole list, one task per line.</p>
           </Field>
 
           <Field label="Notes">
@@ -2017,7 +2095,7 @@ function QuickAddDialog({
                 </p>
                 <p className="mt-1 text-sm text-[#6D5C50]">
                   {bulkLines.length > 1
-                    ? 'Each line will be parsed as its own task. Add 1 task joins all cleaned lines into one title.'
+                    ? 'Each line will be parsed as its own task. You can also combine the pasted list into one task.'
                     : 'Quick Add uses the same parser rules as Android: projects, dates, priorities, recurrence, and reminders.'}
                 </p>
               </div>
@@ -2051,7 +2129,7 @@ function QuickAddDialog({
             <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
               <p className="text-sm font-semibold text-[#A24628]">Add {bulkLines.length} tasks?</p>
               <p className="mt-1 text-sm text-[#8A5A44]">
-                Cancel to keep editing. Add 1 task joins the cleaned lines into one task title. Add {bulkLines.length} tasks creates one task per line.
+                Review the pasted list, then either combine it into one task or create one task per line.
               </p>
               <div className="mt-4 flex flex-wrap justify-end gap-3">
                 <button
@@ -2067,7 +2145,7 @@ function QuickAddDialog({
                   onClick={() => void createBulkTasks('single')}
                   className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSaving ? 'Adding...' : 'Add 1 task'}
+                  {isSaving ? 'Adding...' : 'Combine into 1 task'}
                 </button>
                 <button
                   type="button"
@@ -2075,7 +2153,7 @@ function QuickAddDialog({
                   onClick={() => void createBulkTasks('many')}
                   className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSaving ? 'Adding...' : `Add ${bulkLines.length} tasks`}
+                  {isSaving ? 'Adding...' : `Add all ${bulkLines.length}`}
                 </button>
               </div>
             </section>
@@ -2112,6 +2190,8 @@ function TaskGroup({
   emptyMessage,
   onToggleTask,
   onOpenTask,
+  collapsible = false,
+  defaultCollapsed = false,
 }: {
   title: string;
   subtitle?: string;
@@ -2121,7 +2201,12 @@ function TaskGroup({
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
 }) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const isCollapsed = collapsible && collapsed;
+
   return (
     <section className="rounded-[18px] bg-transparent">
       <div className="mb-2 flex items-center justify-between gap-3 px-1">
@@ -2129,16 +2214,29 @@ function TaskGroup({
           <h3 className="text-[18px] font-semibold text-[#202020]">{title}</h3>
           {subtitle ? <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p> : null}
         </div>
-        <span className="text-xs font-medium text-[#8a8076]">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-[#8a8076]">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={() => setCollapsed(value => !value)}
+              className="rounded-full border border-[#e7ddd4] bg-white px-3 py-1 text-xs font-semibold text-[#6d5c50] transition hover:bg-[#fbf7f3]"
+            >
+              {isCollapsed ? 'Show' : 'Hide'}
+            </button>
+          ) : null}
+        </div>
       </div>
-      <TaskListBlock
-        payload={payload}
-        todayStartMs={todayStartMs}
-        tasks={tasks}
-        emptyMessage={emptyMessage}
-        onToggleTask={onToggleTask}
-        onOpenTask={onOpenTask}
-      />
+      {!isCollapsed ? (
+        <TaskListBlock
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={tasks}
+          emptyMessage={emptyMessage}
+          onToggleTask={onToggleTask}
+          onOpenTask={onOpenTask}
+        />
+      ) : null}
     </section>
   );
 }
@@ -2207,7 +2305,7 @@ function TaskRow({
           onOpenTask(task.id);
         }
       }}
-      className="flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2.5 text-left transition hover:bg-[#fcfaf7] last:border-b-0"
+      className="flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition hover:bg-[#fcfaf7] last:border-b-0 md:px-4"
     >
       <button
         onClick={event => {
@@ -2235,9 +2333,10 @@ function TaskRow({
           ) : null}
           {task.recurringRule ? <span className={overdue ? 'text-[#d1453b]' : ''}>↻</span> : null}
           {task.parentTaskId ? <span>Subtask</span> : null}
+          <span className="md:hidden">{locationLabel}</span>
         </div>
       </div>
-      <div className="mt-0.5 hidden min-w-[120px] shrink-0 text-right text-xs text-[#8a8076] md:block">
+      <div className="mt-0.5 hidden min-w-[180px] shrink-0 text-right text-xs text-[#8a8076] md:block">
         {locationLabel}
       </div>
     </div>

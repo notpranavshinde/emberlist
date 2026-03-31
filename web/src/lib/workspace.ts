@@ -90,6 +90,12 @@ export function getInboxTasks(payload: SyncPayload): Task[] {
         .sort(compareTasks);
 }
 
+export function getCompletedInboxTasks(payload: SyncPayload): Task[] {
+    return getCompletedTasks(payload)
+        .filter(task => task.projectId === null)
+        .sort(compareTasks);
+}
+
 export function getProjectById(payload: SyncPayload, projectId: string): Project | undefined {
     return payload.projects.find(project => project.id === projectId && !project.deletedAt);
 }
@@ -111,6 +117,12 @@ export function getProjectTasks(payload: SyncPayload, projectId: string, include
             !task.deletedAt &&
             (includeArchived || task.status !== 'ARCHIVED')
         )
+        .sort(compareTasks);
+}
+
+export function getCompletedProjectTasks(payload: SyncPayload, projectId: string): Task[] {
+    return getCompletedTasks(payload)
+        .filter(task => task.projectId === projectId)
         .sort(compareTasks);
 }
 
@@ -154,6 +166,13 @@ export function getUpcomingGroups(payload: SyncPayload): Array<{ dateKey: string
         .map(([dateKey, tasks]) => ({ dateKey, tasks }));
 }
 
+export function getUpcomingCompletedTasks(payload: SyncPayload): Task[] {
+    const tomorrowStart = startOfTomorrow().getTime();
+    return getCompletedTasks(payload)
+        .filter(task => task.dueAt !== null && task.dueAt >= tomorrowStart)
+        .sort(compareTasks);
+}
+
 export function searchTasks(payload: SyncPayload, query: string, filters: Set<SearchFilter>): Task[] {
     const normalizedQuery = query.trim().toLowerCase();
     const projects = new Map(payload.projects.map(project => [project.id, project]));
@@ -161,6 +180,28 @@ export function searchTasks(payload: SyncPayload, query: string, filters: Set<Se
     const reminderTaskIds = new Set(payload.reminders.filter(reminder => !reminder.deletedAt).map(reminder => reminder.taskId));
 
     return getOpenTasks(payload)
+        .filter(task => {
+            if (!normalizedQuery) return true;
+            const projectName = task.projectId ? projects.get(task.projectId)?.name ?? '' : 'inbox';
+            const sectionName = task.sectionId ? sections.get(task.sectionId)?.name ?? '' : '';
+            return [
+                task.title,
+                task.description,
+                projectName,
+                sectionName,
+            ].join(' ').toLowerCase().includes(normalizedQuery);
+        })
+        .filter(task => matchesFilters(task, filters, reminderTaskIds))
+        .sort(compareTasks);
+}
+
+export function searchCompletedTasks(payload: SyncPayload, query: string, filters: Set<SearchFilter>): Task[] {
+    const normalizedQuery = query.trim().toLowerCase();
+    const projects = new Map(payload.projects.map(project => [project.id, project]));
+    const sections = new Map(payload.sections.map(section => [section.id, section]));
+    const reminderTaskIds = new Set(payload.reminders.filter(reminder => !reminder.deletedAt).map(reminder => reminder.taskId));
+
+    return getCompletedTasks(payload)
         .filter(task => {
             if (!normalizedQuery) return true;
             const projectName = task.projectId ? projects.get(task.projectId)?.name ?? '' : 'inbox';
@@ -396,6 +437,10 @@ export function deleteSection(payload: SyncPayload, sectionId: string): SyncPayl
 
 function getOpenTasks(payload: SyncPayload): Task[] {
     return payload.tasks.filter(task => !task.deletedAt && task.status === 'OPEN');
+}
+
+function getCompletedTasks(payload: SyncPayload): Task[] {
+    return payload.tasks.filter(task => !task.deletedAt && task.status === 'COMPLETED');
 }
 
 function compareTasks(left: Task, right: Task): number {
