@@ -1208,7 +1208,7 @@ function SearchPage({
       </section>
 
       <TaskGroup
-        title={`${results.length} result${results.length === 1 ? '' : 's'}`}
+        title="Results"
         payload={payload}
         todayStartMs={todayStartMs}
         tasks={results}
@@ -1572,17 +1572,16 @@ function ProjectPage({
 
           <div className="mt-5 space-y-3">
             {sections.length ? (
-              sections.map(section => {
-                const sectionTaskCount = tasks.filter(task => task.sectionId === section.id).length;
-                return (
-                  <div key={section.id} className="rounded-[18px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3">
-                    <p className="text-sm font-semibold text-[#1E2D2F]">{section.name}</p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">
-                      {sectionTaskCount} task{sectionTaskCount === 1 ? '' : 's'}
-                    </p>
-                  </div>
-                );
-              })
+              <div className="flex flex-wrap gap-2">
+                {sections.map(section => (
+                  <span
+                    key={section.id}
+                    className="rounded-full border border-[#E7DDD4] bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]"
+                  >
+                    {section.name}
+                  </span>
+                ))}
+              </div>
             ) : (
               <div className="rounded-[18px] border border-dashed border-[#D9CABC] bg-[#FBF7F3] px-4 py-6 text-center">
                 <p className="text-sm font-semibold text-[#1E2D2F]">No sections yet</p>
@@ -1621,6 +1620,7 @@ function TaskDetailPage({
       key={task.id}
       payload={payload}
       task={task}
+      returnPath={task.projectId ? `/project/${task.projectId}` : '/inbox'}
       onSaveTask={onSaveTask}
       onArchiveTask={onArchiveTask}
       onDeleteTask={onDeleteTask}
@@ -1631,12 +1631,14 @@ function TaskDetailPage({
 function TaskEditor({
   payload,
   task,
+  returnPath,
   onSaveTask,
   onArchiveTask,
   onDeleteTask,
 }: {
   payload: SyncPayload;
   task: Task;
+  returnPath: string;
   onSaveTask: (taskId: string, updater: (task: Task) => Task) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -1656,6 +1658,54 @@ function TaskEditor({
     toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false)
   );
   const sectionOptions = projectId ? getProjectSections(payload, projectId) : [];
+  const isDirty =
+    title.trim() !== task.title ||
+    description.trim() !== task.description ||
+    (projectId || null) !== task.projectId ||
+    (projectId ? sectionId || null : null) !== task.sectionId ||
+    priority !== task.priority ||
+    allDay !== task.allDay ||
+    dueAt !== toInputValue(task.dueAt ?? null, task.allDay) ||
+    deadlineEnabled !== Boolean(task.deadlineAt) ||
+    deadlineAllDay !== (task.deadlineAllDay ?? false) ||
+    deadlineAt !== toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false);
+  useEffect(() => {
+    if (!isDirty) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (anchor.target && anchor.target !== '_self') return;
+
+      const href = anchor.getAttribute('href');
+      if (!href || href === '#' || href === window.location.hash) return;
+      if (!href.startsWith('#/') && !href.startsWith('/')) return;
+
+      const shouldLeave = window.confirm('Discard your unsaved task changes?');
+      if (!shouldLeave) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleDocumentClick, true);
+    };
+  }, [isDirty]);
 
   function saveTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1680,17 +1730,30 @@ function TaskEditor({
     const confirmed = window.confirm(`Delete "${task.title}"? This will sync as a deletion tombstone.`);
     if (!confirmed) return;
     onDeleteTask(task.id);
-    navigate(-1);
+    navigate(returnPath);
+  }
+
+  function goBack() {
+    if (isDirty && !window.confirm('Discard your unsaved task changes?')) {
+      return;
+    }
+    navigate(returnPath);
   }
 
   return (
     <div className="space-y-6">
       <HeroCard
         eyebrow="Task"
-        title={task.title}
+        title={title.trim() || task.title}
         description="Edit the task details that sync between Android and web."
         actions={
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={goBack}
+              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            >
+              Back
+            </button>
             <button
               onClick={() => onArchiveTask(task.id)}
               className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
@@ -1709,6 +1772,11 @@ function TaskEditor({
 
       <form onSubmit={saveTask} className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="space-y-4 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+          {isDirty ? (
+            <p className="rounded-[18px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-3 text-sm text-[#A24628]">
+              You have unsaved changes.
+            </p>
+          ) : null}
           <Field label="Title">
             <input
               value={title}
@@ -1991,7 +2059,6 @@ function QuickAddDialog({
   onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onShowBanner: (tone: Banner['tone'], message: string) => void;
 }) {
-  const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const [input, setInput] = useState('');
   const [description, setDescription] = useState('');
@@ -2018,7 +2085,6 @@ function QuickAddDialog({
       const taskId = await onCreateTask(previewDraft);
       if (taskId) {
         onClose();
-        navigate(`/task/${taskId}`);
       }
     } finally {
       setIsSaving(false);
@@ -2033,7 +2099,6 @@ function QuickAddDialog({
         const taskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 task.' });
         if (taskId) {
           onClose();
-          navigate(`/task/${taskId}`);
         }
         return;
       }
@@ -2227,7 +2292,7 @@ function TaskGroup({
               onClick={() => setCollapsed(value => !value)}
               className="rounded-full border border-[#e7ddd4] bg-white px-3 py-1 text-xs font-semibold text-[#6d5c50] transition hover:bg-[#fbf7f3]"
             >
-              {isCollapsed ? 'Show' : 'Hide'}
+              {isCollapsed ? `Show ${title.toLowerCase()}` : `Hide ${title.toLowerCase()}`}
             </button>
           ) : null}
         </div>
