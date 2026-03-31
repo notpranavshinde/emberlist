@@ -5,3 +5,16 @@ html, body, #root {
   margin: 0;
   padding: 0;
 }
+
+body {
+  background: #F7F4F0;
+  color: #221E1C;
+  font-family: "Aptos", "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}

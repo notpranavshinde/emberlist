@@ -76,7 +76,30 @@ export class DriveSyncService {
         return finalPayload;
     }
 
+    async resetRemoteSyncFile() {
+        if (!this.accessToken) await this.login();
+
+        const fileIds = await this.findSyncFileIds();
+        if (!fileIds.length) {
+            return;
+        }
+
+        for (const fileId of fileIds) {
+            const response = await this.authorizedFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) {
+                throw new Error(await this.buildGoogleApiError('reset cloud sync file', response));
+            }
+        }
+    }
+
     private async findSyncFileId(): Promise<string | null> {
+        const fileIds = await this.findSyncFileIds();
+        return fileIds[0] ?? null;
+    }
+
+    private async findSyncFileIds(): Promise<string[]> {
         const params = new URLSearchParams({
             spaces: 'appDataFolder',
             fields: 'files(id,modifiedTime)',
@@ -89,7 +112,7 @@ export class DriveSyncService {
         }
 
         const body = await response.json() as DriveFileListResponse;
-        const latestFile = (body.files ?? [])
+        return (body.files ?? [])
             .filter((file): file is { id: string; modifiedTime?: string | null } => typeof file.id === 'string' && file.id.length > 0)
             .sort((left, right) => {
                 const leftTime = parseDriveModifiedTime(left.modifiedTime);
@@ -98,9 +121,8 @@ export class DriveSyncService {
                     return rightTime - leftTime;
                 }
                 return right.id.localeCompare(left.id);
-            })[0];
-
-        return latestFile?.id ?? null;
+            })
+            .map(file => file.id);
     }
 
     private async uploadPayload(fileId: string | null, payload: SyncPayload) {

@@ -1,10 +1,11 @@
 # Emberlist (Offline Task Manager)
 
-Emberlist is an offline-first task manager built around fast capture, local-first data, and deterministic sync. The Android app is the primary client today, and the project now has the data model, merge engine, and Google Drive sync foundations needed to support Android + Web without a custom backend.
+Emberlist is an offline-first task manager built around fast capture, local-first data, and deterministic sync. It now has a functional Android client and a functional web client sharing the same `SyncPayload` contract and Google Drive appData sync file, so the same workspace can be used across Android and the browser without a custom backend.
 
 ## Features
 
 - Offline‑first local database
+- Functional web client with routed `Today`, `Upcoming`, `Search`, `Browse`, `Inbox`, Project, Task, and Settings screens
 - Quick Add with live parsing (due, deadline, priority, project, recurrence, reminders)
 - Bulk paste in Quick Add: paste a multi-line list and create one task or one task per line
 - Live project suggestions when typing `#`
@@ -28,6 +29,21 @@ Emberlist is an offline-first task manager built around fast capture, local-firs
 - Backup export/import (JSON)
 - Google Drive sync through Drive appData
 - Clear completed tasks
+
+## Current Status
+
+- Android app is the most complete client.
+- Web app is now functional for daily task/project use:
+  - browse inbox and projects
+  - create projects and sections
+  - create, edit, complete, archive, and delete tasks
+  - search tasks with practical filters
+  - sync to the same Google Drive appData file as Android
+  - reset web cache and reset cloud sync for recovery
+- Web parity is not complete yet:
+  - Android-style quick parser is not implemented on web yet
+  - activity history is still Android-first
+  - location reminder authoring/editing is still Android-first
 
 ## Architecture
 
@@ -79,8 +95,9 @@ Emberlist is an offline-first task manager built around fast capture, local-firs
 - Web client exists in `web/` and is being developed against the same sync contract.
 
 ### Not done yet
-- End-to-end conflict validation across Android and Web
-- Full web polish, auth hardening, and production deployment flow
+- Full Android feature parity on web
+- More end-to-end conflict validation and sync UX hardening
+- Cleaner production configuration around web deployment and OAuth setup
 
 ## Android + Web Sync Build Plan
 
@@ -155,6 +172,27 @@ These are the important end-to-end cases still to verify.
 2. Let Gradle sync.
 3. Run the `app` configuration on an emulator or device (Android 8+).
 
+## Web Setup
+
+The web client lives in [`web/`](./web).
+
+1. Install dependencies:
+   - `cd web`
+   - `npm install`
+2. Configure the web OAuth client:
+   - create `web/.env.local`
+   - add `VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com`
+3. Start the dev server:
+   - `npm run dev`
+4. Build for production:
+   - `npm run build`
+
+Example env file:
+
+```bash
+VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+```
+
 ### Build variants
 - `debug`: default for development
 - `release`: non‑minified by default
@@ -196,6 +234,54 @@ Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/dat
   - Configure the corresponding web OAuth client in the same Google Cloud project.
   - Use the same Google Cloud project and Drive scope as the web client.
   - Keep Android and web pointed at the same `SyncPayload` contract and the same Drive appData file.
+  - For the web client, configure `VITE_GOOGLE_CLIENT_ID` with the web OAuth client ID.
+  - Add every browser origin you will use to the web OAuth client’s **Authorized JavaScript origins**.
+    - Development examples:
+      - `http://localhost:5173`
+      - `http://127.0.0.1:5173`
+    - Production example:
+      - `https://emberlist.yourdomain.com`
+
+## Deploying The Web App
+
+Emberlist’s web client is a static Vite app. That means you do not need a custom backend just to use it from another computer. The browser stores a local IndexedDB cache on each machine, and cross-device state is shared through Google Drive appData sync.
+
+### What you need
+
+1. A public HTTPS URL for the web app.
+2. A Google web OAuth client in the same Google Cloud project as Android sync.
+3. That deployment URL added to the OAuth client’s **Authorized JavaScript origins**.
+4. The same Google account signed in on both devices if you want both devices to use the same Drive-backed workspace.
+
+### Simplest hosting options
+
+- Vercel:
+  - import the repo
+  - set the web root to `web/` if deploying as a separate project
+  - build command: `npm run build`
+  - output directory: `dist`
+  - environment variable: `VITE_GOOGLE_CLIENT_ID=...`
+- Cloudflare Pages:
+  - import the repo
+  - build command: `npm run build`
+  - output directory: `dist`
+  - environment variable: `VITE_GOOGLE_CLIENT_ID=...`
+
+### Recommended first production path
+
+1. Push the repo to GitHub.
+2. Deploy `web/` to Vercel or Cloudflare Pages.
+3. Add the deployed HTTPS origin to the Google web OAuth client.
+4. Set `VITE_GOOGLE_CLIENT_ID` in the host’s environment settings.
+5. Open the deployed site on your other computer.
+6. Sign in with the same Google account and run `Sync now`.
+
+### Practical behavior after deployment
+
+- Each computer has its own local browser cache.
+- Google Drive appData is the shared cloud state.
+- If you add/change tasks on one machine, sync there, then sync on the other machine, the other machine will pull the merged workspace.
+- Because sync is currently explicit on web, you should treat `Sync now` as part of the workflow when switching devices.
 
 ## Tests
 
