@@ -66,9 +66,18 @@ class SettingsViewModel(
 
     fun handleDriveSignInResult(data: Intent?) {
         viewModelScope.launch {
-            val state = driveAuthManager.handleSignInResult(data)
-            if (!state.hasDriveScope) {
-                _syncUiState.value = SyncUiState(error = "Google Drive permission was not granted.")
+            val result = driveAuthManager.handleSignInResult(data)
+            val state = result.state
+            if (state.hasDriveScope) {
+                _syncUiState.value = SyncUiState(status = "Google Drive connected.")
+            } else if (state.isSignedIn) {
+                _syncUiState.value = SyncUiState(
+                    error = result.errorMessage
+                        ?: "Google account connected, but Drive access is still missing. Disconnect and reconnect if this keeps happening."
+                )
+                settingsRepository.updateSyncEnabled(false)
+            } else {
+                _syncUiState.value = SyncUiState(error = result.errorMessage ?: "Google sign-in did not return a usable account.")
                 settingsRepository.updateSyncEnabled(false)
             }
         }

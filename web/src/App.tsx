@@ -61,7 +61,8 @@ function App() {
       alert("Sync Complete!");
     } catch (err) {
       console.error("Sync Failed", err);
-      alert("Cloud Sync failed. Check the console for details.");
+      const message = err instanceof Error ? err.message : "Cloud Sync failed. Check the console for details.";
+      alert(message);
     } finally {
       setIsSyncing(false);
     }

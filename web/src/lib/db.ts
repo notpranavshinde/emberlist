@@ -25,8 +25,16 @@ export class EmberlistDB {
     async savePayload(payload: SyncPayload) {
         if (!this.db) await this.init();
         const tx = this.db!.transaction(['projects', 'sections', 'tasks', 'reminders', 'locations', 'metadata'], 'readwrite');
-        
-        // Clear and refill stores
+
+        await Promise.all([
+            tx.objectStore('projects').clear(),
+            tx.objectStore('sections').clear(),
+            tx.objectStore('tasks').clear(),
+            tx.objectStore('reminders').clear(),
+            tx.objectStore('locations').clear(),
+            tx.objectStore('metadata').clear(),
+        ]);
+
         await Promise.all([
             ...payload.projects.map(p => tx.objectStore('projects').put(p)),
             ...payload.sections.map(s => tx.objectStore('sections').put(s)),

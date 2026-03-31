@@ -78,7 +78,7 @@ export class SyncEngine {
             if (task.deletedAt) return task;
 
             let changed = false;
-            let normalized = { ...task };
+            const normalized = { ...task };
 
             if (normalized.projectId && !liveProjectIds.has(normalized.projectId)) {
                 normalized.projectId = null;

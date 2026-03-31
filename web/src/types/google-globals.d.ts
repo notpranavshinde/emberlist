@@ -1,9 +1,12 @@
 type TokenResponse = {
-    access_token: string;
+    access_token?: string;
+    error?: string;
 };
 
 type TokenClient = {
-    requestAccessToken(options?: { prompt?: string }): void;
+    callback: (response: TokenResponse) => void;
+    error_callback?: (error: { type: string }) => void;
+    requestAccessToken(options?: { prompt?: '' | 'consent' }): void;
 };
 
 declare const google: {
@@ -13,27 +16,8 @@ declare const google: {
                 client_id: string;
                 scope: string;
                 callback: (response: TokenResponse) => void;
+                error_callback?: (error: { type: string }) => void;
             }): TokenClient;
-        };
-    };
-};
-
-declare const gapi: {
-    load(api: string, callback: () => void): void;
-    client: {
-        init(config: { discoveryDocs: string[] }): Promise<void>;
-        drive: {
-            files: {
-                list(params: {
-                    spaces: string;
-                    fields: string;
-                    q: string;
-                }): Promise<{
-                    result: {
-                        files?: Array<{ id?: string | null; name?: string | null }>;
-                    };
-                }>;
-            };
         };
     };
 };
