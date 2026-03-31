@@ -1,0 +1,35 @@
+[31mfailed to load config from C:\Users\notpr\AndroidStudioProjects\emberlist\web\vite.config.ts[39m
+[31merror when starting dev server:
+Error: Build failed with 2 errors:
+
+[31m[UNLOADABLE_DEPENDENCY] Error:[0m Could not load node_modules/@tailwindcss/oxide-win32-x64-msvc/tailwindcss-oxide.win32-x64-msvc.node
+     [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m node_modules/@tailwindcss/oxide/index.js:131:33 [38;5;246m][0m
+     [38;5;246m│[0m
+ [38;5;246m131 │[0m [38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249m [0m[38;5;249mc[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249ms[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249mb[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249md[0m[38;5;249mi[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249me[0m[38;5;249mq[0m[38;5;249mu[0m[38;5;249mi[0m[38;5;249mr[0m[38;5;249me[0m[38;5;249m([0m'@tailwindcss/oxide-win32-x64-msvc'[38;5;249m)[0m
+ [38;5;240m    │[0m                                 ─────────────────┬─────────────────  
+ [38;5;240m    │[0m                                                  ╰─────────────────── stream did not contain valid UTF-8
+[38;5;246m─────╯[0m
+
+[plugin externalize-deps]
+Error: spawn EPERM
+    at ChildProcess.spawn (node:internal/child_process:420:11)
+    at spawn (node:child_process:786:9)
+    at Object.execFile (node:child_process:349:17)
+    at exec (node:child_process:236:25)
+    at optimizeSafeRealPathSync (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:1954:2)
+    at windowsSafeRealPathSync (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:1940:3)
+    at getRealPath (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:32277:36)
+    at tryResolveRealFileOrType (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:32271:9)
+    at tryCleanFsResolve (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:32015:21)
+    at tryFsResolve (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:32008:14)
+    at aggregateBindingErrorsIntoJsError (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/rolldown/dist/shared/error-BO4SlZV_.mjs:48:18)
+    at unwrapBindingResult (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/rolldown/dist/shared/error-BO4SlZV_.mjs:18:128)
+    at #build (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/rolldown/dist/shared/rolldown-build-yQC7KN8K.mjs:3311:34)
+    at async bundleConfigFile (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:34495:17)
+    at async bundleAndLoadConfigFile (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:34403:18)
+    at async loadConfigFromFile (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:34372:42)
+    at async resolveConfig (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:33996:22)
+    at async _createServer (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/chunks/node.js:25892:65)
+    at async CAC.<anonymous> (file:///C:/Users/notpr/AndroidStudioProjects/emberlist/web/node_modules/vite/dist/node/cli.js:709:18) {
+  errors: [Getter/Setter]
+}[39m

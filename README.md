@@ -40,6 +40,7 @@ Emberlist is an offline-first task manager built around fast capture, local-firs
   - search tasks with practical filters
   - sync to the same Google Drive appData file as Android
   - reset web cache and reset cloud sync for recovery
+  - desktop-first shell and task lists refit toward Todoist-style information density
 - Web parity is not complete yet:
   - Android-style quick parser is not implemented on web yet
   - activity history is still Android-first

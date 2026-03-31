@@ -8,6 +8,7 @@ import {
 import type {
     Priority,
     Project,
+    Reminder,
     Section,
     SyncPayload,
     Task,
@@ -31,7 +32,9 @@ export type TaskDraft = {
     title: string;
     description: string;
     projectId: string | null;
+    projectName: string | null;
     sectionId: string | null;
+    sectionName: string | null;
     priority: Priority;
     dueAt: number | null;
     allDay: boolean;
@@ -40,7 +43,12 @@ export type TaskDraft = {
     recurringRule: string | null;
     deadlineRecurringRule: string | null;
     parentTaskId: string | null;
+    reminders: TaskReminderDraft[];
 };
+
+export type TaskReminderDraft =
+    | { kind: 'ABSOLUTE'; timeAt: number }
+    | { kind: 'OFFSET'; offsetMinutes: number };
 
 export type TodayViewData = {
     overdue: Task[];
@@ -55,7 +63,9 @@ export function createTaskDraft(projectId: string | null = null): TaskDraft {
         title: '',
         description: '',
         projectId,
+        projectName: null,
         sectionId: null,
+        sectionName: null,
         priority: 'P4',
         dueAt: null,
         allDay: true,
@@ -64,6 +74,7 @@ export function createTaskDraft(projectId: string | null = null): TaskDraft {
         recurringRule: null,
         deadlineRecurringRule: null,
         parentTaskId: null,
+        reminders: [],
     };
 }
 
@@ -103,11 +114,11 @@ export function getProjectTasks(payload: SyncPayload, projectId: string, include
         .sort(compareTasks);
 }
 
-export function getTodayViewData(payload: SyncPayload): TodayViewData {
-    const now = Date.now();
-    const todayStart = startOfDay(now).getTime();
-    const todayEnd = endOfDay(now).getTime();
-
+export function getTodayViewData(
+    payload: SyncPayload,
+    todayStart: number,
+    todayEnd: number,
+): TodayViewData {
     const openTasks = getOpenTasks(payload);
     const overdue = openTasks.filter(task => task.dueAt !== null && task.dueAt < todayStart).sort(compareTasks);
     const today = openTasks.filter(task => task.dueAt !== null && task.dueAt >= todayStart && task.dueAt <= todayEnd).sort(compareTasks);
@@ -167,12 +178,16 @@ export function searchTasks(payload: SyncPayload, query: string, filters: Set<Se
 
 export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload {
     const now = Date.now();
+    const resolvedProject = resolveProject(payload, draft, now);
+    const resolvedSection = resolveSection(payload, draft, resolvedProject?.id ?? draft.projectId, now);
+    const projectId = resolvedProject?.id ?? draft.projectId;
+    const sectionId = resolvedSection?.id ?? draft.sectionId;
     const task: Task = {
         id: crypto.randomUUID(),
         title: draft.title.trim(),
         description: draft.description.trim(),
-        projectId: draft.projectId,
-        sectionId: draft.sectionId,
+        projectId,
+        sectionId,
         priority: draft.priority,
         dueAt: draft.dueAt,
         allDay: draft.allDay,
@@ -191,9 +206,31 @@ export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload 
         deletedAt: null,
     };
 
+    const reminders = desiredReminderDrafts(draft, task).map<Reminder>(reminder => ({
+        id: crypto.randomUUID(),
+        taskId: task.id,
+        type: 'TIME',
+        timeAt: reminder.kind === 'ABSOLUTE' ? reminder.timeAt : null,
+        offsetMinutes: reminder.kind === 'OFFSET' ? reminder.offsetMinutes : null,
+        locationId: null,
+        locationTriggerType: null,
+        enabled: true,
+        ephemeral: false,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+    }));
+
     return finalizePayload({
         ...payload,
+        projects: resolvedProject && !payload.projects.some(project => project.id === resolvedProject.id)
+            ? [...payload.projects, resolvedProject]
+            : payload.projects,
+        sections: resolvedSection && !payload.sections.some(section => section.id === resolvedSection.id)
+            ? [...payload.sections, resolvedSection]
+            : payload.sections,
         tasks: [...payload.tasks, task],
+        reminders: [...payload.reminders, ...reminders],
     });
 }
 
@@ -392,6 +429,70 @@ function nextTaskOrder(payload: SyncPayload, projectId: string | null, sectionId
     return payload.tasks
         .filter(task => task.projectId === projectId && task.sectionId === sectionId && !task.deletedAt)
         .reduce((max, task) => Math.max(max, task.order), -1) + 1;
+}
+
+function resolveProject(payload: SyncPayload, draft: TaskDraft, now: number): Project | null {
+    if (draft.projectId) {
+        return payload.projects.find(project => project.id === draft.projectId && !project.deletedAt) ?? null;
+    }
+
+    const projectName = draft.projectName?.trim();
+    if (!projectName) return null;
+
+    const existing = payload.projects.find(project => !project.deletedAt && project.name.localeCompare(projectName, undefined, { sensitivity: 'base' }) === 0);
+    if (existing) return existing;
+
+    return {
+        id: crypto.randomUUID(),
+        name: projectName,
+        color: '#EE6A3C',
+        favorite: false,
+        order: nextProjectOrder(payload),
+        archived: false,
+        viewPreference: 'LIST',
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+    };
+}
+
+function resolveSection(payload: SyncPayload, draft: TaskDraft, projectId: string | null, now: number): Section | null {
+    if (!projectId) return null;
+    if (draft.sectionId) {
+        return payload.sections.find(section => section.id === draft.sectionId && !section.deletedAt) ?? null;
+    }
+
+    const sectionName = draft.sectionName?.trim();
+    if (!sectionName) return null;
+
+    const existing = payload.sections.find(section =>
+        section.projectId === projectId &&
+        !section.deletedAt &&
+        section.name.localeCompare(sectionName, undefined, { sensitivity: 'base' }) === 0
+    );
+    if (existing) return existing;
+
+    return {
+        id: crypto.randomUUID(),
+        projectId,
+        name: sectionName,
+        order: nextSectionOrder(payload, projectId),
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+    };
+}
+
+function desiredReminderDrafts(draft: TaskDraft, task: Task): TaskReminderDraft[] {
+    if (draft.reminders.length) {
+        return draft.reminders;
+    }
+
+    if (task.dueAt !== null && !task.allDay) {
+        return [{ kind: 'ABSOLUTE', timeAt: task.dueAt }];
+    }
+
+    return [];
 }
 
 function matchesFilters(task: Task, filters: Set<SearchFilter>, reminderTaskIds: Set<string>): boolean {

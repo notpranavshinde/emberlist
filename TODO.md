@@ -36,9 +36,9 @@
 - [x] Material-3 inspired UI with Sidebar and TaskList.
 
 ## Phase 5: Validation
-- [ ] Android creates task offline -> later syncs to Drive -> Web receives it.
-- [ ] Web edits task -> Android merges and updates correctly.
-- [ ] Delete on one device does not resurrect on another.
+- [x] Android creates task offline -> later syncs to Drive -> Web receives it.
+- [x] Web edits task -> Android merges and updates correctly.
+- [x] Delete on one device does not resurrect on another.
 - [ ] Simulate concurrent edits and verify deterministic winner selection.
 
 ## Done In This Slice
@@ -47,6 +47,7 @@
 - Implemented `db.ts` using IndexedDB for offline-first web storage.
 - Implemented `syncService.ts` for Google Drive AppData integration.
 - Added "Import JSON" for manual testing and "Sync Cloud" for Google Drive sync.
+- Reworked the web shell and task list presentation toward a Todoist-style desktop layout without changing the sync contract.
 - Implemented Android manual Google Drive sync with one `emberlist_sync.json` file in appData.
 - Added Android Google connect/disconnect, enable sync toggle, manual sync, and last synced state in Settings.
 - Added Android `DriveAuthManager`, `DriveSyncService`, and service-level unit tests.

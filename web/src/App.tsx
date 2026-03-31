@@ -1,8 +1,10 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, ComponentType, FormEvent, ReactNode } from 'react';
+import type { CSSProperties, ChangeEvent, ComponentType, FormEvent, ReactNode } from 'react';
 import {
+  Bell,
   Calendar,
   Check,
+  Circle,
   ChevronRight,
   Cloud,
   Folder,
@@ -10,6 +12,7 @@ import {
   Import,
   Layers3,
   ListTodo,
+  PanelLeft,
   Plus,
   RefreshCw,
   Search,
@@ -26,9 +29,11 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
+import { addDays, endOfDay, format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
 import { RecoveryScreen } from './components/RecoveryScreen';
+import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
+import { parseQuickAdd, type QuickAddResult, type ReminderSpec as ParsedReminderSpec } from './lib/quickParser';
 import { ensureSyncPayload } from './lib/syncPayload';
 import { DriveSyncService, type CloudSession } from './lib/syncService';
 import { SyncEngine } from './lib/syncEngine';
@@ -37,7 +42,6 @@ import {
   createProject,
   createSection,
   createTask,
-  createTaskDraft,
   deleteProject,
   deleteSection,
   deleteTask,
@@ -50,6 +54,7 @@ import {
   getTodayViewData,
   getUpcomingGroups,
   searchTasks,
+  type TaskReminderDraft,
   toggleTaskCompletion,
   type SearchFilter,
   type TaskDraft,
@@ -80,6 +85,10 @@ type Banner = {
   message: string;
 };
 type CloudStatusTone = 'ready' | 'idle' | 'warning' | 'muted';
+type QuickAddContext = {
+  defaultProjectId: string | null;
+  defaultDueToday: boolean;
+};
 
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);
@@ -480,8 +489,16 @@ function WorkspaceShell({
   onCloseQuickAdd,
 }: WorkspaceShellProps) {
   const location = useLocation();
+  const todayStartMs = useTodayStartMs();
+  const todayViewData = useMemo(
+    () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
+    [payload, todayStartMs]
+  );
   const title = getRouteTitle(location.pathname, payload);
   const projects = getActiveProjects(payload);
+  const favoriteProjects = projects.filter(project => project.favorite);
+  const regularProjects = projects.filter(project => !project.favorite);
+  const noDueCount = payload.tasks.filter(task => !task.deletedAt && task.status === 'OPEN' && task.dueAt === null).length;
   const cloudStatus = getCloudStatus({
     cloudConfigured,
     cloudSession,
@@ -489,60 +506,101 @@ function WorkspaceShell({
     isSyncing,
     lastCloudSyncAt,
   });
+  const workspaceIdentity = getWorkspaceIdentity(cloudSession);
+  const quickAddContext = useMemo(() => getQuickAddContext(location.pathname, payload), [location.pathname, payload]);
 
   return (
-    <div className="min-h-screen bg-[#F7F4F0] text-[#221E1C]">
-      <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col md:flex-row">
-        <aside className="hidden w-[300px] shrink-0 border-r border-[#E7DDD4] bg-[#F3EEE8] px-5 py-6 md:flex md:flex-col">
-          <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#9F7B63]">Emberlist</p>
-            <h1 className="mt-2 text-3xl font-semibold text-[#1E2D2F]">Workspace</h1>
+    <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
+      <div className="flex min-h-screen flex-col md:flex-row">
+        <aside className="hidden w-[300px] shrink-0 border-r border-[#ece7e3] bg-[#fdfcfb] px-3 py-3 md:flex md:flex-col">
+          <div className="flex items-center justify-between rounded-[16px] px-2 py-2">
+            <div className="flex items-center gap-3">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#4ea0d8] text-sm font-semibold text-white">
+                {workspaceIdentity.initial}
+              </div>
+              <div className="flex items-center gap-1 text-sm font-semibold text-[#2b2b2b]">
+                <span>{workspaceIdentity.label}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-[#6f6b66]">
+              <button className="rounded-md p-2 transition hover:bg-[#f3efeb]" aria-label="Notifications">
+                <Bell size={16} />
+              </button>
+              <button className="rounded-md p-2 transition hover:bg-[#f3efeb]" aria-label="Display options">
+                <PanelLeft size={16} />
+              </button>
+            </div>
           </div>
-          <nav className="space-y-1">
-            <RailLink to="/today" icon={Home} label="Today" />
-            <RailLink to="/upcoming" icon={Calendar} label="Upcoming" />
+
+          <button
+            onClick={onOpenQuickAdd}
+            className="mt-3 flex items-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed]"
+          >
+            <Plus size={16} />
+            <span>Add task</span>
+          </button>
+
+          <nav className="mt-3 space-y-0.5">
             <RailLink to="/search" icon={Search} label="Search" />
+            <RailLink to="/inbox" icon={ListTodo} label="Inbox" count={getInboxTasks(payload).length} />
+            <RailLink to="/today" icon={Home} label="Today" count={todayViewData.overdue.length + todayViewData.today.length} />
+            <RailLink to="/upcoming" icon={Calendar} label="Upcoming" />
             <RailLink to="/browse" icon={Layers3} label="Browse" />
             <RailLink to="/settings" icon={Settings} label="Settings" />
           </nav>
 
-          <div className="mt-8 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Projects</p>
-            <button
-              onClick={onOpenQuickAdd}
-              className="rounded-full bg-[#EE6A3C] p-2 text-white transition hover:bg-[#d75e33]"
-              aria-label="Quick add task"
-            >
-              <Plus size={16} />
-            </button>
+          <div className="mt-8">
+            <p className="px-3 text-xs font-semibold text-[#7e7a76]">Favorites</p>
+            <div className="mt-2 space-y-0.5">
+              <RailLink to="/search/no-due" icon={Circle} label="Tasks without due dates" count={noDueCount} compact />
+              {favoriteProjects.map(project => (
+                <RailLink
+                  key={project.id}
+                  to={`/project/${project.id}`}
+                  icon={Folder}
+                  label={project.name}
+                  count={getProjectTasks(payload, project.id).length}
+                  compact
+                  tint={project.color}
+                />
+              ))}
+            </div>
           </div>
 
-          <div className="mt-3 space-y-1 overflow-y-auto pr-1">
-            <RailLink to="/inbox" icon={ListTodo} label={`Inbox (${getInboxTasks(payload).length})`} compact />
-            {projects.map(project => (
+          <div className="mt-8 flex items-center justify-between px-3">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-[#5f5b57]">My Projects</p>
+              <span className="rounded bg-[#f1ece7] px-1.5 py-0.5 text-[10px] font-semibold text-[#7e7a76]">
+                USED: {projects.filter(project => !project.archived).length}/5
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 flex-1 space-y-0.5 overflow-y-auto">
+            {regularProjects.map(project => (
               <RailLink
                 key={project.id}
                 to={`/project/${project.id}`}
                 icon={Folder}
                 label={project.name}
+                count={getProjectTasks(payload, project.id).length}
                 compact
+                tint={project.color}
               />
             ))}
           </div>
 
-          <div className="mt-auto rounded-[28px] border border-[#E1D5CA] bg-white/90 p-4 shadow-sm">
+          <div className="mt-4 rounded-[18px] border border-[#ece7e3] bg-white px-3 py-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-[#1E2D2F]">Cloud sync</p>
+              <p className="text-sm font-semibold text-[#2b2b2b]">Cloud sync</p>
               <StatusPill label={cloudStatus.label} tone={cloudStatus.tone} />
             </div>
-            <p className="mt-3 text-sm text-[#1E2D2F]">
+            <p className="mt-2 text-xs leading-5 text-[#7a746d]">
               {cloudSession?.email ?? 'No Google account connected in this tab'}
             </p>
-            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">{cloudStatus.detail}</p>
             <button
               onClick={onCloudSync}
               disabled={isSyncing || !cloudConfigured}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
               <span>{isSyncing ? 'Syncing...' : 'Sync now'}</span>
@@ -550,7 +608,7 @@ function WorkspaceShell({
             {cloudSession ? (
               <button
                 onClick={onDisconnectCloud}
-                className="mt-3 w-full rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="mt-2 w-full rounded-full border border-[#ece7e3] bg-[#faf8f6] px-4 py-2.5 text-sm font-semibold text-[#2b2b2b] transition hover:bg-white"
               >
                 Disconnect
               </button>
@@ -559,24 +617,24 @@ function WorkspaceShell({
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-[#E7DDD4] bg-[#F7F4F0]/95 px-4 py-4 backdrop-blur md:px-8">
-            <div className="flex items-center justify-between gap-3">
+          <header className="sticky top-0 z-20 border-b border-[#ece7e3] bg-[#faf8f6]/95 px-4 py-4 backdrop-blur md:px-8">
+            <div className="mx-auto flex w-full max-w-[760px] items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63] md:hidden">Emberlist</p>
-                <h2 className="text-2xl font-semibold text-[#1E2D2F]">{title}</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">Emberlist</p>
+                <h2 className="text-2xl font-semibold text-[#202020]">{title}</h2>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={onCloudSync}
                   disabled={isSyncing}
-                  className="flex items-center gap-2 rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="flex items-center gap-2 rounded-full border border-[#ece7e3] bg-white px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
                   <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync'}</span>
                 </button>
                 <button
                   onClick={onOpenQuickAdd}
-                  className="flex items-center gap-2 rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+                  className="flex items-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
                 >
                   <Plus size={16} />
                   <span className="hidden sm:inline">Quick add</span>
@@ -584,7 +642,7 @@ function WorkspaceShell({
               </div>
             </div>
             {banner ? (
-              <div className={`mt-4 flex items-start justify-between gap-3 rounded-[24px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
+              <div className={`mx-auto mt-4 flex w-full max-w-[760px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
                 <p>{banner.message}</p>
                 <button onClick={onDismissBanner} className="rounded-full p-1 transition hover:bg-black/5" aria-label="Dismiss status message">
                   <X size={16} />
@@ -593,7 +651,8 @@ function WorkspaceShell({
             ) : null}
           </header>
 
-          <main className="flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-8">
+          <main className="flex-1 px-4 pb-24 pt-6 md:px-8 md:pb-8">
+            <div className="mx-auto w-full max-w-[760px]">
             <Routes>
               <Route path="/" element={<Navigate to="/today" replace />} />
               <Route
@@ -614,6 +673,10 @@ function WorkspaceShell({
               <Route
                 path="/search"
                 element={<SearchPage payload={payload} onToggleTask={onToggleTask} />}
+              />
+              <Route
+                path="/search/no-due"
+                element={<SearchPage payload={payload} onToggleTask={onToggleTask} forcedFilter="NO_DUE" />}
               />
               <Route
                 path="/browse"
@@ -671,6 +734,7 @@ function WorkspaceShell({
                 }
               />
             </Routes>
+            </div>
           </main>
         </div>
       </div>
@@ -686,7 +750,12 @@ function WorkspaceShell({
       </nav>
 
       {isQuickAddOpen ? (
-        <QuickAddDialog payload={payload} onClose={onCloseQuickAdd} onCreateTask={onCreateTask} />
+        <QuickAddDialog
+          payload={payload}
+          context={quickAddContext}
+          onClose={onCloseQuickAdd}
+          onCreateTask={onCreateTask}
+        />
       ) : null}
     </div>
   );
@@ -704,7 +773,11 @@ function TodayPage({
   onToggleTask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
-  const data = getTodayViewData(payload);
+  const todayStartMs = useTodayStartMs();
+  const data = useMemo(
+    () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
+    [payload, todayStartMs]
+  );
 
   return (
     <div className="space-y-6">
@@ -728,6 +801,8 @@ function TodayPage({
       <TaskGroup
         title="Overdue"
         subtitle="Open tasks that should already be done."
+        payload={payload}
+        todayStartMs={todayStartMs}
         tasks={data.overdue}
         emptyMessage="Nothing overdue."
         onToggleTask={onToggleTask}
@@ -737,6 +812,8 @@ function TodayPage({
       <TaskGroup
         title="Due today"
         subtitle="Tasks scheduled for today."
+        payload={payload}
+        todayStartMs={todayStartMs}
         tasks={data.today}
         emptyMessage="No tasks due today."
         onToggleTask={onToggleTask}
@@ -747,6 +824,8 @@ function TodayPage({
         <TaskGroup
           title="Completed today"
           subtitle="Recently finished work."
+          payload={payload}
+          todayStartMs={todayStartMs}
           tasks={data.completedToday}
           emptyMessage="Nothing completed yet today."
           onToggleTask={onToggleTask}
@@ -765,7 +844,11 @@ function UpcomingPage({
   onToggleTask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
-  const todayData = getTodayViewData(payload);
+  const todayStartMs = useTodayStartMs();
+  const todayData = useMemo(
+    () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
+    [payload, todayStartMs]
+  );
   const groups = getUpcomingGroups(payload);
 
   return (
@@ -780,6 +863,8 @@ function UpcomingPage({
         <TaskGroup
           title="Still overdue"
           subtitle="These are past due and still open."
+          payload={payload}
+          todayStartMs={todayStartMs}
           tasks={todayData.overdue}
           emptyMessage="Nothing overdue."
           onToggleTask={onToggleTask}
@@ -792,6 +877,8 @@ function UpcomingPage({
           <TaskGroup
             key={group.dateKey}
             title={format(new Date(group.dateKey), 'EEEE, MMM d')}
+            payload={payload}
+            todayStartMs={todayStartMs}
             tasks={group.tasks}
             emptyMessage="No tasks."
             onToggleTask={onToggleTask}
@@ -811,34 +898,61 @@ function UpcomingPage({
 function SearchPage({
   payload,
   onToggleTask,
+  forcedFilter,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
+  forcedFilter?: SearchFilter;
 }) {
   const navigate = useNavigate();
+  const todayStartMs = useTodayStartMs();
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<Set<SearchFilter>>(new Set(['ALL']));
+  const [userFilters, setUserFilters] = useState<Set<SearchFilter>>(new Set());
   const deferredQuery = useDeferredValue(query);
+  const filters = useMemo(() => {
+    if (forcedFilter) {
+      const next = new Set<SearchFilter>([forcedFilter]);
+      userFilters.forEach(filter => {
+        if (filter !== 'ALL' && filter !== forcedFilter) {
+          next.add(filter);
+        }
+      });
+      return next;
+    }
+
+    if (userFilters.size === 0) {
+      return new Set<SearchFilter>(['ALL']);
+    }
+
+    const next = new Set<SearchFilter>();
+    userFilters.forEach(filter => {
+      if (filter !== 'ALL') {
+        next.add(filter);
+      }
+    });
+    return next.size ? next : new Set<SearchFilter>(['ALL']);
+  }, [forcedFilter, userFilters]);
   const results = useMemo(
     () => searchTasks(payload, deferredQuery, filters),
     [deferredQuery, filters, payload]
   );
 
   function toggleFilter(filter: SearchFilter) {
-    setFilters(current => {
+    if (forcedFilter && filter === forcedFilter) return;
+
+    setUserFilters(current => {
       const next = new Set(current);
       if (filter === 'ALL') {
-        return new Set(['ALL']);
+        return new Set();
       }
 
-      next.delete('ALL');
       if (next.has(filter)) {
         next.delete(filter);
       } else {
         next.add(filter);
       }
 
-      return next.size ? next : new Set(['ALL']);
+      return next;
     });
   }
 
@@ -846,8 +960,12 @@ function SearchPage({
     <div className="space-y-6">
       <HeroCard
         eyebrow="Search"
-        title="Find tasks"
-        description="Search titles, descriptions, project names, and sections. Combine filters when you need to narrow the list fast."
+        title={forcedFilter === 'NO_DUE' ? 'Tasks without due dates' : 'Find tasks'}
+        description={
+          forcedFilter === 'NO_DUE'
+            ? 'This is a real filtered view of open tasks that do not have a due date yet.'
+            : 'Search titles, descriptions, project names, and sections. Combine filters when you need to narrow the list fast.'
+        }
       />
 
       <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
@@ -862,15 +980,18 @@ function SearchPage({
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {SEARCH_FILTERS.map(filter => {
-            const active = filters.has(filter.value);
+            const active = filter.value === 'ALL'
+              ? !forcedFilter && userFilters.size === 0
+              : filters.has(filter.value);
             return (
               <button
                 key={filter.value}
                 onClick={() => toggleFilter(filter.value)}
+                disabled={forcedFilter === filter.value}
                 className={`rounded-full px-3 py-2 text-sm font-medium transition ${active
                   ? 'bg-[#EE6A3C] text-white'
                   : 'border border-[#E1D5CA] bg-[#FBF7F3] text-[#6D5C50] hover:bg-white'
-                  }`}
+                  } ${forcedFilter === filter.value ? 'cursor-default opacity-90' : ''}`}
               >
                 {filter.label}
               </button>
@@ -881,6 +1002,8 @@ function SearchPage({
 
       <TaskGroup
         title={`${results.length} result${results.length === 1 ? '' : 's'}`}
+        payload={payload}
+        todayStartMs={todayStartMs}
         tasks={results}
         emptyMessage="No open tasks match this search yet."
         onToggleTask={onToggleTask}
@@ -992,6 +1115,7 @@ function InboxPage({
   onToggleTask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
+  const todayStartMs = useTodayStartMs();
   const tasks = getInboxTasks(payload);
 
   return (
@@ -1003,6 +1127,8 @@ function InboxPage({
       />
       <TaskGroup
         title="Inbox"
+        payload={payload}
+        todayStartMs={todayStartMs}
         tasks={tasks}
         emptyMessage="Inbox is clear."
         onToggleTask={onToggleTask}
@@ -1032,6 +1158,7 @@ function ProjectPage({
   onOpenQuickAdd: () => void;
 }) {
   const navigate = useNavigate();
+  const todayStartMs = useTodayStartMs();
   const { projectId } = useParams();
   const [sectionName, setSectionName] = useState('');
 
@@ -1115,6 +1242,8 @@ function ProjectPage({
           <TaskGroup
             title="Loose tasks"
             subtitle="Tasks in this project without a section."
+            payload={payload}
+            todayStartMs={todayStartMs}
             tasks={unsectionedTasks}
             emptyMessage="No unsectioned tasks here."
             onToggleTask={onToggleTask}
@@ -1154,6 +1283,8 @@ function ProjectPage({
                   </div>
                 </div>
                 <TaskListBlock
+                  payload={payload}
+                  todayStartMs={todayStartMs}
                   tasks={sectionTasks}
                   emptyMessage="No tasks in this section yet."
                   onToggleTask={onToggleTask}
@@ -1584,27 +1715,40 @@ function SettingsPage({
 
 function QuickAddDialog({
   payload,
+  context,
   onClose,
   onCreateTask,
 }: {
   payload: SyncPayload;
+  context: QuickAddContext;
   onClose: () => void;
   onCreateTask: (draft: TaskDraft) => Promise<string | null>;
 }) {
   const navigate = useNavigate();
-  const projects = getActiveProjects(payload);
-  const [draft, setDraft] = useState<TaskDraft>(createTaskDraft());
+  const todayStartMs = useTodayStartMs();
+  const [input, setInput] = useState('');
+  const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showBulkChoices, setShowBulkChoices] = useState(false);
+  const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
+  const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
+  const hasInput = input.trim().length > 0;
+  const previewDraft = useMemo(
+    () => buildDraftFromParsed(payload, parsedPreview, description, context, todayStartMs),
+    [context, description, parsedPreview, payload, todayStartMs]
+  );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!hasInput) return;
+    if (shouldPromptBulkQuickAdd(input)) {
+      setShowBulkChoices(true);
+      return;
+    }
+
     setIsSaving(true);
     try {
-      const taskId = await onCreateTask({
-        ...draft,
-        title: draft.title.trim(),
-        description: draft.description.trim(),
-      });
+      const taskId = await onCreateTask(previewDraft);
       if (taskId) {
         onClose();
         navigate(`/task/${taskId}`);
@@ -1614,7 +1758,30 @@ function QuickAddDialog({
     }
   }
 
-  const availableSections = draft.projectId ? getProjectSections(payload, draft.projectId) : [];
+  async function createBulkTasks(mode: 'single' | 'many') {
+    setIsSaving(true);
+    try {
+      if (mode === 'single') {
+        const mergedDraft = createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs);
+        const taskId = await onCreateTask(mergedDraft);
+        if (taskId) {
+          onClose();
+          navigate(`/task/${taskId}`);
+        }
+        return;
+      }
+
+      for (const line of bulkLines) {
+        const parsedLine = parseQuickAdd(line);
+        const draft = buildDraftFromParsed(payload, parsedLine, description, context, todayStartMs);
+        await onCreateTask(draft);
+      }
+      onClose();
+    } finally {
+      setIsSaving(false);
+      setShowBulkChoices(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
@@ -1629,99 +1796,106 @@ function QuickAddDialog({
           </button>
         </div>
 
-        <form onSubmit={submit} className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="space-y-4 md:col-span-2">
-            <Field label="Title">
-              <input
-                autoFocus
-                value={draft.title}
-                onChange={event => setDraft(current => ({ ...current, title: event.target.value }))}
-                placeholder="What needs doing?"
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-              />
-            </Field>
-            <Field label="Description">
-              <textarea
-                value={draft.description}
-                onChange={event => setDraft(current => ({ ...current, description: event.target.value }))}
-                rows={4}
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-              />
-            </Field>
-          </div>
-
-          <Field label="Project">
-            <select
-              value={draft.projectId ?? ''}
-              onChange={event =>
-                setDraft(current => ({
-                  ...current,
-                  projectId: event.target.value || null,
-                  sectionId: null,
-                }))
-              }
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            >
-              <option value="">Inbox</option>
-              {projects.map(project => (
-                <option key={project.id} value={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Section">
-            <select
-              value={draft.sectionId ?? ''}
-              onChange={event => setDraft(current => ({ ...current, sectionId: event.target.value || null }))}
-              disabled={!draft.projectId}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <option value="">No section</option>
-              {availableSections.map(section => (
-                <option key={section.id} value={section.id}>
-                  {section.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Priority">
-            <select
-              value={draft.priority}
-              onChange={event => setDraft(current => ({ ...current, priority: event.target.value as Priority }))}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            >
-              <option value="P1">P1 · Critical</option>
-              <option value="P2">P2 · High</option>
-              <option value="P3">P3 · Medium</option>
-              <option value="P4">P4 · Low</option>
-            </select>
-          </Field>
-
-          <Field label="Due date">
-            <input
-              type={draft.allDay ? 'date' : 'datetime-local'}
-              value={toInputValue(draft.dueAt, draft.allDay)}
-              onChange={event => setDraft(current => ({ ...current, dueAt: parseInputValue(event.target.value, current.allDay) }))}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+        <form onSubmit={submit} className="mt-5 space-y-4">
+          <Field label="Task parser">
+            <textarea
+              autoFocus
+              value={input}
+              onChange={event => {
+                setInput(event.target.value);
+                if (showBulkChoices) {
+                  setShowBulkChoices(false);
+                }
+              }}
+              rows={4}
+              placeholder="Try: pay rent p1 tomorrow 9pm #bills\nOr paste a whole list"
+              className="w-full rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
             />
           </Field>
 
-          <div className="md:col-span-2">
-            <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm font-medium text-[#1E2D2F]">
-              <input
-                type="checkbox"
-                checked={draft.allDay}
-                onChange={event => setDraft(current => ({ ...current, allDay: event.target.checked }))}
-                className="h-4 w-4 accent-[#EE6A3C]"
-              />
-              Due date is all day
-            </label>
-          </div>
+          <Field label="Notes">
+            <textarea
+              value={description}
+              onChange={event => setDescription(event.target.value)}
+              rows={4}
+              placeholder="Add notes"
+              className="w-full rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+          </Field>
 
-          <div className="md:col-span-2 flex justify-end gap-3 pt-2">
+          <section className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  {bulkLines.length > 1 ? `Bulk add preview · ${bulkLines.length} tasks` : 'Parsed metadata'}
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  {bulkLines.length > 1
+                    ? 'Each line will be parsed as its own task. Add 1 task joins all cleaned lines into one title.'
+                    : 'Quick Add uses the same parser rules as Android: projects, dates, priorities, recurrence, and reminders.'}
+                </p>
+              </div>
+              {context.defaultDueToday || context.defaultProjectId ? (
+                <span className="rounded-full bg-[#FBF7F3] px-3 py-1 text-xs font-semibold text-[#9F7B63]">
+                  {describeQuickAddContext(payload, context)}
+                </span>
+              ) : null}
+            </div>
+
+            {bulkLines.length > 1 ? (
+              <div className="mt-4 rounded-[18px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3 text-sm text-[#6D5C50]">
+                <p className="font-medium text-[#1E2D2F]">First task preview</p>
+                <p className="mt-2">{bulkLines[0]}</p>
+              </div>
+            ) : (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {renderQuickAddMetadata(payload, previewDraft).map(item => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[#E7DDD4] bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {showBulkChoices ? (
+            <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
+              <p className="text-sm font-semibold text-[#A24628]">Add {bulkLines.length} tasks?</p>
+              <p className="mt-1 text-sm text-[#8A5A44]">
+                Cancel to keep editing. Add 1 task joins the cleaned lines into one task title. Add {bulkLines.length} tasks creates one task per line.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkChoices(false)}
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving || bulkLines.length === 0}
+                  onClick={() => void createBulkTasks('single')}
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSaving ? 'Adding...' : 'Add 1 task'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving || bulkLines.length === 0}
+                  onClick={() => void createBulkTasks('many')}
+                  className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSaving ? 'Adding...' : `Add ${bulkLines.length} tasks`}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
@@ -1731,10 +1905,10 @@ function QuickAddDialog({
             </button>
             <button
               type="submit"
-              disabled={isSaving}
+              disabled={isSaving || !hasInput}
               className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSaving ? 'Creating...' : 'Create task'}
+              {isSaving ? 'Creating...' : bulkLines.length > 1 ? `Review ${bulkLines.length} tasks` : 'Create task'}
             </button>
           </div>
         </form>
@@ -1746,6 +1920,8 @@ function QuickAddDialog({
 function TaskGroup({
   title,
   subtitle,
+  payload,
+  todayStartMs,
   tasks,
   emptyMessage,
   onToggleTask,
@@ -1753,18 +1929,25 @@ function TaskGroup({
 }: {
   title: string;
   subtitle?: string;
+  payload: SyncPayload;
+  todayStartMs: number;
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
 }) {
   return (
-    <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-      <div className="mb-4">
-        <h3 className="text-xl font-semibold text-[#1E2D2F]">{title}</h3>
-        {subtitle ? <p className="mt-1 text-sm text-[#6D5C50]">{subtitle}</p> : null}
+    <section className="rounded-[18px] bg-transparent">
+      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+        <div>
+          <h3 className="text-[18px] font-semibold text-[#202020]">{title}</h3>
+          {subtitle ? <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p> : null}
+        </div>
+        <span className="text-xs font-medium text-[#8a8076]">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
       </div>
       <TaskListBlock
+        payload={payload}
+        todayStartMs={todayStartMs}
         tasks={tasks}
         emptyMessage={emptyMessage}
         onToggleTask={onToggleTask}
@@ -1775,39 +1958,57 @@ function TaskGroup({
 }
 
 function TaskListBlock({
+  payload,
+  todayStartMs,
   tasks,
   emptyMessage,
   onToggleTask,
   onOpenTask,
 }: {
+  payload: SyncPayload;
+  todayStartMs: number;
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
 }) {
   if (!tasks.length) {
-    return <p className="rounded-[20px] bg-[#FBF7F3] px-4 py-5 text-sm text-[#6D5C50]">{emptyMessage}</p>;
+    return <p className="rounded-[12px] border border-[#ece7e3] bg-white px-4 py-5 text-sm text-[#7b736b]">{emptyMessage}</p>;
   }
 
   return (
-    <div className="space-y-3">
+    <div className="overflow-hidden rounded-[14px] border border-[#ece7e3] bg-white">
       {tasks.map(task => (
-        <TaskRow key={task.id} task={task} onToggleTask={onToggleTask} onOpenTask={onOpenTask} />
+        <TaskRow
+          key={task.id}
+          payload={payload}
+          todayStartMs={todayStartMs}
+          task={task}
+          onToggleTask={onToggleTask}
+          onOpenTask={onOpenTask}
+        />
       ))}
     </div>
   );
 }
 
 function TaskRow({
+  payload,
+  todayStartMs,
   task,
   onToggleTask,
   onOpenTask,
 }: {
+  payload: SyncPayload;
+  todayStartMs: number;
   task: Task;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
 }) {
   const completed = task.status === 'COMPLETED';
+  const overdue = Boolean(task.dueAt && task.status === 'OPEN' && task.dueAt < todayStartMs);
+  const locationLabel = getTaskLocationLabel(payload, task);
+  const dueLabel = task.dueAt ? formatTaskDate(task.dueAt, task.allDay) : null;
 
   return (
     <div
@@ -1820,35 +2021,39 @@ function TaskRow({
           onOpenTask(task.id);
         }
       }}
-      className="flex items-start gap-4 rounded-[22px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4 text-left transition hover:border-[#EE6A3C]/30 hover:bg-white"
+      className="flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2.5 text-left transition hover:bg-[#fcfaf7] last:border-b-0"
     >
       <button
         onClick={event => {
           event.stopPropagation();
           onToggleTask(task.id);
         }}
-        className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${completed
-          ? 'border-[#EE6A3C] bg-[#EE6A3C] text-white'
-          : 'border-[#D8C8BC] bg-white text-transparent hover:border-[#EE6A3C]'
+        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${completed
+          ? 'border-[#dc4c3e] bg-[#dc4c3e] text-white'
+          : `${priorityCircleClasses(task.priority)} bg-white text-transparent`
           }`}
       >
-        <Check size={14} />
+        <Check size={12} />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className={`text-sm font-semibold ${completed ? 'text-[#8B7C71] line-through' : 'text-[#1E2D2F]'}`}>{task.title}</p>
-          <PriorityPill priority={task.priority} />
-        </div>
+        <p className={`text-[15px] leading-5 ${completed ? 'text-[#9a928c] line-through' : 'text-[#202020]'}`}>{task.title}</p>
         {task.description ? (
-          <p className={`mt-2 text-sm leading-6 ${completed ? 'text-[#9F9288]' : 'text-[#6D5C50]'}`}>{task.description}</p>
+          <p className={`mt-1 text-sm leading-5 ${completed ? 'text-[#a39a93]' : 'text-[#6d665e]'}`}>{task.description}</p>
         ) : null}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-[#7A675A]">
-          {task.dueAt ? <MetaPill label={formatTaskDate(task.dueAt, task.allDay)} /> : <MetaPill label="No due date" />}
-          {task.deadlineAt ? <MetaPill label={`Deadline ${formatTaskDate(task.deadlineAt, task.deadlineAllDay ?? false)}`} /> : null}
-          {task.parentTaskId ? <MetaPill label="Subtask" /> : null}
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#8a8076]">
+          {dueLabel ? (
+            <span className={`inline-flex items-center gap-1 ${overdue ? 'text-[#d1453b]' : 'text-[#8a8076]'}`}>
+              <Calendar size={11} />
+              <span>{dueLabel}</span>
+            </span>
+          ) : null}
+          {task.recurringRule ? <span className={overdue ? 'text-[#d1453b]' : ''}>↻</span> : null}
+          {task.parentTaskId ? <span>Subtask</span> : null}
         </div>
       </div>
-      <ChevronRight size={16} className="mt-1 shrink-0 text-[#A18B7A]" />
+      <div className="mt-0.5 hidden min-w-[120px] shrink-0 text-right text-xs text-[#8a8076] md:block">
+        {locationLabel}
+      </div>
     </div>
   );
 }
@@ -1865,12 +2070,12 @@ function HeroCard({
   actions?: ReactNode;
 }) {
   return (
-    <section className="rounded-[32px] bg-[#1E2D2F] px-6 py-6 text-white shadow-[0_20px_50px_rgba(30,45,47,0.18)] md:px-8">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <section className="px-1 pb-2 pt-1">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[#F2D0A4]">{eyebrow}</p>
-          <h2 className="mt-3 text-3xl font-semibold">{title}</h2>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-[#D7C9BF]">{description}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">{eyebrow}</p>
+          <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">{title}</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[#7a7168]">{description}</p>
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
@@ -1911,24 +2116,29 @@ function RailLink({
   icon: Icon,
   label,
   compact = false,
+  count,
+  tint,
 }: {
   to: string;
-  icon: ComponentType<{ size?: number; className?: string }>;
+  icon: ComponentType<{ size?: number; className?: string; style?: CSSProperties }>;
   label: string;
   compact?: boolean;
+  count?: number;
+  tint?: string;
 }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-[20px] px-4 py-3 text-sm font-medium transition ${isActive
-          ? 'bg-white text-[#1E2D2F] shadow-sm'
-          : 'text-[#6D5C50] hover:bg-white/70 hover:text-[#1E2D2F]'
-        } ${compact ? 'py-2.5' : ''}`
+        `flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition ${isActive
+          ? 'bg-[#fff1ed] text-[#dc4c3e]'
+          : 'text-[#4f4a45] hover:bg-[#f7f3ef]'
+        } ${compact ? 'py-1.5' : ''}`
       }
     >
-      <Icon size={18} />
-      <span>{label}</span>
+      <Icon size={16} className={tint ? '' : undefined} style={tint ? { color: tint } : undefined} />
+      <span className="truncate">{label}</span>
+      {typeof count === 'number' ? <span className="ml-auto text-xs text-[#9a928a]">{count}</span> : null}
     </NavLink>
   );
 }
@@ -1956,18 +2166,6 @@ function BottomLink({
       <span>{label}</span>
     </NavLink>
   );
-}
-
-function PriorityPill({ priority }: { priority: Priority }) {
-  return (
-    <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${priorityClasses(priority)}`}>
-      {priority}
-    </span>
-  );
-}
-
-function MetaPill({ label }: { label: string }) {
-  return <span className="rounded-full bg-white px-2 py-1">{label}</span>;
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -1999,17 +2197,17 @@ function bannerClasses(tone: Banner['tone']): string {
   }
 }
 
-function priorityClasses(priority: Priority): string {
+function priorityCircleClasses(priority: Priority): string {
   switch (priority) {
     case 'P1':
-      return 'bg-[#FCE4DF] text-[#B23A2C]';
+      return 'border-[#d1453b] text-[#d1453b] hover:border-[#d1453b]';
     case 'P2':
-      return 'bg-[#FFE7DA] text-[#B85A23]';
+      return 'border-[#d97706] text-[#d97706] hover:border-[#d97706]';
     case 'P3':
-      return 'bg-[#E7F0FA] text-[#396C97]';
+      return 'border-[#2563eb] text-[#2563eb] hover:border-[#2563eb]';
     case 'P4':
     default:
-      return 'bg-[#EFE6DD] text-[#6D5C50]';
+      return 'border-[#c9c3bd] text-[#c9c3bd] hover:border-[#a79f97]';
   }
 }
 
@@ -2089,7 +2287,203 @@ function getCloudStatus({
   };
 }
 
+function useTodayStartMs(): number {
+  const [todayStartMs, setTodayStartMs] = useState(() => startOfDay(Date.now()).getTime());
+
+  useEffect(() => {
+    const now = Date.now();
+    const nextMidnightMs = startOfDay(addDays(now, 1)).getTime();
+    const timer = window.setTimeout(() => {
+      setTodayStartMs(startOfDay(Date.now()).getTime());
+    }, Math.max(nextMidnightMs - now + 1000, 1000));
+    return () => window.clearTimeout(timer);
+  }, [todayStartMs]);
+
+  return todayStartMs;
+}
+
+function getTaskLocationLabel(payload: SyncPayload, task: Task): string {
+  if (!task.projectId) return 'Inbox';
+  const project = payload.projects.find(projectItem => projectItem.id === task.projectId && !projectItem.deletedAt);
+  const section = task.sectionId
+    ? payload.sections.find(sectionItem => sectionItem.id === task.sectionId && !sectionItem.deletedAt)
+    : null;
+  if (!project) return 'Inbox';
+  return section ? `${project.name} / ${section.name}` : project.name;
+}
+
+function getQuickAddContext(pathname: string, payload: SyncPayload): QuickAddContext {
+  if (pathname.startsWith('/today')) {
+    return { defaultProjectId: null, defaultDueToday: true };
+  }
+
+  if (pathname.startsWith('/project/')) {
+    const projectId = pathname.split('/')[2];
+    const project = getProjectById(payload, projectId);
+    return { defaultProjectId: project?.id ?? null, defaultDueToday: false };
+  }
+
+  if (pathname.startsWith('/inbox')) {
+    return { defaultProjectId: null, defaultDueToday: false };
+  }
+
+  return { defaultProjectId: null, defaultDueToday: false };
+}
+
+function buildDraftFromParsed(
+  payload: SyncPayload,
+  parsed: QuickAddResult,
+  description: string,
+  context: QuickAddContext,
+  todayStartMs: number
+): TaskDraft {
+  const projectMatch = parsed.projectName
+    ? getActiveProjects(payload, true).find(project => project.name.localeCompare(parsed.projectName!, undefined, { sensitivity: 'base' }) === 0) ?? null
+    : null;
+  const contextProjectId = !parsed.projectName ? context.defaultProjectId : null;
+  const projectId = projectMatch?.id ?? contextProjectId ?? null;
+  const sectionMatch = parsed.sectionName && projectId
+    ? getProjectSections(payload, projectId).find(section => section.name.localeCompare(parsed.sectionName!, undefined, { sensitivity: 'base' }) === 0) ?? null
+    : null;
+  const dueAt = parsed.dueAt ?? (context.defaultDueToday ? todayStartMs : null);
+  const allDay = parsed.dueAt === null && context.defaultDueToday ? true : parsed.allDay;
+
+  return {
+    title: parsed.title.trim(),
+    description: description.trim(),
+    projectId,
+    projectName: projectMatch ? null : parsed.projectName,
+    sectionId: sectionMatch?.id ?? null,
+    sectionName: sectionMatch ? null : parsed.sectionName,
+    priority: parsed.priority,
+    dueAt,
+    allDay,
+    deadlineAt: parsed.deadlineAt,
+    deadlineAllDay: parsed.deadlineAllDay,
+    recurringRule: parsed.recurrenceRule,
+    deadlineRecurringRule: parsed.deadlineRecurringRule,
+    parentTaskId: null,
+    reminders: parsed.reminders.map(mapParsedReminder),
+  };
+}
+
+function createMergedBulkDraft(
+  payload: SyncPayload,
+  lines: string[],
+  description: string,
+  context: QuickAddContext,
+  todayStartMs: number
+): TaskDraft {
+  const baseDraft = buildDraftFromParsed(payload, parseQuickAdd(''), description, context, todayStartMs);
+  return {
+    ...baseDraft,
+    title: lines.join(' ').trim() || 'Untitled task',
+  };
+}
+
+function renderQuickAddMetadata(payload: SyncPayload, draft: TaskDraft): string[] {
+  const items: string[] = [];
+  const projectLabel = draft.projectId
+    ? getProjectById(payload, draft.projectId)?.name ?? 'Inbox'
+    : draft.projectName ?? 'Inbox';
+  if (draft.sectionId) {
+    const section = payload.sections.find(item => item.id === draft.sectionId && !item.deletedAt);
+    items.push(`#${projectLabel}/${section?.name ?? 'Section'}`);
+  } else if (draft.sectionName) {
+    items.push(`#${projectLabel}/${draft.sectionName}`);
+  } else {
+    items.push(`#${projectLabel}`);
+  }
+  items.push(draft.priority);
+  if (draft.dueAt !== null) {
+    items.push(formatTaskDate(draft.dueAt, draft.allDay));
+  } else {
+    items.push('No due date');
+  }
+  if (draft.deadlineAt !== null) {
+    items.push(`Deadline ${formatTaskDate(draft.deadlineAt, draft.deadlineAllDay)}`);
+  }
+  if (draft.recurringRule) {
+    items.push(renderRecurrenceLabel(draft.recurringRule));
+  }
+  if (draft.reminders.length) {
+    items.push(renderReminderLabel(draft.reminders));
+  }
+  return items;
+}
+
+function describeQuickAddContext(payload: SyncPayload, context: QuickAddContext): string {
+  const labels: string[] = [];
+  if (context.defaultDueToday) {
+    labels.push('Defaults to Today');
+  }
+  if (context.defaultProjectId) {
+    labels.push(`Project ${getProjectById(payload, context.defaultProjectId)?.name ?? 'current'}`);
+  }
+  return labels.join(' · ');
+}
+
+function mapParsedReminder(reminder: ParsedReminderSpec): TaskReminderDraft {
+  return reminder.kind === 'ABSOLUTE'
+    ? { kind: 'ABSOLUTE', timeAt: reminder.timeAt }
+    : { kind: 'OFFSET', offsetMinutes: reminder.minutes };
+}
+
+function renderReminderLabel(reminders: TaskReminderDraft[]): string {
+  if (reminders.length === 1) {
+    const [reminder] = reminders;
+    return reminder.kind === 'ABSOLUTE'
+      ? `Reminder ${formatDateTime(reminder.timeAt)}`
+      : `Reminder ${reminder.offsetMinutes}m before`;
+  }
+  return `${reminders.length} reminders`;
+}
+
+function renderRecurrenceLabel(rule: string): string {
+  const frequency = /FREQ=([A-Z]+)/.exec(rule)?.[1] ?? 'CUSTOM';
+  const interval = Number.parseInt(/INTERVAL=(\d+)/.exec(rule)?.[1] ?? '1', 10);
+  const byDay = /BYDAY=([A-Z,]+)/.exec(rule)?.[1];
+  const byMonthDay = /BYMONTHDAY=(\d+)/.exec(rule)?.[1];
+
+  if (byDay) {
+    const days = byDay.split(',').map(token => ({
+      MO: 'Mon',
+      TU: 'Tue',
+      WE: 'Wed',
+      TH: 'Thu',
+      FR: 'Fri',
+      SA: 'Sat',
+      SU: 'Sun',
+    }[token] ?? token));
+    return interval === 2 ? `Every other ${days.join(', ')}` : `Every ${days.join(', ')}`;
+  }
+
+  if (frequency === 'MONTHLY' && byMonthDay) {
+    return `Every month on ${byMonthDay}`;
+  }
+
+  const label = frequency === 'DAILY'
+    ? 'day'
+    : frequency === 'WEEKLY'
+      ? 'week'
+      : frequency === 'MONTHLY'
+        ? 'month'
+        : frequency === 'YEARLY'
+          ? 'year'
+          : 'custom';
+  return interval <= 1 ? `Every ${label}` : `Every ${interval} ${label}s`;
+}
+
+function getWorkspaceIdentity(cloudSession: CloudSession | null): { label: string; initial: string } {
+  const label = cloudSession?.name?.trim()
+    || cloudSession?.email?.trim()
+    || 'Emberlist';
+  const initial = label.charAt(0).toUpperCase() || 'E';
+  return { label, initial };
+}
+
 function getRouteTitle(pathname: string, payload: SyncPayload): string {
+  if (pathname.startsWith('/search/no-due')) return 'Tasks without due dates';
   if (pathname.startsWith('/today')) return 'Today';
   if (pathname.startsWith('/upcoming')) return 'Upcoming';
   if (pathname.startsWith('/search')) return 'Search';
