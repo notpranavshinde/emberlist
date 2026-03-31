@@ -10,7 +10,7 @@ import { Upload, Cloud, RefreshCw } from 'lucide-react';
 const syncEngine = new SyncEngine();
 
 // TODO: Replace with your actual Google Client ID from Google Cloud Console
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '1032043281818-fjqpnk8tren6v259tflkk5v6sf3415lq.apps.googleusercontent.com';
 
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);

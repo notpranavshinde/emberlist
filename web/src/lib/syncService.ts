@@ -6,11 +6,14 @@ const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/rest?version=v3';
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
 
 export class DriveSyncService {
-    private tokenClient: google.accounts.oauth2.TokenClient | null = null;
+    private tokenClient: TokenClient | null = null;
     private accessToken: string | null = null;
-    private syncEngine = new SyncEngine();
+    private readonly syncEngine = new SyncEngine();
+    private readonly clientId: string;
 
-    constructor(private clientId: string) {}
+    constructor(clientId: string) {
+        this.clientId = clientId;
+    }
 
     async init() {
         return new Promise<void>((resolve) => {
@@ -20,7 +23,7 @@ export class DriveSyncService {
                 this.tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: this.clientId,
                     scope: SCOPES,
-                    callback: (response) => {
+                    callback: (response: TokenResponse) => {
                         this.accessToken = response.access_token;
                         resolve();
                     },

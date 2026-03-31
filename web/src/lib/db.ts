@@ -60,6 +60,8 @@ export class EmberlistDB {
             schemaVersion: schemaVersion || 1,
             exportedAt: exportedAt || 0,
             deviceId: deviceId || crypto.randomUUID(),
+            payloadId: crypto.randomUUID(),
+            source: 'web',
             projects: projects as Project[],
             sections: sections as Section[],
             tasks: tasks as Task[],

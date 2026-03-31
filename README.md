@@ -1,6 +1,6 @@
 # Emberlist (Offline Task Manager)
 
-Emberlist is an offline-first task manager built around fast capture, local-first data, and deterministic sync. The Android app is the primary client today, and the project now has the data model, merge engine, and manual Google Drive sync foundations needed to support Android + Web without a custom backend.
+Emberlist is an offline-first task manager built around fast capture, local-first data, and deterministic sync. The Android app is the primary client today, and the project now has the data model, merge engine, and Google Drive sync foundations needed to support Android + Web without a custom backend.
 
 ## Features
 
@@ -26,7 +26,7 @@ Emberlist is an offline-first task manager built around fast capture, local-firs
 - Search
 - Search smart filters (multi-select)
 - Backup export/import (JSON)
-- Manual Google Drive sync through Drive appData
+- Google Drive sync through Drive appData
 - Clear completed tasks
 
 ## Architecture
@@ -67,18 +67,18 @@ Emberlist is an offline-first task manager built around fast capture, local-firs
   - last-writer-wins by `updatedAt`
   - tombstones beat older live rows
   - invalid references are repaired after merge
-- Android manual Google Drive sync is implemented:
+- Android Google Drive sync is implemented:
   - Google connect/disconnect
   - enable/disable sync
   - manual `Sync now`
+  - app-startup sync
+  - debounced local-change sync
+  - periodic background sync
   - last synced timestamp
   - one Drive appData file: `emberlist_sync.json`
 - Web client exists in `web/` and is being developed against the same sync contract.
 
 ### Not done yet
-- Android startup sync
-- Android debounced sync after local edits
-- Android periodic background sync
 - End-to-end conflict validation across Android and Web
 - Full web polish, auth hardening, and production deployment flow
 
@@ -101,28 +101,21 @@ These pieces are already in place on Android and should remain the contract for 
    - drop invalid location references
 
 ### Phase 2: Android cloud sync completion
-The Android app is currently manual-sync only. The next Android steps should be implemented in this order.
+The Android app now supports manual sync plus automatic startup/background triggers. The next Android steps should focus on hardening and validation.
 
-1. Add app-startup sync:
-   - if sync is enabled and a Google account is connected, pull/merge/push once on app launch
-   - surface sync failure without blocking app launch
-2. Add debounced local-change sync:
-   - observe write activity
-   - debounce for a short window
-   - run one sync after bursts of edits instead of one sync per mutation
-3. Add periodic background sync:
-   - use WorkManager
-   - require network
-   - avoid overlapping sync jobs with a single-flight guard
-4. Harden Android sync UX:
+1. Harden Android sync UX:
    - clearer sync state text
    - last error details
    - visible “sync in progress” state
-5. Add more Android sync tests:
-   - startup sync
-   - local-change debounce
-   - background worker trigger behavior
+2. Add more Android sync tests:
+   - startup sync worker behavior
+   - local-change debounce behavior against real DB writes
+   - periodic worker scheduling/constraints
    - repeated manual taps do not overlap
+3. Verify real-device Google account flows:
+   - auth restore after app restart
+   - disconnect/reconnect
+   - sync behavior when Drive permission is revoked externally
 
 ### Phase 3: Web client completion
 The web client should follow the same payload and merge rules as Android. Do not invent a second sync model.
@@ -190,7 +183,11 @@ Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/dat
 
 ## Google Drive Sync
 
-- Manual sync only in the current Android app. No startup/background sync yet.
+- Android currently supports:
+  - manual sync from Settings
+  - app-startup sync when sync is enabled and Drive access is available
+  - debounced sync after local DB changes while the app is running
+  - periodic background sync via WorkManager
 - Sync writes one hidden file named `emberlist_sync.json` to the user's Google Drive appData folder.
 - Setup required:
   - Enable the Google Drive API in your Google Cloud project.
@@ -278,7 +275,7 @@ Run:
 
 ## Notes
 
-- The Android app now supports manual Google Drive sync. Background sync is not implemented yet.
+- The Android app now supports manual Google Drive sync plus automatic startup/background sync triggers.
 - The sync architecture is now split cleanly:
   - `BackupPayload` for user backup/export/import
   - `SyncPayload` for replicated cloud state

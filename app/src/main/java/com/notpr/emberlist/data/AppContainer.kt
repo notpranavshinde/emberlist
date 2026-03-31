@@ -9,6 +9,8 @@ import com.notpr.emberlist.data.settings.SettingsRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveSyncService
 import com.notpr.emberlist.data.sync.GoogleDriveAppDataClient
+import com.notpr.emberlist.data.sync.observeSyncInvalidations
+import com.notpr.emberlist.data.sync.SyncCoordinator
 import com.notpr.emberlist.data.sync.SyncManager
 import com.notpr.emberlist.ui.UndoController
 
@@ -44,6 +46,12 @@ class AppContainer(context: Context) {
                 GoogleDriveAppDataClient(appContext, account)
             }
         }
+    )
+    val syncCoordinator = SyncCoordinator(
+        context = appContext,
+        settingsFlow = settingsRepository.settings,
+        authFlow = driveAuthManager.state,
+        invalidationFlow = database.observeSyncInvalidations()
     )
 
     val undoController = UndoController()

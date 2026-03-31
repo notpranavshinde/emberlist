@@ -11,6 +11,7 @@ class EmberlistApp : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.syncCoordinator.start()
     }
 
     override val workManagerConfiguration: Configuration =

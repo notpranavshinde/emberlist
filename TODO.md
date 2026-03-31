@@ -20,13 +20,13 @@
 ## Phase 3: Android Cloud Sync [IN PROGRESS]
 - [x] Implement `DriveSyncService` using Google Drive appData.
 - [x] Add auth + settings UI (Sign in with Google).
-- [ ] Add WorkManager sync triggers (startup, local changes).
+- [x] Add WorkManager sync triggers (startup, local changes).
   - [x] Manual sync now
   - [x] Enable/disable sync
   - [x] Last synced timestamp
-  - [ ] App startup sync
-  - [ ] Debounced local-change sync
-  - [ ] Periodic background sync
+  - [x] App startup sync
+  - [x] Debounced local-change sync
+  - [x] Periodic background sync
 
 ## Phase 4: Web Client [DONE]
 - [x] Build the web app in `/web` using React + TypeScript.
@@ -50,3 +50,6 @@
 - Implemented Android manual Google Drive sync with one `emberlist_sync.json` file in appData.
 - Added Android Google connect/disconnect, enable sync toggle, manual sync, and last synced state in Settings.
 - Added Android `DriveAuthManager`, `DriveSyncService`, and service-level unit tests.
+- Added Android `SyncWorker`, `SyncScheduler`, and `SyncCoordinator`.
+- Implemented Android startup sync, debounced local-change sync, and periodic background sync.
+- Added coordinator tests covering activation, local invalidation scheduling, suppression after recent sync, and disable cleanup.

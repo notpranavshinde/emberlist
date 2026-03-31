@@ -7,10 +7,13 @@ type Syncable = Project | Section | Task | Reminder | Location;
  * It matches the logic in the Android SyncManager perfectly.
  */
 export class SyncEngine {
-    constructor(
-        private nowProvider: () => number = () => Date.now(),
-        private source: string = 'web'
-    ) {}
+    private readonly nowProvider: () => number;
+    private readonly source: string;
+
+    constructor(nowProvider: () => number = () => Date.now(), source: string = 'web') {
+        this.nowProvider = nowProvider;
+        this.source = source;
+    }
 
     mergePayloads(local: SyncPayload, remote: SyncPayload): SyncPayload {
         const mergedProjects = this.mergeEntities(local.projects, remote.projects);
