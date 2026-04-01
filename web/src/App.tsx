@@ -91,6 +91,7 @@ type Banner = {
 type CloudStatusTone = 'ready' | 'idle' | 'warning' | 'muted';
 type QuickAddContext = {
   defaultProjectId: string | null;
+  defaultSectionId: string | null;
   defaultDueToday: boolean;
 };
 
@@ -105,6 +106,7 @@ function App() {
   const [isResettingCloud, setIsResettingCloud] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [quickAddOverride, setQuickAddOverride] = useState<Partial<QuickAddContext> | null>(null);
   const [showCompletedToday, setShowCompletedToday] = useState(() =>
     readStoredBoolean('emberlist.showCompletedToday', true)
   );
@@ -583,8 +585,15 @@ function App() {
         lastCloudSyncAt={lastCloudSyncAt}
         onDisconnectCloud={() => void handleDisconnectCloud()}
         isQuickAddOpen={isQuickAddOpen}
-        onOpenQuickAdd={() => setIsQuickAddOpen(true)}
-        onCloseQuickAdd={() => setIsQuickAddOpen(false)}
+        quickAddOverride={quickAddOverride}
+        onOpenQuickAdd={overrides => {
+          setQuickAddOverride(overrides ?? null);
+          setIsQuickAddOpen(true);
+        }}
+        onCloseQuickAdd={() => {
+          setIsQuickAddOpen(false);
+          setQuickAddOverride(null);
+        }}
       />
     </HashRouter>
   );
@@ -625,7 +634,8 @@ type WorkspaceShellProps = {
   lastCloudSyncAt: number | null;
   onDisconnectCloud: () => void;
   isQuickAddOpen: boolean;
-  onOpenQuickAdd: () => void;
+  quickAddOverride: Partial<QuickAddContext> | null;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onCloseQuickAdd: () => void;
 };
 
@@ -662,6 +672,7 @@ function WorkspaceShell({
   lastCloudSyncAt,
   onDisconnectCloud,
   isQuickAddOpen,
+  quickAddOverride,
   onOpenQuickAdd,
   onCloseQuickAdd,
 }: WorkspaceShellProps) {
@@ -687,7 +698,10 @@ function WorkspaceShell({
     lastCloudSyncAt,
   });
   const workspaceIdentity = getWorkspaceIdentity(cloudSession);
-  const quickAddContext = useMemo(() => getQuickAddContext(location.pathname, payload), [location.pathname, payload]);
+  const quickAddContext = useMemo(
+    () => ({ ...getQuickAddContext(location.pathname, payload), ...(quickAddOverride ?? {}) }),
+    [location.pathname, payload, quickAddOverride]
+  );
 
   useEffect(() => {
     document.title = `${title} · Emberlist`;
@@ -716,7 +730,7 @@ function WorkspaceShell({
           </div>
 
           <button
-            onClick={onOpenQuickAdd}
+            onClick={() => onOpenQuickAdd()}
             className="mt-3 flex items-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed]"
           >
             <Plus size={16} />
@@ -813,7 +827,7 @@ function WorkspaceShell({
                   <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
                 </button>
                 <button
-                  onClick={onOpenQuickAdd}
+                  onClick={() => onOpenQuickAdd()}
                   className="flex items-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
                 >
                   <Plus size={16} />
@@ -1393,7 +1407,7 @@ function ProjectPage({
   onUpdateSection: (sectionId: string, updater: (section: Section) => Section) => void;
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
-  onOpenQuickAdd: () => void;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1442,11 +1456,14 @@ function ProjectPage({
 
   return (
     <div className="space-y-6">
-      <HeroCard
-        eyebrow="Project"
-        title={currentProject.name}
-        description="Manage tasks, sections, and project metadata. New tasks can be added from Quick add and assigned here."
-        actions={
+      <section className="px-1 pb-2 pt-1">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">Project</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">
+              Manage tasks, sections, and project metadata for {currentProject.name}.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={renameProject}
@@ -1466,15 +1483,9 @@ function ProjectPage({
             >
               Delete
             </button>
-            <button
-              onClick={onOpenQuickAdd}
-              className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-            >
-              Quick add
-            </button>
           </div>
-        }
-      />
+        </div>
+      </section>
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="space-y-4">
@@ -1498,7 +1509,13 @@ function ProjectPage({
                     <h3 className="text-lg font-semibold text-[#1E2D2F]">{section.name}</h3>
                     <p className="text-sm text-[#6D5C50]">{sectionTasks.length} task{sectionTasks.length === 1 ? '' : 's'}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: section.id })}
+                      className="rounded-full bg-[#EE6A3C] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#d75e33]"
+                    >
+                      Add task
+                    </button>
                     <button
                       onClick={() => {
                         const nextName = window.prompt('Rename section', section.name)?.trim();
@@ -2697,20 +2714,20 @@ function getTaskLocationLabel(payload: SyncPayload, task: Task): string {
 
 function getQuickAddContext(pathname: string, payload: SyncPayload): QuickAddContext {
   if (pathname.startsWith('/today')) {
-    return { defaultProjectId: null, defaultDueToday: true };
+    return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: true };
   }
 
   if (pathname.startsWith('/project/')) {
     const projectId = pathname.split('/')[2];
     const project = getProjectById(payload, projectId);
-    return { defaultProjectId: project?.id ?? null, defaultDueToday: false };
+    return { defaultProjectId: project?.id ?? null, defaultSectionId: null, defaultDueToday: false };
   }
 
   if (pathname.startsWith('/inbox')) {
-    return { defaultProjectId: null, defaultDueToday: false };
+    return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: false };
   }
 
-  return { defaultProjectId: null, defaultDueToday: false };
+  return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: false };
 }
 
 function buildDraftFromParsed(
@@ -2725,8 +2742,12 @@ function buildDraftFromParsed(
     : null;
   const contextProjectId = !parsed.projectName ? context.defaultProjectId : null;
   const projectId = projectMatch?.id ?? contextProjectId ?? null;
-  const sectionMatch = parsed.sectionName && projectId
-    ? getProjectSections(payload, projectId).find(section => section.name.localeCompare(parsed.sectionName!, undefined, { sensitivity: 'base' }) === 0) ?? null
+  const sectionMatch = projectId
+    ? (
+      parsed.sectionName
+        ? getProjectSections(payload, projectId).find(section => section.name.localeCompare(parsed.sectionName!, undefined, { sensitivity: 'base' }) === 0) ?? null
+        : getProjectSections(payload, projectId).find(section => section.id === context.defaultSectionId) ?? null
+    )
     : null;
   const dueAt = parsed.dueAt ?? (context.defaultDueToday ? todayStartMs : null);
   const allDay = parsed.dueAt === null && context.defaultDueToday ? true : parsed.allDay;
@@ -2801,7 +2822,11 @@ function describeQuickAddContext(payload: SyncPayload, context: QuickAddContext)
     labels.push('Defaults to Today');
   }
   if (context.defaultProjectId) {
-    labels.push(`Project ${getProjectById(payload, context.defaultProjectId)?.name ?? 'current'}`);
+    const projectName = getProjectById(payload, context.defaultProjectId)?.name ?? 'current';
+    const sectionName = context.defaultSectionId
+      ? payload.sections.find(section => section.id === context.defaultSectionId && !section.deletedAt)?.name
+      : null;
+    labels.push(sectionName ? `Project ${projectName} / ${sectionName}` : `Project ${projectName}`);
   }
   return labels.join(' · ');
 }
