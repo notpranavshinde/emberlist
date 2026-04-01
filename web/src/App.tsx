@@ -3314,6 +3314,7 @@ function TaskRow({
       ) : (
         <div className="h-5 w-5 shrink-0" aria-hidden="true" />
       )}
+      {depth > 0 ? <TaskHierarchyGutter depth={depth} /> : null}
       {selectionMode ? (
         <button
           type="button"
@@ -3343,7 +3344,6 @@ function TaskRow({
       >
         <Check size={12} />
       </button>
-      {depth > 0 ? <div aria-hidden="true" className="shrink-0" style={{ width: depth * 16 }} /> : null}
       <div className="min-w-0 flex-1">
         <p className={`text-[15px] leading-5 ${completed ? 'text-[#9a928c] line-through' : 'text-[#202020]'}`}>{task.title}</p>
         {task.description ? (
@@ -3371,6 +3371,28 @@ function TaskRow({
       <div className="mt-0.5 hidden min-w-[180px] shrink-0 text-right text-xs text-[#8a8076] md:block">
         {locationLabel}
       </div>
+    </div>
+  );
+}
+
+function TaskHierarchyGutter({ depth }: { depth: number }) {
+  return (
+    <div aria-hidden="true" className="flex shrink-0 self-stretch items-stretch" style={{ width: depth * 18 }}>
+      {Array.from({ length: depth }).map((_, index) => {
+        const isLast = index === depth - 1;
+        return (
+          <div key={index} className="relative h-full w-[18px] shrink-0">
+            {isLast ? (
+              <>
+                <div className="absolute bottom-1/2 left-1/2 top-0 w-px -translate-x-1/2 bg-[#E6D8CC]" />
+                <div className="absolute left-1/2 top-1/2 h-px w-[12px] -translate-y-1/2 bg-[#E6D8CC]" />
+              </>
+            ) : (
+              <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#F0E5DB]" />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
