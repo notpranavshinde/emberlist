@@ -29,6 +29,7 @@ import {
 } from 'react-router-dom';
 import { addDays, endOfDay, format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
 import { RecoveryScreen } from './components/RecoveryScreen';
+import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './lib/banner';
 import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
 import { parseQuickAdd, type QuickAddResult, type ReminderSpec as ParsedReminderSpec } from './lib/quickParser';
@@ -91,6 +92,10 @@ type Banner = {
   id: number;
   tone: 'success' | 'error' | 'info';
   message: string;
+  actionLabel?: string;
+  onAction?: (() => void | Promise<void>) | null;
+  persistOnNavigation?: boolean;
+  autoDismissMs?: number;
 };
 type CloudStatusTone = 'ready' | 'idle' | 'warning' | 'muted';
 type QuickAddContext = {
@@ -137,9 +142,21 @@ function App() {
     []
   );
 
-  function showBanner(tone: Banner['tone'], message: string) {
+  function showBanner(
+    tone: Banner['tone'],
+    message: string,
+    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+  ) {
     bannerIdRef.current += 1;
-    setBanner({ id: bannerIdRef.current, tone, message });
+    setBanner({
+      id: bannerIdRef.current,
+      tone,
+      message,
+      actionLabel: options?.actionLabel,
+      onAction: options?.onAction ?? null,
+      persistOnNavigation: options?.persistOnNavigation ?? false,
+      autoDismissMs: options?.autoDismissMs,
+    });
   }
 
   useEffect(() => {
@@ -179,10 +196,11 @@ function App() {
   }, [cloudSession]);
 
   useEffect(() => {
-    if (!banner || banner.tone === 'error') return;
+    const autoDismissMs = resolveBannerAutoDismissMs(banner);
+    if (!banner || autoDismissMs === null) return;
     const timeoutId = window.setTimeout(() => {
       setBanner(current => (current?.id === banner.id ? null : current));
-    }, 4_000);
+    }, autoDismissMs);
     return () => window.clearTimeout(timeoutId);
   }, [banner]);
 
@@ -312,13 +330,30 @@ function App() {
     }
   }
 
-  async function applyPayloadUpdate(
-    updater: (current: SyncPayload) => SyncPayload
+  function showUndoBanner(message: string, previousPayload: SyncPayload, undoMessage: string = 'Change undone.') {
+    showBanner('success', message, {
+      actionLabel: 'Undo',
+      persistOnNavigation: true,
+      autoDismissMs: 8_000,
+      onAction: async () => {
+        await persistPayload(previousPayload, true);
+        showBanner('info', undoMessage);
+      },
+    });
+  }
+
+  async function applyUndoablePayloadUpdate(
+    updater: (current: SyncPayload) => SyncPayload,
+    options: {
+      message: string;
+      undoMessage?: string;
+    }
   ): Promise<SyncPayload | null> {
     const current = payloadRef.current;
     if (!current) return null;
     const nextPayload = updater(current);
     await persistPayload(nextPayload, true);
+    showUndoBanner(options.message, current, options.undoMessage);
     return nextPayload;
   }
 
@@ -403,48 +438,116 @@ function App() {
   async function handleCreateProject(name: string) {
     const trimmed = name.trim();
     if (!trimmed) return;
-    await applyPayloadUpdate(current => createProject(current, trimmed));
-    showBanner('success', `Project "${trimmed}" created.`);
+    await applyUndoablePayloadUpdate(
+      current => createProject(current, trimmed),
+      {
+        message: `Project "${trimmed}" created.`,
+        undoMessage: `Removed project "${trimmed}".`,
+      }
+    );
   }
 
   async function handleUpdateProject(projectId: string, updater: (project: Project) => Project) {
-    await applyPayloadUpdate(current => updateProject(current, projectId, updater));
+    await applyUndoablePayloadUpdate(
+      current => updateProject(current, projectId, updater),
+      {
+        message: 'Project updated.',
+        undoMessage: 'Reverted project changes.',
+      }
+    );
   }
 
   async function handleDeleteProject(projectId: string) {
-    await applyPayloadUpdate(current => deleteProject(current, projectId));
+    const projectName = payloadRef.current?.projects.find(project => project.id === projectId)?.name ?? 'Project';
+    await applyUndoablePayloadUpdate(
+      current => deleteProject(current, projectId),
+      {
+        message: `Deleted "${projectName}".`,
+        undoMessage: `Restored "${projectName}".`,
+      }
+    );
   }
 
   async function handleCreateSection(projectId: string, name: string) {
     const trimmed = name.trim();
     if (!trimmed) return;
-    await applyPayloadUpdate(current => createSection(current, projectId, trimmed));
+    await applyUndoablePayloadUpdate(
+      current => createSection(current, projectId, trimmed),
+      {
+        message: `Section "${trimmed}" created.`,
+        undoMessage: `Removed section "${trimmed}".`,
+      }
+    );
   }
 
   async function handleUpdateSection(sectionId: string, updater: (section: Section) => Section) {
-    await applyPayloadUpdate(current => updateSection(current, sectionId, updater));
+    await applyUndoablePayloadUpdate(
+      current => updateSection(current, sectionId, updater),
+      {
+        message: 'Section updated.',
+        undoMessage: 'Reverted section changes.',
+      }
+    );
   }
 
   async function handleDeleteSection(sectionId: string) {
-    await applyPayloadUpdate(current => deleteSection(current, sectionId));
+    const sectionName = payloadRef.current?.sections.find(section => section.id === sectionId)?.name ?? 'Section';
+    await applyUndoablePayloadUpdate(
+      current => deleteSection(current, sectionId),
+      {
+        message: `Deleted section "${sectionName}".`,
+        undoMessage: `Restored section "${sectionName}".`,
+      }
+    );
   }
 
   async function handleToggleTask(taskId: string) {
-    await applyPayloadUpdate(current => toggleTaskCompletion(current, taskId));
+    const task = payloadRef.current?.tasks.find(currentTask => currentTask.id === taskId && !currentTask.deletedAt);
+    if (!task) return;
+    const completed = task.status === 'COMPLETED';
+    await applyUndoablePayloadUpdate(
+      current => toggleTaskCompletion(current, taskId),
+      {
+        message: completed ? `Reopened "${task.title}".` : `Completed "${task.title}".`,
+        undoMessage: completed ? `Marked "${task.title}" complete again.` : `Reopened "${task.title}".`,
+      }
+    );
   }
 
   async function handleArchiveTask(taskId: string) {
-    await applyPayloadUpdate(current => archiveTask(current, taskId));
+    const task = payloadRef.current?.tasks.find(currentTask => currentTask.id === taskId && !currentTask.deletedAt);
+    if (!task) return;
+    const archived = task.status === 'ARCHIVED';
+    await applyUndoablePayloadUpdate(
+      current => archiveTask(current, taskId),
+      {
+        message: archived ? `Unarchived "${task.title}".` : `Archived "${task.title}".`,
+        undoMessage: archived ? `Archived "${task.title}" again.` : `Unarchived "${task.title}".`,
+      }
+    );
   }
 
   async function handleDeleteTask(taskId: string) {
-    await applyPayloadUpdate(current => deleteTask(current, taskId));
+    const task = payloadRef.current?.tasks.find(currentTask => currentTask.id === taskId && !currentTask.deletedAt);
+    if (!task) return;
+    await applyUndoablePayloadUpdate(
+      current => deleteTask(current, taskId),
+      {
+        message: `Deleted "${task.title}".`,
+        undoMessage: `Restored "${task.title}".`,
+      }
+    );
   }
 
   async function handleRescheduleTasks(taskIds: string[], dueAt: number) {
     if (!taskIds.length) return;
-    await applyPayloadUpdate(current => rescheduleTasksToDate(current, taskIds, dueAt));
-    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`);
+    await applyUndoablePayloadUpdate(
+      current => rescheduleTasksToDate(current, taskIds, dueAt),
+      {
+        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`,
+        undoMessage: 'Reverted task dates.',
+      }
+    );
   }
 
   async function handleMoveTasksToProject(taskIds: string[], projectId: string | null) {
@@ -452,20 +555,35 @@ function App() {
     const targetName = projectId
       ? payloadRef.current?.projects.find(project => project.id === projectId && !project.deletedAt)?.name ?? 'project'
       : 'Inbox';
-    await applyPayloadUpdate(current => moveTasksToProject(current, taskIds, projectId));
-    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`);
+    await applyUndoablePayloadUpdate(
+      current => moveTasksToProject(current, taskIds, projectId),
+      {
+        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`,
+        undoMessage: 'Reverted task moves.',
+      }
+    );
   }
 
   async function handleSetTasksPriority(taskIds: string[], priority: Priority) {
     if (!taskIds.length) return;
-    await applyPayloadUpdate(current => setPriorityForTasks(current, taskIds, priority));
-    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} set to ${priority}.`);
+    await applyUndoablePayloadUpdate(
+      current => setPriorityForTasks(current, taskIds, priority),
+      {
+        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} set to ${priority}.`,
+        undoMessage: 'Reverted task priorities.',
+      }
+    );
   }
 
   async function handleDeleteTasks(taskIds: string[]) {
     if (!taskIds.length) return;
-    await applyPayloadUpdate(current => deleteTasks(current, taskIds));
-    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} deleted.`);
+    await applyUndoablePayloadUpdate(
+      current => deleteTasks(current, taskIds),
+      {
+        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} deleted.`,
+        undoMessage: 'Restored deleted tasks.',
+      }
+    );
   }
 
   async function handleCreateTask(
@@ -485,16 +603,29 @@ function App() {
     const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
     await persistPayload(nextPayload, true);
     if (!options?.silent) {
-      showBanner('success', options?.successMessage ?? `Task "${draft.title.trim()}" created.`);
+      showUndoBanner(
+        options?.successMessage ?? `Task "${draft.title.trim()}" created.`,
+        current,
+        `Removed "${draft.title.trim()}".`
+      );
     }
     return createdTask?.id ?? null;
   }
 
   async function handleSaveTask(taskId: string, updater: (task: Task) => Task) {
-    const nextPayload = await applyPayloadUpdate(current => updateTask(current, taskId, updater));
+    const nextPayload = await applyUndoablePayloadUpdate(
+      current => updateTask(current, taskId, updater),
+      {
+        message: 'Task saved.',
+        undoMessage: 'Reverted task edits.',
+      }
+    );
     const savedTask = nextPayload?.tasks.find(task => task.id === taskId);
     if (savedTask) {
-      showBanner('success', `Saved "${savedTask.title}".`);
+      setBanner(current => current && current.onAction
+        ? { ...current, message: `Saved "${savedTask.title}".` }
+        : current
+      );
     }
   }
 
@@ -640,7 +771,11 @@ type WorkspaceShellProps = {
   payload: SyncPayload;
   banner: Banner | null;
   onDismissBanner: () => void;
-  onShowBanner: (tone: Banner['tone'], message: string) => void;
+  onShowBanner: (
+    tone: Banner['tone'],
+    message: string,
+    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+  ) => void;
   onCloudSync: () => void;
   onResetCloudSync: () => void;
   onResetLocalCache: () => void;
@@ -722,6 +857,7 @@ function WorkspaceShell({
   const location = useLocation();
   const todayStartMs = useTodayStartMs();
   const previousPathRef = useRef(location.key);
+  const [isBannerActionRunning, setIsBannerActionRunning] = useState(false);
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -752,10 +888,24 @@ function WorkspaceShell({
 
   useEffect(() => {
     if (previousPathRef.current !== location.key) {
-      onDismissBanner();
+      if (shouldDismissBannerOnNavigation(banner)) {
+        onDismissBanner();
+      }
       previousPathRef.current = location.key;
     }
-  }, [location.key, onDismissBanner]);
+  }, [banner, location.key, onDismissBanner]);
+
+  async function handleBannerAction() {
+    if (!banner?.onAction || isBannerActionRunning) return;
+    setIsBannerActionRunning(true);
+    try {
+      await banner.onAction();
+    } catch (error) {
+      onShowBanner('error', error instanceof Error ? error.message : 'Undo failed.');
+    } finally {
+      setIsBannerActionRunning(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
@@ -882,9 +1032,21 @@ function WorkspaceShell({
             {banner ? (
               <div className={`mx-auto mt-4 flex w-full max-w-[1240px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
                 <p>{banner.message}</p>
-                <button onClick={onDismissBanner} className="rounded-full p-1 transition hover:bg-black/5" aria-label="Dismiss status message">
-                  <X size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {banner.actionLabel && banner.onAction ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleBannerAction()}
+                      disabled={isBannerActionRunning}
+                      className="rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isBannerActionRunning ? `${banner.actionLabel}...` : banner.actionLabel}
+                    </button>
+                  ) : null}
+                  <button onClick={onDismissBanner} className="rounded-full p-1 transition hover:bg-black/5" aria-label="Dismiss status message">
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
             ) : null}
           </header>
@@ -2425,7 +2587,11 @@ function QuickAddDialog({
   context: QuickAddContext;
   onClose: () => void;
   onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
-  onShowBanner: (tone: Banner['tone'], message: string) => void;
+  onShowBanner: (
+    tone: Banner['tone'],
+    message: string,
+    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+  ) => void;
 }) {
   const todayStartMs = useTodayStartMs();
   const [input, setInput] = useState('');

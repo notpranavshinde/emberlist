@@ -73,7 +73,7 @@
 ## Web Feature Parity Backlog
 
 ### High Priority
-- [ ] Add global undo snackbar flows on web for task changes instead of banner-only recovery.
+- [x] Add global undo snackbar flows on web for task changes instead of banner-only recovery.
 - [x] Add multi-select selection mode on Today.
 - [x] Add bulk reschedule on Today.
 - [x] Add bulk move-to-project on Today.
@@ -128,7 +128,7 @@
 1. [x] Build a shared web task-selection state and bulk-action infrastructure.
    - Scope: selection mode, selected-task state, shared bulk action bar, shared task-list checkbox affordances.
    - Why first: Today, Upcoming, and Search bulk actions all depend on the same foundation.
-2. [ ] Add a shared web undo system.
+2. [x] Add a shared web undo system.
    - Scope: snackbar/toast UI, action queue, undo handlers for complete, reopen, reschedule, move, priority, delete, archive, and section changes.
    - Why second: bulk actions become much safer once undo exists.
 3. [x] Implement Today bulk workflows.
