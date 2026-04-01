@@ -89,11 +89,11 @@
 - [x] Render subtasks inside project sections on the web project page.
 
 ### Medium Priority
-- [ ] Strengthen web task detail toward Android parity with a richer editing flow.
+- [x] Strengthen web task detail toward Android parity with a richer editing flow.
 - [x] Add subtask list and subtask creation inside web task detail.
-- [ ] Add reminder editing UI in web task detail.
-- [ ] Add recurrence editing and removal UI in web task detail.
-- [ ] Add explicit metadata controls to web Quick Add for project, priority, recurrence, and reminders.
+- [x] Add reminder editing UI in web task detail.
+- [x] Add recurrence editing and removal UI in web task detail.
+- [x] Add explicit metadata controls to web Quick Add for project, priority, recurrence, and reminders.
 - [x] Keep Quick Add open for repeated task entry on web, while also letting `Esc` close it.
 
 ### Low Priority
@@ -115,8 +115,8 @@
 - [ ] Add bulk task actions from Search results.
 - [ ] Add subtask-aware Search result presentation with flattened parent/subtask rendering.
 - [ ] Make Search more action-oriented, closer to Android's behavior.
-- [ ] Add deadline recurrence UI in web task detail.
-- [ ] Strengthen post-create reminder and recurrence management surfaces on web beyond parser-only entry.
+- [x] Add deadline recurrence UI in web task detail.
+- [x] Strengthen post-create reminder and recurrence management surfaces on web beyond parser-only entry.
 - [ ] Improve deadline and scheduling controls on web task detail to better match Android.
 - [ ] Add week-start preference to web Settings.
 - [ ] Add 24-hour time preference to web Settings.
@@ -144,10 +144,10 @@
 6. [x] Add drag-to-subtask interactions.
    - Scope: parent drop targets, hierarchy reassignment, and safety rules for invalid nesting.
    - Why sixth: depends on existing visible hierarchy and subtask mutation support.
-7. [ ] Upgrade Quick Add and task detail editing surfaces.
+7. [x] Upgrade Quick Add and task detail editing surfaces.
    - Scope: repeated-entry Quick Add, `Esc` close behavior, explicit metadata controls, reminder UI, recurrence UI, and stronger task detail editing.
    - Why seventh: builds on the shared task mutation patterns and hierarchy support.
-   - Progress: repeated-entry Quick Add and `Esc` close behavior are in place; explicit metadata controls, reminder UI, recurrence UI, and stronger task detail editing are still pending.
+   - Progress: repeated-entry Quick Add, explicit metadata controls, reminder UI, recurrence UI, deadline recurrence UI, and stronger task detail editing are now in place.
 8. [ ] Add project-page operational parity.
    - Scope: richer row actions, direct reschedule, and improved in-project task operations.
    - Why eighth: safer after undo, hierarchy, and task-editing improvements are already in place.

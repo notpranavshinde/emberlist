@@ -139,6 +139,22 @@ export function getSubtasks(payload: SyncPayload, parentTaskId: string): Task[] 
         .sort(compareTasks);
 }
 
+export function getTaskReminderDrafts(payload: SyncPayload, taskId: string): TaskReminderDraft[] {
+    return payload.reminders
+        .filter(reminder =>
+            reminder.taskId === taskId &&
+            !reminder.deletedAt &&
+            reminder.enabled &&
+            reminder.type === 'TIME'
+        )
+        .sort(compareReminders)
+        .map(reminder =>
+            reminder.timeAt !== null
+                ? { kind: 'ABSOLUTE', timeAt: reminder.timeAt }
+                : { kind: 'OFFSET', offsetMinutes: reminder.offsetMinutes ?? 0 }
+        );
+}
+
 export function getTodayViewData(
     payload: SyncPayload,
     todayStart: number,
@@ -383,6 +399,67 @@ export function updateTask(payload: SyncPayload, taskId: string, updater: (task:
     return finalizePayload({
         ...payload,
         tasks: nextTasks,
+    });
+}
+
+export function updateTaskFromDraft(payload: SyncPayload, taskId: string, draft: TaskDraft): SyncPayload {
+    const currentTask = payload.tasks.find(task => task.id === taskId && !task.deletedAt);
+    if (!currentTask) return payload;
+
+    const now = Date.now();
+    const resolvedProject = resolveProject(payload, draft, now);
+    const resolvedProjectId = resolvedProject?.id ?? draft.projectId;
+    const resolvedSection = resolveSection(payload, draft, resolvedProjectId, now);
+    const resolvedSectionId = resolvedSection?.id ?? draft.sectionId;
+
+    const nextTasks = payload.tasks.map(task =>
+        task.id === taskId
+            ? {
+                ...task,
+                title: draft.title.trim(),
+                description: draft.description.trim(),
+                projectId: resolvedProjectId,
+                sectionId: resolvedProjectId ? resolvedSectionId : null,
+                priority: draft.priority,
+                dueAt: draft.dueAt,
+                allDay: draft.allDay,
+                deadlineAt: draft.deadlineAt,
+                deadlineAllDay: draft.deadlineAllDay,
+                recurringRule: draft.recurringRule,
+                deadlineRecurringRule: draft.deadlineRecurringRule,
+                updatedAt: now,
+            }
+            : task
+    );
+
+    const nextReminders = [
+        ...payload.reminders.filter(reminder => reminder.taskId !== taskId),
+        ...draft.reminders.map<Reminder>(reminder => ({
+            id: crypto.randomUUID(),
+            taskId,
+            type: 'TIME',
+            timeAt: reminder.kind === 'ABSOLUTE' ? reminder.timeAt : null,
+            offsetMinutes: reminder.kind === 'OFFSET' ? reminder.offsetMinutes : null,
+            locationId: null,
+            locationTriggerType: null,
+            enabled: true,
+            ephemeral: false,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+        })),
+    ];
+
+    return finalizePayload({
+        ...payload,
+        projects: resolvedProject && !payload.projects.some(project => project.id === resolvedProject.id)
+            ? [...payload.projects, resolvedProject]
+            : payload.projects,
+        sections: resolvedSection && !payload.sections.some(section => section.id === resolvedSection.id)
+            ? [...payload.sections, resolvedSection]
+            : payload.sections,
+        tasks: nextTasks,
+        reminders: nextReminders,
     });
 }
 
@@ -698,6 +775,15 @@ function desiredReminderDrafts(draft: TaskDraft, task: Task): TaskReminderDraft[
     }
 
     return [];
+}
+
+function compareReminders(left: Reminder, right: Reminder): number {
+    const leftRank = left.timeAt !== null ? 0 : 1;
+    const rightRank = right.timeAt !== null ? 0 : 1;
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    if (left.timeAt !== right.timeAt) return (left.timeAt ?? 0) - (right.timeAt ?? 0);
+    if (left.offsetMinutes !== right.offsetMinutes) return (left.offsetMinutes ?? 0) - (right.offsetMinutes ?? 0);
+    return left.createdAt - right.createdAt;
 }
 
 function matchesFilters(task: Task, filters: Set<SearchFilter>, reminderTaskIds: Set<string>): boolean {

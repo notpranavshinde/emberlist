@@ -7,11 +7,13 @@ import {
   deleteTasks,
   flattenTasksWithSubtasks,
   getSubtasks,
+  getTaskReminderDrafts,
   getTodayViewData,
   moveTasksToProject,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   setPriorityForTasks,
+  updateTaskFromDraft,
 } from './workspace';
 import type { Reminder, SyncPayload, Task } from '../types/sync';
 
@@ -302,5 +304,58 @@ describe('workspace bulk task helpers', () => {
     expect(canReparentTaskAsSubtask(payload, 'task-parent', 'task-child')).toBe(false);
     expect(canReparentTaskAsSubtask(payload, 'task-child', 'task-parent')).toBe(false);
     expect(reparentTaskAsSubtask(payload, 'task-parent', 'task-child')).toBe(payload);
+  });
+
+  it('reads reminder drafts for a task in a stable order', () => {
+    const payload = createPayload();
+
+    expect(getTaskReminderDrafts(payload, 'task-overdue')).toEqual([
+      { kind: 'ABSOLUTE', timeAt: new Date('2026-03-30T09:00:00').getTime() },
+    ]);
+    expect(getTaskReminderDrafts(payload, 'task-open')).toEqual([
+      { kind: 'ABSOLUTE', timeAt: new Date('2026-03-31T09:00:00').getTime() },
+    ]);
+  });
+
+  it('updates task scheduling fields and replaces reminders from a draft', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9900);
+    const payload = createPayload();
+    const draft = createTaskDraft('project-work');
+    draft.title = 'Inbox followup polished';
+    draft.description = 'Call back with estimate';
+    draft.priority = 'P1';
+    draft.dueAt = new Date('2026-04-03T14:00:00').getTime();
+    draft.allDay = false;
+    draft.deadlineAt = new Date('2026-04-02T00:00:00').getTime();
+    draft.deadlineAllDay = true;
+    draft.recurringRule = 'FREQ=WEEKLY';
+    draft.deadlineRecurringRule = 'FREQ=MONTHLY';
+    draft.reminders = [
+      { kind: 'OFFSET', offsetMinutes: 30 },
+      { kind: 'ABSOLUTE', timeAt: new Date('2026-04-03T10:00:00').getTime() },
+    ];
+
+    const updated = updateTaskFromDraft(payload, 'task-open', draft);
+    const updatedTask = updated.tasks.find(task => task.id === 'task-open');
+    const reminders = getTaskReminderDrafts(updated, 'task-open');
+
+    expect(updatedTask).toMatchObject({
+      title: 'Inbox followup polished',
+      description: 'Call back with estimate',
+      projectId: 'project-work',
+      sectionId: null,
+      priority: 'P1',
+      dueAt: new Date('2026-04-03T14:00:00').getTime(),
+      allDay: false,
+      deadlineAt: new Date('2026-04-02T00:00:00').getTime(),
+      deadlineAllDay: true,
+      recurringRule: 'FREQ=WEEKLY',
+      deadlineRecurringRule: 'FREQ=MONTHLY',
+      updatedAt: 9900,
+    });
+    expect(reminders).toEqual([
+      { kind: 'ABSOLUTE', timeAt: new Date('2026-04-03T10:00:00').getTime() },
+      { kind: 'OFFSET', offsetMinutes: 30 },
+    ]);
   });
 });
