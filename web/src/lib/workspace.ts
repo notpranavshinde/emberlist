@@ -56,6 +56,13 @@ export type TodayViewData = {
     completedToday: Task[];
 };
 
+export type FlattenedTask = {
+    task: Task;
+    depth: number;
+    hasVisibleSubtasks: boolean;
+    visibleSubtaskCount: number;
+};
+
 const HIGH_PRIORITIES: Priority[] = ['P1', 'P2'];
 
 export function createTaskDraft(projectId: string | null = null): TaskDraft {
@@ -123,6 +130,12 @@ export function getProjectTasks(payload: SyncPayload, projectId: string, include
 export function getCompletedProjectTasks(payload: SyncPayload, projectId: string): Task[] {
     return getCompletedTasks(payload)
         .filter(task => task.projectId === projectId)
+        .sort(compareTasks);
+}
+
+export function getSubtasks(payload: SyncPayload, parentTaskId: string): Task[] {
+    return payload.tasks
+        .filter(task => task.parentTaskId === parentTaskId && !task.deletedAt && task.status !== 'ARCHIVED')
         .sort(compareTasks);
 }
 
@@ -215,6 +228,47 @@ export function searchCompletedTasks(payload: SyncPayload, query: string, filter
         })
         .filter(task => matchesFilters(task, filters, reminderTaskIds))
         .sort(compareTasks);
+}
+
+export function flattenTasksWithSubtasks(tasks: Task[]): FlattenedTask[] {
+    if (!tasks.length) return [];
+
+    const visibleTaskIds = new Set(tasks.map(task => task.id));
+    const childrenByParent = new Map<string, Task[]>();
+    const roots: Task[] = [];
+
+    tasks.forEach(task => {
+        if (task.parentTaskId && visibleTaskIds.has(task.parentTaskId)) {
+            const siblings = childrenByParent.get(task.parentTaskId) ?? [];
+            siblings.push(task);
+            childrenByParent.set(task.parentTaskId, siblings);
+            return;
+        }
+        roots.push(task);
+    });
+
+    const flattened: FlattenedTask[] = [];
+    const visited = new Set<string>();
+
+    const appendTask = (task: Task, depth: number) => {
+        if (visited.has(task.id)) return;
+        visited.add(task.id);
+
+        const children = childrenByParent.get(task.id) ?? [];
+        flattened.push({
+            task,
+            depth,
+            hasVisibleSubtasks: children.length > 0,
+            visibleSubtaskCount: children.length,
+        });
+
+        children.forEach(child => appendTask(child, depth + 1));
+    };
+
+    roots.forEach(task => appendTask(task, 0));
+    tasks.forEach(task => appendTask(task, 0));
+
+    return flattened;
 }
 
 export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload {

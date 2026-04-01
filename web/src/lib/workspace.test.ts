@@ -1,7 +1,11 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEmptySyncPayload } from './syncPayload';
 import {
+  createTask as createWorkspaceTask,
+  createTaskDraft,
   deleteTasks,
+  flattenTasksWithSubtasks,
+  getSubtasks,
   getTodayViewData,
   moveTasksToProject,
   rescheduleTasksToDate,
@@ -206,5 +210,60 @@ describe('workspace bulk task helpers', () => {
 
     expect(todayData.overdue.map(task => task.id)).not.toContain('task-overdue');
     expect(todayData.today.map(task => task.id)).toContain('task-overdue');
+  });
+
+  it('flattens visible task hierarchies and leaves orphan subtasks at the root', () => {
+    const tasks = [
+      createTask({ id: 'task-parent', title: 'Parent', order: 0 }),
+      createTask({ id: 'task-child', title: 'Child', parentTaskId: 'task-parent', order: 1 }),
+      createTask({ id: 'task-grandchild', title: 'Grandchild', parentTaskId: 'task-child', order: 2 }),
+      createTask({ id: 'task-orphan', title: 'Orphan child', parentTaskId: 'missing-parent', order: 3 }),
+    ];
+
+    const flattened = flattenTasksWithSubtasks(tasks);
+
+    expect(flattened.map(item => [item.task.id, item.depth])).toEqual([
+      ['task-parent', 0],
+      ['task-child', 1],
+      ['task-grandchild', 2],
+      ['task-orphan', 0],
+    ]);
+    expect(flattened[0]).toMatchObject({ hasVisibleSubtasks: true, visibleSubtaskCount: 1 });
+    expect(flattened[1]).toMatchObject({ hasVisibleSubtasks: true, visibleSubtaskCount: 1 });
+    expect(flattened[2]).toMatchObject({ hasVisibleSubtasks: false, visibleSubtaskCount: 0 });
+  });
+
+  it('returns direct subtasks without archived children', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-parent', title: 'Parent task' }),
+      createTask({ id: 'task-child-open', title: 'Open child', parentTaskId: 'task-parent', order: 0 }),
+      createTask({ id: 'task-child-complete', title: 'Completed child', parentTaskId: 'task-parent', status: 'COMPLETED', completedAt: 5, order: 1 }),
+      createTask({ id: 'task-child-archived', title: 'Archived child', parentTaskId: 'task-parent', status: 'ARCHIVED', order: 2 }),
+    );
+
+    expect(getSubtasks(payload, 'task-parent').map(task => task.id)).toEqual([
+      'task-child-open',
+      'task-child-complete',
+    ]);
+  });
+
+  it('creates subtasks with the parent task id intact', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9000);
+    const payload = createPayload();
+    const draft = createTaskDraft('project-home');
+    draft.title = 'Follow up on rent';
+    draft.sectionId = 'section-weekend';
+    draft.parentTaskId = 'task-today';
+
+    const updated = createWorkspaceTask(payload, draft);
+    const createdTask = updated.tasks.find(task => task.title === 'Follow up on rent');
+
+    expect(createdTask).toMatchObject({
+      parentTaskId: 'task-today',
+      projectId: 'project-home',
+      sectionId: 'section-weekend',
+      status: 'OPEN',
+    });
   });
 });

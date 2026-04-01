@@ -45,6 +45,7 @@ import {
   deleteProject,
   deleteSection,
   deleteTask,
+  flattenTasksWithSubtasks,
   getCompletedInboxTasks,
   getCompletedProjectTasks,
   getActiveProjects,
@@ -52,6 +53,7 @@ import {
   getProjectById,
   getProjectSections,
   getProjectTasks,
+  getSubtasks,
   getTaskById,
   getTodayViewData,
   getUpcomingCompletedTasks,
@@ -1110,9 +1112,12 @@ function WorkspaceShell({
                 element={
                   <TaskDetailPage
                     payload={payload}
+                    onCreateTask={onCreateTask}
                     onSaveTask={onSaveTask}
+                    onShowBanner={onShowBanner}
                     onArchiveTask={onArchiveTask}
                     onDeleteTask={onDeleteTask}
+                    onToggleTask={onToggleTask}
                   />
                 }
               />
@@ -2129,14 +2134,24 @@ function ProjectPage({
 
 function TaskDetailPage({
   payload,
+  onCreateTask,
   onSaveTask,
+  onShowBanner,
   onArchiveTask,
   onDeleteTask,
+  onToggleTask,
 }: {
   payload: SyncPayload;
+  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onSaveTask: (taskId: string, updater: (task: Task) => Task) => void;
+  onShowBanner: (
+    tone: Banner['tone'],
+    message: string,
+    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+  ) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onToggleTask: (taskId: string) => void;
 }) {
   const { taskId } = useParams();
   const task = taskId ? getTaskById(payload, taskId) : undefined;
@@ -2151,9 +2166,12 @@ function TaskDetailPage({
       payload={payload}
       task={task}
       returnPath={task.projectId ? `/project/${task.projectId}` : '/inbox'}
+      onCreateTask={onCreateTask}
       onSaveTask={onSaveTask}
+      onShowBanner={onShowBanner}
       onArchiveTask={onArchiveTask}
       onDeleteTask={onDeleteTask}
+      onToggleTask={onToggleTask}
     />
   );
 }
@@ -2162,19 +2180,31 @@ function TaskEditor({
   payload,
   task,
   returnPath,
+  onCreateTask,
   onSaveTask,
+  onShowBanner,
   onArchiveTask,
   onDeleteTask,
+  onToggleTask,
 }: {
   payload: SyncPayload;
   task: Task;
   returnPath: string;
+  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onSaveTask: (taskId: string, updater: (task: Task) => Task) => void;
+  onShowBanner: (
+    tone: Banner['tone'],
+    message: string,
+    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+  ) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onToggleTask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
   const projects = getActiveProjects(payload, true);
+  const todayStartMs = useTodayStartMs();
+  const subtasks = useMemo(() => getSubtasks(payload, task.id), [payload, task.id]);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [projectId, setProjectId] = useState<string>(task.projectId ?? '');
@@ -2187,7 +2217,11 @@ function TaskEditor({
   const [deadlineAt, setDeadlineAt] = useState(
     toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false)
   );
+  const [newSubtask, setNewSubtask] = useState('');
+  const [showBulkSubtaskChoices, setShowBulkSubtaskChoices] = useState(false);
+  const [isCreatingSubtasks, setIsCreatingSubtasks] = useState(false);
   const sectionOptions = projectId ? getProjectSections(payload, projectId) : [];
+  const bulkSubtaskLines = useMemo(() => extractBulkQuickAddLines(newSubtask), [newSubtask]);
   const isDirty =
     title.trim() !== task.title ||
     description.trim() !== task.description ||
@@ -2268,6 +2302,91 @@ function TaskEditor({
       return;
     }
     navigate(returnPath);
+  }
+
+  async function createSubtaskDrafts(mode: 'single' | 'many') {
+    const subtaskContext: QuickAddContext = {
+      defaultProjectId: task.projectId,
+      defaultSectionId: task.sectionId,
+      defaultDueToday: false,
+    };
+
+    setIsCreatingSubtasks(true);
+    try {
+      if (mode === 'single') {
+        const mergedDraft = {
+          ...createMergedBulkDraft(payload, bulkSubtaskLines, '', subtaskContext, todayStartMs),
+          parentTaskId: task.id,
+          projectId: task.projectId,
+          projectName: null,
+          sectionId: task.sectionId,
+          sectionName: null,
+        };
+        const createdTaskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 subtask.' });
+        if (createdTaskId) {
+          setNewSubtask('');
+        }
+        return;
+      }
+
+      let createdCount = 0;
+      for (const line of bulkSubtaskLines) {
+        const parsedLine = parseQuickAdd(line);
+        const draft = {
+          ...buildDraftFromParsed(payload, parsedLine, '', subtaskContext, todayStartMs),
+          parentTaskId: task.id,
+          projectId: task.projectId,
+          projectName: null,
+          sectionId: task.sectionId,
+          sectionName: null,
+        };
+        const createdTaskId = await onCreateTask(draft, { silent: true });
+        if (createdTaskId) {
+          createdCount += 1;
+        }
+      }
+      if (createdCount > 0) {
+        onShowBanner('success', `${createdCount} subtask${createdCount === 1 ? '' : 's'} created.`);
+        setNewSubtask('');
+      }
+    } finally {
+      setIsCreatingSubtasks(false);
+      setShowBulkSubtaskChoices(false);
+    }
+  }
+
+  async function submitSubtask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newSubtask.trim()) return;
+    if (shouldPromptBulkQuickAdd(newSubtask)) {
+      setShowBulkSubtaskChoices(true);
+      return;
+    }
+
+    const subtaskContext: QuickAddContext = {
+      defaultProjectId: task.projectId,
+      defaultSectionId: task.sectionId,
+      defaultDueToday: false,
+    };
+    const parsed = parseQuickAdd(newSubtask);
+    const draft = {
+      ...buildDraftFromParsed(payload, parsed, '', subtaskContext, todayStartMs),
+      parentTaskId: task.id,
+      projectId: task.projectId,
+      projectName: null,
+      sectionId: task.sectionId,
+      sectionName: null,
+    };
+
+    setIsCreatingSubtasks(true);
+    try {
+      const createdTaskId = await onCreateTask(draft, { successMessage: `Created subtask "${draft.title}".` });
+      if (createdTaskId) {
+        setNewSubtask('');
+      }
+    } finally {
+      setIsCreatingSubtasks(false);
+    }
   }
 
   return (
@@ -2434,6 +2553,97 @@ function TaskEditor({
           </button>
         </section>
       </form>
+
+      <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Subtasks</p>
+            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">Break this task down</h3>
+            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+              Subtasks stay linked to this task, inherit its current project and section, and support pasted lists.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
+            {subtasks.length} subtask{subtasks.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        <div className="mt-5">
+          <TaskListBlock
+            payload={payload}
+            todayStartMs={todayStartMs}
+            tasks={subtasks}
+            emptyMessage="No subtasks yet."
+            onToggleTask={onToggleTask}
+            onOpenTask={taskId => navigate(`/task/${taskId}`)}
+            baseDepth={1}
+          />
+        </div>
+
+        <form onSubmit={submitSubtask} className="mt-5 space-y-4">
+          <Field label="Add subtask">
+            <textarea
+              value={newSubtask}
+              onChange={event => {
+                setNewSubtask(event.target.value);
+                if (showBulkSubtaskChoices) {
+                  setShowBulkSubtaskChoices(false);
+                }
+              }}
+              rows={3}
+              placeholder="Add a subtask or paste one task per line"
+              className="w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
+            />
+            <p className="mt-2 text-xs text-[#8A8076]">
+              Quick Add parsing works here too: dates, priorities, projects, sections, recurrence, and reminders.
+            </p>
+          </Field>
+
+          {showBulkSubtaskChoices && bulkSubtaskLines.length > 1 ? (
+            <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
+              <p className="text-sm font-semibold text-[#A24628]">Add {bulkSubtaskLines.length} subtasks?</p>
+              <p className="mt-1 text-sm text-[#8A5A44]">
+                Combine the pasted list into one subtask or create one subtask per line.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkSubtaskChoices(false)}
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isCreatingSubtasks}
+                  onClick={() => void createSubtaskDrafts('single')}
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isCreatingSubtasks ? 'Adding...' : 'Add 1 subtask'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isCreatingSubtasks}
+                  onClick={() => void createSubtaskDrafts('many')}
+                  className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isCreatingSubtasks ? 'Adding...' : `Add all ${bulkSubtaskLines.length}`}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={isCreatingSubtasks || !newSubtask.trim()}
+              className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isCreatingSubtasks ? 'Adding...' : bulkSubtaskLines.length > 1 ? `Review ${bulkSubtaskLines.length} subtasks` : 'Add subtask'}
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
@@ -2864,6 +3074,7 @@ function TaskListBlock({
   emptyMessage,
   onToggleTask,
   onOpenTask,
+  baseDepth = 0,
   selectionMode = false,
   selectedTaskIds,
   onToggleSelection,
@@ -2874,26 +3085,32 @@ function TaskListBlock({
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
+  baseDepth?: number;
   selectionMode?: boolean;
   selectedTaskIds?: Set<string>;
   onToggleSelection?: (taskId: string) => void;
 }) {
+  const flattenedTasks = useMemo(() => flattenTasksWithSubtasks(tasks), [tasks]);
+
   if (!tasks.length) {
     return <p className="rounded-[12px] border border-[#ece7e3] bg-white px-4 py-5 text-sm text-[#7b736b]">{emptyMessage}</p>;
   }
 
   return (
     <div className="overflow-hidden rounded-[14px] border border-[#ece7e3] bg-white">
-      {tasks.map(task => (
+      {flattenedTasks.map(item => (
         <TaskRow
-          key={task.id}
+          key={item.task.id}
           payload={payload}
           todayStartMs={todayStartMs}
-          task={task}
+          task={item.task}
+          depth={item.depth + baseDepth}
+          hasVisibleSubtasks={item.hasVisibleSubtasks}
+          visibleSubtaskCount={item.visibleSubtaskCount}
           onToggleTask={onToggleTask}
           onOpenTask={onOpenTask}
           selectionMode={selectionMode}
-          selected={selectedTaskIds?.has(task.id) ?? false}
+          selected={selectedTaskIds?.has(item.task.id) ?? false}
           onToggleSelection={onToggleSelection}
         />
       ))}
@@ -2905,6 +3122,9 @@ function TaskRow({
   payload,
   todayStartMs,
   task,
+  depth,
+  hasVisibleSubtasks,
+  visibleSubtaskCount,
   onToggleTask,
   onOpenTask,
   selectionMode = false,
@@ -2914,6 +3134,9 @@ function TaskRow({
   payload: SyncPayload;
   todayStartMs: number;
   task: Task;
+  depth: number;
+  hasVisibleSubtasks: boolean;
+  visibleSubtaskCount: number;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   selectionMode?: boolean;
@@ -2978,12 +3201,17 @@ function TaskRow({
       >
         <Check size={12} />
       </button>
+      {depth > 0 ? <div aria-hidden="true" className="shrink-0" style={{ width: depth * 16 }} /> : null}
       <div className="min-w-0 flex-1">
         <p className={`text-[15px] leading-5 ${completed ? 'text-[#9a928c] line-through' : 'text-[#202020]'}`}>{task.title}</p>
         {task.description ? (
           <p className={`mt-1 text-sm leading-5 ${completed ? 'text-[#a39a93]' : 'text-[#6d665e]'}`}>{task.description}</p>
         ) : null}
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#8a8076]">
+          {depth > 0 ? <span>Subtask</span> : null}
+          {hasVisibleSubtasks ? (
+            <span>{visibleSubtaskCount} subtask{visibleSubtaskCount === 1 ? '' : 's'}</span>
+          ) : null}
           {dueLabel ? (
             <span className={`inline-flex items-center gap-1 ${overdue ? 'text-[#d1453b]' : 'text-[#8a8076]'}`}>
               <Calendar size={11} />
@@ -2991,7 +3219,7 @@ function TaskRow({
             </span>
           ) : null}
           {task.recurringRule ? <span className={overdue ? 'text-[#d1453b]' : ''}>↻</span> : null}
-          {task.parentTaskId ? <span>Subtask</span> : null}
+          {task.parentTaskId && depth === 0 ? <span>Subtask</span> : null}
           <span className="md:hidden">{locationLabel}</span>
         </div>
       </div>
