@@ -94,7 +94,7 @@
 - [ ] Add reminder editing UI in web task detail.
 - [ ] Add recurrence editing and removal UI in web task detail.
 - [ ] Add explicit metadata controls to web Quick Add for project, priority, recurrence, and reminders.
-- [ ] Keep Quick Add open for repeated task entry on web, while also letting `Esc` close it.
+- [x] Keep Quick Add open for repeated task entry on web, while also letting `Esc` close it.
 
 ### Low Priority
 - [ ] Add web project board view.
@@ -147,6 +147,7 @@
 7. [ ] Upgrade Quick Add and task detail editing surfaces.
    - Scope: repeated-entry Quick Add, `Esc` close behavior, explicit metadata controls, reminder UI, recurrence UI, and stronger task detail editing.
    - Why seventh: builds on the shared task mutation patterns and hierarchy support.
+   - Progress: repeated-entry Quick Add and `Esc` close behavior are in place; explicit metadata controls, reminder UI, recurrence UI, and stronger task detail editing are still pending.
 8. [ ] Add project-page operational parity.
    - Scope: richer row actions, direct reschedule, and improved in-project task operations.
    - Why eighth: safer after undo, hierarchy, and task-editing improvements are already in place.

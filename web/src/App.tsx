@@ -33,6 +33,7 @@ import { RecoveryScreen } from './components/RecoveryScreen';
 import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './lib/banner';
 import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
+import { getQuickAddEscapeAction, shouldCloseQuickAddAfterCreate, type QuickAddSubmitMode } from './lib/quickAddFlow';
 import { parseQuickAdd, type QuickAddResult, type ReminderSpec as ParsedReminderSpec } from './lib/quickParser';
 import { ensureSyncPayload } from './lib/syncPayload';
 import { DriveSyncService, type CloudSession } from './lib/syncService';
@@ -2865,6 +2866,7 @@ function QuickAddDialog({
   const [description, setDescription] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [showBulkChoices, setShowBulkChoices] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
   const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
   const hasInput = input.trim().length > 0;
@@ -2873,8 +2875,34 @@ function QuickAddDialog({
     [context, description, parsedPreview, payload, todayStartMs]
   );
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (isSaving) return;
+
+      event.preventDefault();
+      const action = getQuickAddEscapeAction(showBulkChoices);
+      if (action === 'dismiss-bulk') {
+        setShowBulkChoices(false);
+        return;
+      }
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSaving, onClose, showBulkChoices]);
+
+  function resetDialogFields() {
+    setInput('');
+    setDescription('');
+    setShowBulkChoices(false);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }
+
+  async function submitDraft(mode: QuickAddSubmitMode = 'close') {
     if (!hasInput) return;
     if (shouldPromptBulkQuickAdd(input)) {
       setShowBulkChoices(true);
@@ -2885,11 +2913,20 @@ function QuickAddDialog({
     try {
       const taskId = await onCreateTask(previewDraft);
       if (taskId) {
-        onClose();
+        if (shouldCloseQuickAddAfterCreate(mode)) {
+          onClose();
+        } else {
+          resetDialogFields();
+        }
       }
     } finally {
       setIsSaving(false);
     }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitDraft('close');
   }
 
   async function createBulkTasks(mode: 'single' | 'many') {
@@ -2934,6 +2971,7 @@ function QuickAddDialog({
           <Field label="Task parser">
             <textarea
               autoFocus
+              ref={inputRef}
               value={input}
               onChange={event => {
                 setInput(event.target.value);
@@ -3044,6 +3082,14 @@ function QuickAddDialog({
               className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSaving ? 'Creating...' : bulkLines.length > 1 ? `Review ${bulkLines.length} tasks` : 'Create task'}
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || !hasInput || bulkLines.length > 1}
+              onClick={() => void submitDraft('continue')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSaving ? 'Creating...' : 'Create & add another'}
             </button>
           </div>
         </form>
