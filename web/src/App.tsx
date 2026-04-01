@@ -925,11 +925,11 @@ function WorkspaceShell({
   const todayStartMs = useTodayStartMs();
   const previousPathRef = useRef(location.key);
   const goSequenceTimeoutRef = useRef<number | null>(null);
+  const pendingGoPrefixRef = useRef(false);
   const bannerActionRef = useRef<() => Promise<void>>(async () => undefined);
   const [isBannerActionRunning, setIsBannerActionRunning] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
-  const [pendingGoPrefix, setPendingGoPrefix] = useState(false);
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -987,7 +987,7 @@ function WorkspaceShell({
         window.clearTimeout(goSequenceTimeoutRef.current);
         goSequenceTimeoutRef.current = null;
       }
-      setPendingGoPrefix(false);
+      pendingGoPrefixRef.current = false;
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -996,7 +996,7 @@ function WorkspaceShell({
       const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
       const typing = isTypingTarget(event.target);
 
-      if (pendingGoPrefix) {
+      if (pendingGoPrefixRef.current) {
         const destination = resolveGoShortcut(lowerKey);
         clearGoPrefix();
         if (destination) {
@@ -1066,14 +1066,15 @@ function WorkspaceShell({
 
       if (!hasModifier && lowerKey === 'g') {
         event.preventDefault();
-        setPendingGoPrefix(true);
+        pendingGoPrefixRef.current = true;
         if (goSequenceTimeoutRef.current !== null) {
           window.clearTimeout(goSequenceTimeoutRef.current);
         }
         goSequenceTimeoutRef.current = window.setTimeout(() => {
-          setPendingGoPrefix(false);
+          pendingGoPrefixRef.current = false;
           goSequenceTimeoutRef.current = null;
         }, 1200);
+        return;
       }
     };
 
@@ -1082,7 +1083,7 @@ function WorkspaceShell({
       window.removeEventListener('keydown', handleKeyDown);
       clearGoPrefix();
     };
-  }, [banner, isBannerActionRunning, isShortcutDialogOpen, navigate, onOpenQuickAdd, pendingGoPrefix]);
+  }, [banner, isBannerActionRunning, isShortcutDialogOpen, navigate, onOpenQuickAdd]);
 
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
@@ -4243,7 +4244,7 @@ function ChoiceDialog({
 
   return (
     <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
-      <div className="w-full max-w-lg rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl">
+      <div className="flex max-h-[min(82vh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-semibold text-[#1E2D2F]">{title}</h3>
@@ -4258,8 +4259,8 @@ function ChoiceDialog({
             <X size={16} />
           </button>
         </div>
-        {children ? <div className="mt-5">{children}</div> : null}
-        {footer ? <div className="mt-5">{footer}</div> : null}
+        {children ? <div className="mt-5 overflow-y-auto pr-1">{children}</div> : null}
+        {footer ? <div className="mt-5 shrink-0">{footer}</div> : null}
       </div>
     </div>
   );
