@@ -21,6 +21,10 @@ export type SyncOptions = {
     interactiveAuth?: boolean;
 };
 
+export function resolveGoogleAuthPrompt(interactive: boolean, hasAccessToken: boolean): '' | 'consent' {
+    return interactive && !hasAccessToken ? 'consent' : '';
+}
+
 export class DriveSyncService {
     private static gisScriptPromise: Promise<void> | null = null;
 
@@ -49,11 +53,16 @@ export class DriveSyncService {
 
     async login(interactive: boolean = true) {
         if (!this.tokenClient) await this.init();
-        if (!interactive && !this.accessToken) {
-            throw new Error('Google Drive sign-in is required in this browser.');
+        const prompt = resolveGoogleAuthPrompt(interactive, Boolean(this.accessToken));
+
+        try {
+            this.accessToken = await this.requestAccessToken(prompt);
+        } catch (error) {
+            if (!interactive) {
+                throw new Error('Google Drive sign-in is required in this browser.');
+            }
+            throw error;
         }
-        const prompt = interactive && !this.accessToken ? 'consent' : '';
-        this.accessToken = await this.requestAccessToken(prompt);
         this.session = await this.fetchSessionProfile(interactive);
         return this.session;
     }
