@@ -1,5 +1,5 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ChangeEvent, ComponentType, FormEvent, ReactNode } from 'react';
+import type { CSSProperties, ChangeEvent, ComponentType, DragEvent, FormEvent, ReactNode } from 'react';
 import {
   Calendar,
   Check,
@@ -7,6 +7,7 @@ import {
   ChevronRight,
   Cloud,
   Folder,
+  GripVertical,
   Home,
   Import,
   Layers3,
@@ -38,6 +39,7 @@ import { DriveSyncService, type CloudSession } from './lib/syncService';
 import { SyncEngine } from './lib/syncEngine';
 import {
   archiveTask,
+  canReparentTaskAsSubtask,
   createProject,
   createSection,
   createTask,
@@ -59,6 +61,7 @@ import {
   getUpcomingCompletedTasks,
   getUpcomingGroups,
   moveTasksToProject,
+  reparentTaskAsSubtask,
   rescheduleTasksToDate,
   searchTasks,
   searchCompletedTasks,
@@ -588,6 +591,23 @@ function App() {
     );
   }
 
+  async function handleReparentTaskAsSubtask(draggedTaskId: string, parentTaskId: string) {
+    const current = payloadRef.current;
+    if (!current || !canReparentTaskAsSubtask(current, draggedTaskId, parentTaskId)) return;
+
+    const draggedTask = current.tasks.find(task => task.id === draggedTaskId && !task.deletedAt);
+    const parentTask = current.tasks.find(task => task.id === parentTaskId && !task.deletedAt);
+    if (!draggedTask || !parentTask) return;
+
+    await applyUndoablePayloadUpdate(
+      payload => reparentTaskAsSubtask(payload, draggedTaskId, parentTaskId),
+      {
+        message: `Moved "${draggedTask.title}" under "${parentTask.title}".`,
+        undoMessage: `Moved "${draggedTask.title}" back.`,
+      }
+    );
+  }
+
   async function handleCreateTask(
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string }
@@ -733,6 +753,7 @@ function App() {
         onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
         onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
         onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
+        onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
         onSaveTask={(taskId, updater) => void handleSaveTask(taskId, updater)}
         onCreateProject={name => void handleCreateProject(name)}
         onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
@@ -790,6 +811,7 @@ type WorkspaceShellProps = {
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onSaveTask: (taskId: string, updater: (task: Task) => Task) => void;
   onCreateProject: (name: string) => void;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
@@ -832,6 +854,7 @@ function WorkspaceShell({
   onMoveTasksToProject,
   onSetTasksPriority,
   onDeleteTasks,
+  onReparentTaskAsSubtask,
   onSaveTask,
   onCreateProject,
   onUpdateProject,
@@ -1065,6 +1088,7 @@ function WorkspaceShell({
                     showCompletedToday={showCompletedToday}
                     onToggleShowCompletedToday={onToggleShowCompletedToday}
                     onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
                     onSetTasksPriority={onSetTasksPriority}
@@ -1074,15 +1098,15 @@ function WorkspaceShell({
               />
               <Route
                 path="/upcoming"
-                element={<UpcomingPage payload={payload} onToggleTask={onToggleTask} />}
+                element={<UpcomingPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} />}
               />
               <Route
                 path="/search"
-                element={<SearchPage payload={payload} onToggleTask={onToggleTask} />}
+                element={<SearchPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} />}
               />
               <Route
                 path="/search/no-due"
-                element={<SearchPage payload={payload} onToggleTask={onToggleTask} forcedFilter="NO_DUE" />}
+                element={<SearchPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} forcedFilter="NO_DUE" />}
               />
               <Route
                 path="/browse"
@@ -1090,7 +1114,7 @@ function WorkspaceShell({
               />
               <Route
                 path="/inbox"
-                element={<InboxPage payload={payload} onToggleTask={onToggleTask} />}
+                element={<InboxPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} />}
               />
               <Route
                 path="/project/:projectId"
@@ -1103,6 +1127,7 @@ function WorkspaceShell({
                     onUpdateSection={onUpdateSection}
                     onDeleteSection={onDeleteSection}
                     onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onOpenQuickAdd={onOpenQuickAdd}
                   />
                 }
@@ -1118,6 +1143,7 @@ function WorkspaceShell({
                     onArchiveTask={onArchiveTask}
                     onDeleteTask={onDeleteTask}
                     onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                   />
                 }
               />
@@ -1179,6 +1205,7 @@ function TodayPage({
   showCompletedToday,
   onToggleShowCompletedToday,
   onToggleTask,
+  onReparentTaskAsSubtask,
   onRescheduleTasks,
   onMoveTasksToProject,
   onSetTasksPriority,
@@ -1188,6 +1215,7 @@ function TodayPage({
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
@@ -1358,6 +1386,7 @@ function TodayPage({
         tasks={data.overdue}
         emptyMessage="Nothing overdue."
         onToggleTask={onToggleTask}
+        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
@@ -1383,6 +1412,7 @@ function TodayPage({
         tasks={data.today}
         emptyMessage="No tasks due today."
         onToggleTask={onToggleTask}
+        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
@@ -1398,6 +1428,7 @@ function TodayPage({
           tasks={data.completedToday}
           emptyMessage="Nothing completed yet today."
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1558,9 +1589,11 @@ function TodayPage({
 function UpcomingPage({
   payload,
   onToggleTask,
+  onReparentTaskAsSubtask,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1588,6 +1621,7 @@ function UpcomingPage({
           tasks={todayData.overdue}
           emptyMessage="Nothing overdue."
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
         />
       ) : null}
@@ -1602,6 +1636,7 @@ function UpcomingPage({
             tasks={group.tasks}
             emptyMessage="No tasks."
             onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
           />
         ))
@@ -1621,6 +1656,7 @@ function UpcomingPage({
           tasks={completedTasks}
           emptyMessage="No completed tasks."
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1633,10 +1669,12 @@ function UpcomingPage({
 function SearchPage({
   payload,
   onToggleTask,
+  onReparentTaskAsSubtask,
   forcedFilter,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   forcedFilter?: SearchFilter;
 }) {
   const navigate = useNavigate();
@@ -1746,6 +1784,7 @@ function SearchPage({
         tasks={results}
         emptyMessage="No open tasks match this search yet."
         onToggleTask={onToggleTask}
+        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
       />
 
@@ -1758,6 +1797,7 @@ function SearchPage({
           tasks={completedResults}
           emptyMessage="No completed tasks match this search."
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1864,9 +1904,11 @@ function BrowsePage({
 function InboxPage({
   payload,
   onToggleTask,
+  onReparentTaskAsSubtask,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1887,6 +1929,7 @@ function InboxPage({
         tasks={tasks}
         emptyMessage="Inbox is clear."
         onToggleTask={onToggleTask}
+        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
       />
 
@@ -1899,6 +1942,7 @@ function InboxPage({
           tasks={completedTasks}
           emptyMessage="No completed Inbox tasks."
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1916,6 +1960,7 @@ function ProjectPage({
   onUpdateSection,
   onDeleteSection,
   onToggleTask,
+  onReparentTaskAsSubtask,
   onOpenQuickAdd,
 }: {
   payload: SyncPayload;
@@ -1925,6 +1970,7 @@ function ProjectPage({
   onUpdateSection: (sectionId: string, updater: (section: Section) => Section) => void;
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
 }) {
   const navigate = useNavigate();
@@ -2015,6 +2061,7 @@ function ProjectPage({
             tasks={unsectionedTasks}
             emptyMessage="No unsectioned tasks here."
             onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
           />
 
@@ -2062,6 +2109,7 @@ function ProjectPage({
                   tasks={sectionTasks}
                   emptyMessage="No tasks in this section yet."
                   onToggleTask={onToggleTask}
+                  onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                   onOpenTask={taskId => navigate(`/task/${taskId}`)}
                 />
               </div>
@@ -2077,6 +2125,7 @@ function ProjectPage({
               tasks={completedTasks}
               emptyMessage="No completed tasks in this project."
               onToggleTask={onToggleTask}
+              onReparentTaskAsSubtask={onReparentTaskAsSubtask}
               onOpenTask={taskId => navigate(`/task/${taskId}`)}
               collapsible
               defaultCollapsed
@@ -2140,6 +2189,7 @@ function TaskDetailPage({
   onArchiveTask,
   onDeleteTask,
   onToggleTask,
+  onReparentTaskAsSubtask,
 }: {
   payload: SyncPayload;
   onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
@@ -2152,6 +2202,7 @@ function TaskDetailPage({
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
 }) {
   const { taskId } = useParams();
   const task = taskId ? getTaskById(payload, taskId) : undefined;
@@ -2172,6 +2223,7 @@ function TaskDetailPage({
       onArchiveTask={onArchiveTask}
       onDeleteTask={onDeleteTask}
       onToggleTask={onToggleTask}
+      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
     />
   );
 }
@@ -2186,6 +2238,7 @@ function TaskEditor({
   onArchiveTask,
   onDeleteTask,
   onToggleTask,
+  onReparentTaskAsSubtask,
 }: {
   payload: SyncPayload;
   task: Task;
@@ -2200,6 +2253,7 @@ function TaskEditor({
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
 }) {
   const navigate = useNavigate();
   const projects = getActiveProjects(payload, true);
@@ -2575,6 +2629,7 @@ function TaskEditor({
             tasks={subtasks}
             emptyMessage="No subtasks yet."
             onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
             baseDepth={1}
           />
@@ -3003,6 +3058,7 @@ function TaskGroup({
   tasks,
   emptyMessage,
   onToggleTask,
+  onReparentTaskAsSubtask,
   onOpenTask,
   collapsible = false,
   defaultCollapsed = false,
@@ -3018,6 +3074,7 @@ function TaskGroup({
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onOpenTask: (taskId: string) => void;
   collapsible?: boolean;
   defaultCollapsed?: boolean;
@@ -3057,6 +3114,7 @@ function TaskGroup({
           tasks={tasks}
           emptyMessage={emptyMessage}
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={onOpenTask}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
@@ -3073,6 +3131,7 @@ function TaskListBlock({
   tasks,
   emptyMessage,
   onToggleTask,
+  onReparentTaskAsSubtask,
   onOpenTask,
   baseDepth = 0,
   selectionMode = false,
@@ -3084,6 +3143,7 @@ function TaskListBlock({
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onOpenTask: (taskId: string) => void;
   baseDepth?: number;
   selectionMode?: boolean;
@@ -3108,6 +3168,7 @@ function TaskListBlock({
           hasVisibleSubtasks={item.hasVisibleSubtasks}
           visibleSubtaskCount={item.visibleSubtaskCount}
           onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onOpenTask={onOpenTask}
           selectionMode={selectionMode}
           selected={selectedTaskIds?.has(item.task.id) ?? false}
@@ -3126,6 +3187,7 @@ function TaskRow({
   hasVisibleSubtasks,
   visibleSubtaskCount,
   onToggleTask,
+  onReparentTaskAsSubtask,
   onOpenTask,
   selectionMode = false,
   selected = false,
@@ -3138,15 +3200,19 @@ function TaskRow({
   hasVisibleSubtasks: boolean;
   visibleSubtaskCount: number;
   onToggleTask: (taskId: string) => void;
+  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onOpenTask: (taskId: string) => void;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelection?: (taskId: string) => void;
 }) {
   const completed = task.status === 'COMPLETED';
+  const canDrag = !selectionMode && task.status === 'OPEN';
+  const canAcceptSubtaskDrop = task.status === 'OPEN' && task.parentTaskId === null;
   const overdue = Boolean(task.dueAt && task.status === 'OPEN' && task.dueAt < todayStartMs);
   const locationLabel = getTaskLocationLabel(payload, task);
   const dueLabel = task.dueAt ? formatTaskDate(task.dueAt, task.allDay) : null;
+  const [isDropActive, setIsDropActive] = useState(false);
 
   function handleRowAction() {
     if (selectionMode) {
@@ -3156,10 +3222,63 @@ function TaskRow({
     onOpenTask(task.id);
   }
 
+  function getDraggedTaskId(event: DragEvent<HTMLElement>): string | null {
+    const value = event.dataTransfer.getData('text/task-id').trim();
+    return value || null;
+  }
+
+  function handleDragStart(event: DragEvent<HTMLElement>) {
+    if (!canDrag) return;
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/task-id', task.id);
+    event.dataTransfer.setData('text/plain', task.title);
+  }
+
+  function handleDragEnd() {
+    setIsDropActive(false);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    const draggedTaskId = getDraggedTaskId(event);
+    if (!draggedTaskId || !canAcceptSubtaskDrop || !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)) {
+      setIsDropActive(false);
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (!isDropActive) {
+      setIsDropActive(true);
+    }
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      return;
+    }
+    setIsDropActive(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    const draggedTaskId = getDraggedTaskId(event);
+    setIsDropActive(false);
+    if (!draggedTaskId || !canAcceptSubtaskDrop || !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    onReparentTaskAsSubtask(draggedTaskId, task.id);
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       onClick={handleRowAction}
       onKeyDown={event => {
         if (event.key === 'Enter' || event.key === ' ') {
@@ -3167,11 +3286,28 @@ function TaskRow({
           handleRowAction();
         }
       }}
-      className={`flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${selected
+      className={`flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${isDropActive
+        ? 'bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]'
+        : selected
         ? 'bg-[#FFF3EE]'
         : 'hover:bg-[#fcfaf7]'
         }`}
     >
+      {canDrag ? (
+        <button
+          type="button"
+          draggable
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onClick={event => event.stopPropagation()}
+          aria-label={`Drag ${task.title}`}
+          className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[#FBF7F3] active:cursor-grabbing"
+        >
+          <GripVertical size={14} />
+        </button>
+      ) : (
+        <div className="h-5 w-5 shrink-0" aria-hidden="true" />
+      )}
       {selectionMode ? (
         <button
           type="button"
@@ -3206,6 +3342,9 @@ function TaskRow({
         <p className={`text-[15px] leading-5 ${completed ? 'text-[#9a928c] line-through' : 'text-[#202020]'}`}>{task.title}</p>
         {task.description ? (
           <p className={`mt-1 text-sm leading-5 ${completed ? 'text-[#a39a93]' : 'text-[#6d665e]'}`}>{task.description}</p>
+        ) : null}
+        {isDropActive ? (
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">Drop to make subtask</p>
         ) : null}
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#8a8076]">
           {depth > 0 ? <span>Subtask</span> : null}

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEmptySyncPayload } from './syncPayload';
 import {
+  canReparentTaskAsSubtask,
   createTask as createWorkspaceTask,
   createTaskDraft,
   deleteTasks,
@@ -8,6 +9,7 @@ import {
   getSubtasks,
   getTodayViewData,
   moveTasksToProject,
+  reparentTaskAsSubtask,
   rescheduleTasksToDate,
   setPriorityForTasks,
 } from './workspace';
@@ -265,5 +267,40 @@ describe('workspace bulk task helpers', () => {
       sectionId: 'section-weekend',
       status: 'OPEN',
     });
+  });
+
+  it('reparents a task as a subtask and inherits the parent project and section', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9500);
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-parent', title: 'Parent', projectId: 'project-home', sectionId: 'section-weekend', order: 2 }),
+      createTask({ id: 'task-target', title: 'Target', projectId: null, sectionId: null, order: 0 }),
+      createTask({ id: 'task-existing-child', title: 'Existing child', parentTaskId: 'task-parent', projectId: 'project-home', sectionId: 'section-weekend', order: 4 }),
+    );
+
+    const updated = reparentTaskAsSubtask(payload, 'task-target', 'task-parent');
+    const movedTask = updated.tasks.find(task => task.id === 'task-target');
+
+    expect(movedTask).toMatchObject({
+      parentTaskId: 'task-parent',
+      projectId: 'project-home',
+      sectionId: 'section-weekend',
+      order: 5,
+      updatedAt: 9500,
+    });
+  });
+
+  it('rejects invalid subtask reparent targets', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-parent', title: 'Parent' }),
+      createTask({ id: 'task-child', title: 'Child', parentTaskId: 'task-parent' }),
+      createTask({ id: 'task-other-parent', title: 'Other parent', parentTaskId: 'task-parent' }),
+    );
+
+    expect(canReparentTaskAsSubtask(payload, 'task-parent', 'task-parent')).toBe(false);
+    expect(canReparentTaskAsSubtask(payload, 'task-parent', 'task-child')).toBe(false);
+    expect(canReparentTaskAsSubtask(payload, 'task-child', 'task-parent')).toBe(false);
+    expect(reparentTaskAsSubtask(payload, 'task-parent', 'task-child')).toBe(payload);
   });
 });

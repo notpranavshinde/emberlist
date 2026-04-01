@@ -84,7 +84,7 @@
 - [x] Add web subtask creation.
 - [x] Render subtasks nested under parent tasks on web.
 - [x] Support bulk subtask creation from pasted lists on web.
-- [ ] Add drag-to-subtask interactions on web.
+- [x] Add drag-to-subtask interactions on web.
 - [x] Expose the existing `parentId` task hierarchy in the web UI.
 - [x] Render subtasks inside project sections on the web project page.
 
@@ -109,7 +109,7 @@
 - [ ] Add bulk priority change on Upcoming.
 - [ ] Add bulk delete on Upcoming.
 - [ ] Add gesture-driven scheduling interactions on Upcoming.
-- [ ] Add drag-to-subtask behavior on Upcoming.
+- [x] Add drag-to-subtask behavior on Upcoming.
 - [ ] Make Upcoming more action-oriented, closer to Android's management flow.
 - [ ] Add multi-select selection mode in Search.
 - [ ] Add bulk task actions from Search results.
@@ -137,11 +137,11 @@
 4. [ ] Expose task hierarchy in the shared web data/view layer.
    - Scope: parent/child selectors, nested rendering helpers, flatten/expand behavior, and parent-aware task mutations.
    - Why fourth: subtasks affect task lists, task detail, projects, Today, Upcoming, and Search.
-   - Progress: shared hierarchy selectors, nested rendering helpers, and hierarchy-aware list output are in place; expand behavior and parent-aware mutations are still pending.
+   - Progress: shared hierarchy selectors, nested rendering helpers, and parent-aware reparent mutations are in place; expand/collapse behavior is still pending.
 5. [x] Add subtask creation and rendering in task detail and project views.
    - Scope: create subtasks, nested display, pasted bulk subtask creation, and subtasks inside project sections.
    - Why fifth: delivers the core subtask feature set without drag complexity yet.
-6. [ ] Add drag-to-subtask interactions.
+6. [x] Add drag-to-subtask interactions.
    - Scope: parent drop targets, hierarchy reassignment, and safety rules for invalid nesting.
    - Why sixth: depends on existing visible hierarchy and subtask mutation support.
 7. [ ] Upgrade Quick Add and task detail editing surfaces.

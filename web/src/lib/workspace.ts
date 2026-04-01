@@ -329,6 +329,47 @@ export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload 
     });
 }
 
+export function canReparentTaskAsSubtask(payload: SyncPayload, draggedTaskId: string, parentTaskId: string): boolean {
+    const dragged = payload.tasks.find(task => task.id === draggedTaskId && !task.deletedAt) ?? null;
+    const parent = payload.tasks.find(task => task.id === parentTaskId && !task.deletedAt) ?? null;
+
+    if (!dragged || !parent) return false;
+    if (dragged.status !== 'OPEN' || parent.status !== 'OPEN') return false;
+    if (dragged.id === parent.id) return false;
+    if (parent.parentTaskId !== null) return false;
+    if (dragged.parentTaskId === parent.id) return false;
+
+    return true;
+}
+
+export function reparentTaskAsSubtask(payload: SyncPayload, draggedTaskId: string, parentTaskId: string): SyncPayload {
+    if (!canReparentTaskAsSubtask(payload, draggedTaskId, parentTaskId)) {
+        return payload;
+    }
+
+    const now = Date.now();
+    const parent = payload.tasks.find(task => task.id === parentTaskId && !task.deletedAt)!;
+    const nextOrder = payload.tasks
+        .filter(task => task.parentTaskId === parentTaskId && !task.deletedAt && task.id !== draggedTaskId)
+        .reduce((max, task) => Math.max(max, task.order), -1) + 1;
+
+    return finalizePayload({
+        ...payload,
+        tasks: payload.tasks.map(task =>
+            task.id === draggedTaskId
+                ? {
+                    ...task,
+                    parentTaskId,
+                    projectId: parent.projectId,
+                    sectionId: parent.sectionId,
+                    order: nextOrder,
+                    updatedAt: now,
+                }
+                : task
+        ),
+    });
+}
+
 export function updateTask(payload: SyncPayload, taskId: string, updater: (task: Task) => Task): SyncPayload {
     const nextTasks = payload.tasks.map(task => {
         if (task.id !== taskId) return task;
