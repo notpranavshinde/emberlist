@@ -291,6 +291,25 @@ export function updateTask(payload: SyncPayload, taskId: string, updater: (task:
     });
 }
 
+export function updateTasks(payload: SyncPayload, taskIds: string[], updater: (task: Task) => Task): SyncPayload {
+    if (!taskIds.length) return payload;
+    const ids = new Set(taskIds);
+    const now = Date.now();
+    const nextTasks = payload.tasks.map(task => {
+        if (!ids.has(task.id) || task.deletedAt) return task;
+        const updated = updater(task);
+        return {
+            ...updated,
+            updatedAt: now,
+        };
+    });
+
+    return finalizePayload({
+        ...payload,
+        tasks: nextTasks,
+    });
+}
+
 export function toggleTaskCompletion(payload: SyncPayload, taskId: string): SyncPayload {
     return updateTask(payload, taskId, task => {
         const isCompleted = task.status === 'COMPLETED';
@@ -323,6 +342,48 @@ export function deleteTask(payload: SyncPayload, taskId: string): SyncPayload {
                 : task
         ),
         reminders: payload.reminders.filter(reminder => reminder.taskId !== taskId),
+    });
+}
+
+export function rescheduleTasksToDate(payload: SyncPayload, taskIds: string[], dueAt: number): SyncPayload {
+    return updateTasks(payload, taskIds, task => ({
+        ...task,
+        dueAt,
+        allDay: true,
+    }));
+}
+
+export function moveTasksToProject(payload: SyncPayload, taskIds: string[], projectId: string | null): SyncPayload {
+    return updateTasks(payload, taskIds, task => ({
+        ...task,
+        projectId,
+        sectionId: null,
+    }));
+}
+
+export function setPriorityForTasks(payload: SyncPayload, taskIds: string[], priority: Priority): SyncPayload {
+    return updateTasks(payload, taskIds, task => ({
+        ...task,
+        priority,
+    }));
+}
+
+export function deleteTasks(payload: SyncPayload, taskIds: string[]): SyncPayload {
+    if (!taskIds.length) return payload;
+    const ids = new Set(taskIds);
+    const now = Date.now();
+    return finalizePayload({
+        ...payload,
+        tasks: payload.tasks.map(task =>
+            ids.has(task.id) && !task.deletedAt
+                ? {
+                    ...task,
+                    deletedAt: now,
+                    updatedAt: now,
+                }
+                : task
+        ),
+        reminders: payload.reminders.filter(reminder => !ids.has(reminder.taskId)),
     });
 }
 

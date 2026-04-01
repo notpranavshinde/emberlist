@@ -40,6 +40,7 @@ import {
   createProject,
   createSection,
   createTask,
+  deleteTasks,
   deleteProject,
   deleteSection,
   deleteTask,
@@ -54,8 +55,11 @@ import {
   getTodayViewData,
   getUpcomingCompletedTasks,
   getUpcomingGroups,
+  moveTasksToProject,
+  rescheduleTasksToDate,
   searchTasks,
   searchCompletedTasks,
+  setPriorityForTasks,
   type TaskReminderDraft,
   toggleTaskCompletion,
   type SearchFilter,
@@ -437,6 +441,33 @@ function App() {
     await applyPayloadUpdate(current => deleteTask(current, taskId));
   }
 
+  async function handleRescheduleTasks(taskIds: string[], dueAt: number) {
+    if (!taskIds.length) return;
+    await applyPayloadUpdate(current => rescheduleTasksToDate(current, taskIds, dueAt));
+    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`);
+  }
+
+  async function handleMoveTasksToProject(taskIds: string[], projectId: string | null) {
+    if (!taskIds.length) return;
+    const targetName = projectId
+      ? payloadRef.current?.projects.find(project => project.id === projectId && !project.deletedAt)?.name ?? 'project'
+      : 'Inbox';
+    await applyPayloadUpdate(current => moveTasksToProject(current, taskIds, projectId));
+    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`);
+  }
+
+  async function handleSetTasksPriority(taskIds: string[], priority: Priority) {
+    if (!taskIds.length) return;
+    await applyPayloadUpdate(current => setPriorityForTasks(current, taskIds, priority));
+    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} set to ${priority}.`);
+  }
+
+  async function handleDeleteTasks(taskIds: string[]) {
+    if (!taskIds.length) return;
+    await applyPayloadUpdate(current => deleteTasks(current, taskIds));
+    showBanner('success', `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} deleted.`);
+  }
+
   async function handleCreateTask(
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string }
@@ -565,6 +596,10 @@ function App() {
         onToggleTask={taskId => void handleToggleTask(taskId)}
         onArchiveTask={taskId => void handleArchiveTask(taskId)}
         onDeleteTask={taskId => void handleDeleteTask(taskId)}
+        onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
+        onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
+        onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
+        onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
         onSaveTask={(taskId, updater) => void handleSaveTask(taskId, updater)}
         onCreateProject={name => void handleCreateProject(name)}
         onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
@@ -614,6 +649,10 @@ type WorkspaceShellProps = {
   onToggleTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDeleteTasks: (taskIds: string[]) => void;
   onSaveTask: (taskId: string, updater: (task: Task) => Task) => void;
   onCreateProject: (name: string) => void;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
@@ -652,6 +691,10 @@ function WorkspaceShell({
   onToggleTask,
   onArchiveTask,
   onDeleteTask,
+  onRescheduleTasks,
+  onMoveTasksToProject,
+  onSetTasksPriority,
+  onDeleteTasks,
   onSaveTask,
   onCreateProject,
   onUpdateProject,
@@ -858,6 +901,10 @@ function WorkspaceShell({
                     showCompletedToday={showCompletedToday}
                     onToggleShowCompletedToday={onToggleShowCompletedToday}
                     onToggleTask={onToggleTask}
+                    onRescheduleTasks={onRescheduleTasks}
+                    onMoveTasksToProject={onMoveTasksToProject}
+                    onSetTasksPriority={onSetTasksPriority}
+                    onDeleteTasks={onDeleteTasks}
                   />
                 }
               />
@@ -965,11 +1012,19 @@ function TodayPage({
   showCompletedToday,
   onToggleShowCompletedToday,
   onToggleTask,
+  onRescheduleTasks,
+  onMoveTasksToProject,
+  onSetTasksPriority,
+  onDeleteTasks,
 }: {
   payload: SyncPayload;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
   onToggleTask: (taskId: string) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDeleteTasks: (taskIds: string[]) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -977,6 +1032,81 @@ function TodayPage({
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
   );
+  const projects = useMemo(() => getActiveProjects(payload), [payload]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
+  const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'reschedule-overdue' | 'move' | 'priority' | 'delete'>(null);
+  const [rescheduleDate, setRescheduleDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const visibleTasks = useMemo(
+    () => (showCompletedToday ? [...data.overdue, ...data.today, ...data.completedToday] : [...data.overdue, ...data.today]),
+    [data.completedToday, data.overdue, data.today, showCompletedToday]
+  );
+  const visibleTaskIds = useMemo(() => new Set(visibleTasks.map(task => task.id)), [visibleTasks]);
+  const selectedIds = useMemo(
+    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
+    [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedCount = selectedIds.length;
+
+  function clearSelection() {
+    setSelectionMode(false);
+    setSelectedTaskIds(new Set());
+  }
+
+  function toggleSelection(taskId: string) {
+    setSelectedTaskIds(current => {
+      const next = new Set(current);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function openSelection() {
+    setSelectionMode(true);
+  }
+
+  function openDateDialog(mode: 'reschedule-selected' | 'reschedule-overdue') {
+    setRescheduleDate(format(new Date(), 'yyyy-MM-dd'));
+    setActiveDialog(mode);
+  }
+
+  function closeDialog() {
+    setActiveDialog(null);
+  }
+
+  function submitReschedule(taskIds: string[]) {
+    if (!rescheduleDate || !taskIds.length) return;
+    const dueAt = parseInputValue(rescheduleDate, true);
+    if (dueAt === null) return;
+    onRescheduleTasks(taskIds, dueAt);
+    closeDialog();
+    clearSelection();
+  }
+
+  function submitMove(projectId: string | null) {
+    if (!selectedIds.length) return;
+    onMoveTasksToProject(selectedIds, projectId);
+    closeDialog();
+    clearSelection();
+  }
+
+  function submitPriority(priority: Priority) {
+    if (!selectedIds.length) return;
+    onSetTasksPriority(selectedIds, priority);
+    closeDialog();
+    clearSelection();
+  }
+
+  function submitDelete() {
+    if (!selectedIds.length) return;
+    onDeleteTasks(selectedIds);
+    closeDialog();
+    clearSelection();
+  }
 
   return (
     <div className="space-y-6">
@@ -985,17 +1115,73 @@ function TodayPage({
         title="Today"
         description="Review what is due now, what slipped past due, and what you already finished today."
         actions={
-          <label className="flex items-center gap-3 rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-medium text-[#6D5C50]">
-            <input
-              type="checkbox"
-              checked={showCompletedToday}
-              onChange={onToggleShowCompletedToday}
-              className="h-4 w-4 accent-[#EE6A3C]"
-            />
-            Show completed today
-          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-3 rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-medium text-[#6D5C50]">
+              <input
+                type="checkbox"
+                checked={showCompletedToday}
+                onChange={onToggleShowCompletedToday}
+                className="h-4 w-4 accent-[#EE6A3C]"
+              />
+              Show completed today
+            </label>
+            <button
+              type="button"
+              onClick={() => (selectionMode ? clearSelection() : openSelection())}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                }`}
+            >
+              {selectionMode ? 'Cancel selection' : 'Select tasks'}
+            </button>
+            {selectionMode ? (
+              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+                {selectedCount} selected
+              </span>
+            ) : null}
+          </div>
         }
       />
+
+      {selectionMode ? (
+        <section className="rounded-[24px] border border-[#E1D5CA] bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => openDateDialog('reschedule-selected')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('move')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('priority')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Priority
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('delete')}
+              className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Delete
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <TaskGroup
         title="Overdue"
@@ -1006,6 +1192,20 @@ function TodayPage({
         emptyMessage="Nothing overdue."
         onToggleTask={onToggleTask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        selectionMode={selectionMode}
+        selectedTaskIds={selectedTaskIds}
+        onToggleSelection={toggleSelection}
+        headerActions={
+          data.overdue.length ? (
+            <button
+              type="button"
+              onClick={() => openDateDialog('reschedule-overdue')}
+              className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            >
+              Reschedule overdue
+            </button>
+          ) : null
+        }
       />
 
       <TaskGroup
@@ -1017,6 +1217,9 @@ function TodayPage({
         emptyMessage="No tasks due today."
         onToggleTask={onToggleTask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        selectionMode={selectionMode}
+        selectedTaskIds={selectedTaskIds}
+        onToggleSelection={toggleSelection}
       />
 
       {showCompletedToday ? (
@@ -1031,6 +1234,154 @@ function TodayPage({
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={toggleSelection}
+        />
+      ) : null}
+
+      {activeDialog === 'reschedule-selected' ? (
+        <ChoiceDialog
+          title="Reschedule tasks"
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          onClose={closeDialog}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDialog}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => submitReschedule(selectedIds)}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+              >
+                Save date
+              </button>
+            </div>
+          )}
+        >
+          <Field label="New date">
+            <input
+              type="date"
+              value={rescheduleDate}
+              onChange={event => setRescheduleDate(event.target.value)}
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+          </Field>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'reschedule-overdue' ? (
+        <ChoiceDialog
+          title="Reschedule overdue tasks"
+          description={`Choose a new date for ${data.overdue.length} overdue task${data.overdue.length === 1 ? '' : 's'}.`}
+          onClose={closeDialog}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDialog}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => submitReschedule(data.overdue.map(task => task.id))}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+              >
+                Save date
+              </button>
+            </div>
+          )}
+        >
+          <Field label="New date">
+            <input
+              type="date"
+              value={rescheduleDate}
+              onChange={event => setRescheduleDate(event.target.value)}
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+          </Field>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'move' ? (
+        <ChoiceDialog
+          title="Move tasks"
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or back to Inbox.`}
+          onClose={closeDialog}
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => submitMove(null)}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            >
+              Inbox
+            </button>
+            {projects.map(project => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => submitMove(project.id)}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {project.name}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'priority' ? (
+        <ChoiceDialog
+          title="Change priority"
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          onClose={closeDialog}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+              <button
+                key={priority}
+                type="button"
+                onClick={() => submitPriority(priority)}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'delete' ? (
+        <ChoiceDialog
+          title="Delete tasks"
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          onClose={closeDialog}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDialog}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitDelete}
+                className="rounded-full bg-[#B64B28] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#9e4122]"
+              >
+                Delete tasks
+              </button>
+            </div>
+          )}
         />
       ) : null}
     </div>
@@ -2279,6 +2630,10 @@ function TaskGroup({
   onOpenTask,
   collapsible = false,
   defaultCollapsed = false,
+  selectionMode = false,
+  selectedTaskIds,
+  onToggleSelection,
+  headerActions,
 }: {
   title: string;
   subtitle?: string;
@@ -2290,6 +2645,10 @@ function TaskGroup({
   onOpenTask: (taskId: string) => void;
   collapsible?: boolean;
   defaultCollapsed?: boolean;
+  selectionMode?: boolean;
+  selectedTaskIds?: Set<string>;
+  onToggleSelection?: (taskId: string) => void;
+  headerActions?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const isCollapsed = collapsible && collapsed;
@@ -2302,6 +2661,7 @@ function TaskGroup({
           {subtitle ? <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p> : null}
         </div>
         <div className="flex items-center gap-3">
+          {headerActions}
           <span className="text-xs font-medium text-[#8a8076]">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
           {collapsible ? (
             <button
@@ -2322,6 +2682,9 @@ function TaskGroup({
           emptyMessage={emptyMessage}
           onToggleTask={onToggleTask}
           onOpenTask={onOpenTask}
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={onToggleSelection}
         />
       ) : null}
     </section>
@@ -2335,6 +2698,9 @@ function TaskListBlock({
   emptyMessage,
   onToggleTask,
   onOpenTask,
+  selectionMode = false,
+  selectedTaskIds,
+  onToggleSelection,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -2342,6 +2708,9 @@ function TaskListBlock({
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
+  selectionMode?: boolean;
+  selectedTaskIds?: Set<string>;
+  onToggleSelection?: (taskId: string) => void;
 }) {
   if (!tasks.length) {
     return <p className="rounded-[12px] border border-[#ece7e3] bg-white px-4 py-5 text-sm text-[#7b736b]">{emptyMessage}</p>;
@@ -2357,6 +2726,9 @@ function TaskListBlock({
           task={task}
           onToggleTask={onToggleTask}
           onOpenTask={onOpenTask}
+          selectionMode={selectionMode}
+          selected={selectedTaskIds?.has(task.id) ?? false}
+          onToggleSelection={onToggleSelection}
         />
       ))}
     </div>
@@ -2369,32 +2741,66 @@ function TaskRow({
   task,
   onToggleTask,
   onOpenTask,
+  selectionMode = false,
+  selected = false,
+  onToggleSelection,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
   task: Task;
   onToggleTask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelection?: (taskId: string) => void;
 }) {
   const completed = task.status === 'COMPLETED';
   const overdue = Boolean(task.dueAt && task.status === 'OPEN' && task.dueAt < todayStartMs);
   const locationLabel = getTaskLocationLabel(payload, task);
   const dueLabel = task.dueAt ? formatTaskDate(task.dueAt, task.allDay) : null;
 
+  function handleRowAction() {
+    if (selectionMode) {
+      onToggleSelection?.(task.id);
+      return;
+    }
+    onOpenTask(task.id);
+  }
+
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={() => onOpenTask(task.id)}
+      onClick={handleRowAction}
       onKeyDown={event => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          onOpenTask(task.id);
+          handleRowAction();
         }
       }}
-      className="flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition hover:bg-[#fcfaf7] last:border-b-0 md:px-4"
+      className={`flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${selected
+        ? 'bg-[#FFF3EE]'
+        : 'hover:bg-[#fcfaf7]'
+        }`}
     >
+      {selectionMode ? (
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onToggleSelection?.(task.id);
+          }}
+          aria-label={selected ? `Deselect ${task.title}` : `Select ${task.title}`}
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${selected
+            ? 'border-[#EE6A3C] bg-[#EE6A3C] text-white'
+            : 'border-[#D8C9BC] bg-white text-transparent'
+            }`}
+        >
+          <Check size={12} />
+        </button>
+      ) : null}
       <button
+        type="button"
         onClick={event => {
           event.stopPropagation();
           onToggleTask(task.id);
@@ -2425,6 +2831,43 @@ function TaskRow({
       </div>
       <div className="mt-0.5 hidden min-w-[180px] shrink-0 text-right text-xs text-[#8a8076] md:block">
         {locationLabel}
+      </div>
+    </div>
+  );
+}
+
+function ChoiceDialog({
+  title,
+  description,
+  children,
+  footer,
+  onClose,
+}: {
+  title: string;
+  description: string;
+  children?: ReactNode;
+  footer?: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
+      <div className="w-full max-w-lg rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-xl font-semibold text-[#1E2D2F]">{title}</h3>
+            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">{description}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close dialog"
+            className="rounded-full p-2 text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        {children ? <div className="mt-5">{children}</div> : null}
+        {footer ? <div className="mt-5">{footer}</div> : null}
       </div>
     </div>
   );
