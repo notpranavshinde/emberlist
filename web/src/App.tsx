@@ -109,6 +109,8 @@ type QuickAddContext = {
   defaultDueToday: boolean;
 };
 
+let activeDraggedTaskId: string | null = null;
+
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);
   const [bootState, setBootState] = useState<BootState>('loading');
@@ -3223,19 +3225,23 @@ function TaskRow({
   }
 
   function getDraggedTaskId(event: DragEvent<HTMLElement>): string | null {
-    const value = event.dataTransfer.getData('text/task-id').trim();
-    return value || null;
+    const directValue = activeDraggedTaskId?.trim();
+    if (directValue) return directValue;
+    const fallbackValue = event.dataTransfer.getData('text/task-id').trim();
+    return fallbackValue || null;
   }
 
   function handleDragStart(event: DragEvent<HTMLElement>) {
     if (!canDrag) return;
     event.stopPropagation();
+    activeDraggedTaskId = task.id;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/task-id', task.id);
     event.dataTransfer.setData('text/plain', task.title);
   }
 
   function handleDragEnd() {
+    activeDraggedTaskId = null;
     setIsDropActive(false);
   }
 
