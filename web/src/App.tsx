@@ -48,6 +48,7 @@ import {
 import { ensureSyncPayload } from './lib/syncPayload';
 import { DriveSyncService, type CloudSession } from './lib/syncService';
 import { SyncEngine } from './lib/syncEngine';
+import { resolveGoShortcut, shortcutSections } from './lib/webShortcuts';
 import {
   archiveTask,
   canReparentTaskAsSubtask,
@@ -73,6 +74,7 @@ import {
   getUpcomingCompletedTasks,
   getUpcomingGroups,
   moveTasksToProject,
+  promoteSubtask,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   searchTasks,
@@ -625,6 +627,25 @@ function App() {
     );
   }
 
+  async function handlePromoteSubtask(taskId: string) {
+    const current = payloadRef.current;
+    if (!current) return;
+
+    const task = current.tasks.find(candidate => candidate.id === taskId && !candidate.deletedAt);
+    if (!task?.parentTaskId) return;
+
+    const parentTask = current.tasks.find(candidate => candidate.id === task.parentTaskId && !candidate.deletedAt);
+    await applyUndoablePayloadUpdate(
+      payload => promoteSubtask(payload, taskId),
+      {
+        message: parentTask
+          ? `Moved "${task.title}" out from "${parentTask.title}".`
+          : `Promoted "${task.title}".`,
+        undoMessage: `Moved "${task.title}" back.`,
+      }
+    );
+  }
+
   async function handleCreateTask(
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string }
@@ -771,6 +792,7 @@ function App() {
         onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
         onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
         onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
+        onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
         onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
         onCreateProject={name => void handleCreateProject(name)}
         onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
@@ -829,6 +851,7 @@ type WorkspaceShellProps = {
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onCreateProject: (name: string) => void;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
@@ -872,6 +895,7 @@ function WorkspaceShell({
   onSetTasksPriority,
   onDeleteTasks,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
   onSaveTask,
   onCreateProject,
   onUpdateProject,
@@ -897,9 +921,15 @@ function WorkspaceShell({
   onCloseQuickAdd,
 }: WorkspaceShellProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const previousPathRef = useRef(location.key);
+  const goSequenceTimeoutRef = useRef<number | null>(null);
+  const bannerActionRef = useRef<() => Promise<void>>(async () => undefined);
   const [isBannerActionRunning, setIsBannerActionRunning] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
+  const [pendingGoPrefix, setPendingGoPrefix] = useState(false);
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -949,16 +979,121 @@ function WorkspaceShell({
     }
   }
 
+  bannerActionRef.current = handleBannerAction;
+
+  useEffect(() => {
+    const clearGoPrefix = () => {
+      if (goSequenceTimeoutRef.current !== null) {
+        window.clearTimeout(goSequenceTimeoutRef.current);
+        goSequenceTimeoutRef.current = null;
+      }
+      setPendingGoPrefix(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const key = event.key;
+      const lowerKey = key.toLowerCase();
+      const hasModifier = event.metaKey || event.ctrlKey || event.altKey;
+      const typing = isTypingTarget(event.target);
+
+      if (pendingGoPrefix) {
+        const destination = resolveGoShortcut(lowerKey);
+        clearGoPrefix();
+        if (destination) {
+          event.preventDefault();
+          navigate(destination);
+        }
+        return;
+      }
+
+      if (hasOpenOverlayDialog() && key !== 'Escape') {
+        return;
+      }
+
+      if (typing) {
+        if ((event.metaKey || event.ctrlKey) && lowerKey === 'k') {
+          event.preventDefault();
+          navigate('/search', { state: { focusSearchToken: Date.now() } });
+        }
+        return;
+      }
+
+      if (key === '?') {
+        event.preventDefault();
+        setIsShortcutDialogOpen(true);
+        return;
+      }
+
+      if (key === 'Escape') {
+        if (isShortcutDialogOpen) {
+          event.preventDefault();
+          setIsShortcutDialogOpen(false);
+        }
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && lowerKey === 'k') {
+        event.preventDefault();
+        navigate('/search', { state: { focusSearchToken: Date.now() } });
+        return;
+      }
+
+      if (((event.metaKey || event.ctrlKey) && lowerKey === 'z') || (!hasModifier && lowerKey === 'z')) {
+        if (banner?.onAction && banner.actionLabel) {
+          event.preventDefault();
+          void bannerActionRef.current();
+        }
+        return;
+      }
+
+      if (!hasModifier && lowerKey === 'q') {
+        event.preventDefault();
+        onOpenQuickAdd();
+        return;
+      }
+
+      if (!hasModifier && lowerKey === 'm') {
+        event.preventDefault();
+        setIsSidebarCollapsed(value => !value);
+        return;
+      }
+
+      if (!hasModifier && lowerKey === 'h') {
+        event.preventDefault();
+        navigate('/today');
+        return;
+      }
+
+      if (!hasModifier && lowerKey === 'g') {
+        event.preventDefault();
+        setPendingGoPrefix(true);
+        if (goSequenceTimeoutRef.current !== null) {
+          window.clearTimeout(goSequenceTimeoutRef.current);
+        }
+        goSequenceTimeoutRef.current = window.setTimeout(() => {
+          setPendingGoPrefix(false);
+          goSequenceTimeoutRef.current = null;
+        }, 1200);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      clearGoPrefix();
+    };
+  }, [banner, isBannerActionRunning, isShortcutDialogOpen, navigate, onOpenQuickAdd, pendingGoPrefix]);
+
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
       <div className="flex min-h-screen flex-col md:flex-row">
-        <aside className="hidden w-[300px] shrink-0 border-r border-[#ece7e3] bg-[#fdfcfb] px-3 py-3 md:flex md:flex-col">
+        <aside className={`hidden shrink-0 border-r border-[#ece7e3] bg-[#fdfcfb] px-3 py-3 transition-[width] duration-200 md:flex md:flex-col ${isSidebarCollapsed ? 'w-[92px]' : 'w-[300px]'}`}>
           <div className="flex items-center justify-between rounded-[16px] px-2 py-2">
             <div className="flex items-center gap-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#4ea0d8] text-sm font-semibold text-white">
                 {workspaceIdentity.initial}
               </div>
-              <div className="flex items-center gap-1 text-sm font-semibold text-[#2b2b2b]">
+              <div className={`flex items-center gap-1 text-sm font-semibold text-[#2b2b2b] ${isSidebarCollapsed ? 'hidden' : ''}`}>
                 <span>{workspaceIdentity.label}</span>
               </div>
             </div>
@@ -966,22 +1101,23 @@ function WorkspaceShell({
 
           <button
             onClick={() => onOpenQuickAdd()}
-            className="mt-3 flex items-center gap-2 rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed]"
+            className={`mt-3 flex rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed] ${isSidebarCollapsed ? 'justify-center' : 'items-center gap-2'}`}
+            title="Add task (Q)"
           >
             <Plus size={16} />
-            <span>Add task</span>
+            <span className={isSidebarCollapsed ? 'hidden' : ''}>Add task</span>
           </button>
 
           <nav className="mt-3 space-y-0.5">
-            <RailLink to="/search" icon={Search} label="Search" />
-            <RailLink to="/inbox" icon={ListTodo} label="Inbox" count={getInboxTasks(payload).length} />
-            <RailLink to="/today" icon={Home} label="Today" count={todayViewData.overdue.length + todayViewData.today.length} />
-            <RailLink to="/upcoming" icon={Calendar} label="Upcoming" />
-            <RailLink to="/browse" icon={Layers3} label="Browse" />
-            <RailLink to="/settings" icon={Settings} label="Settings" />
+            <RailLink to="/search" icon={Search} label="Search" collapsed={isSidebarCollapsed} />
+            <RailLink to="/inbox" icon={ListTodo} label="Inbox" count={getInboxTasks(payload).length} collapsed={isSidebarCollapsed} />
+            <RailLink to="/today" icon={Home} label="Today" count={todayViewData.overdue.length + todayViewData.today.length} collapsed={isSidebarCollapsed} />
+            <RailLink to="/upcoming" icon={Calendar} label="Upcoming" collapsed={isSidebarCollapsed} />
+            <RailLink to="/browse" icon={Layers3} label="Browse" collapsed={isSidebarCollapsed} />
+            <RailLink to="/settings" icon={Settings} label="Settings" collapsed={isSidebarCollapsed} />
           </nav>
 
-          <div className="mt-8">
+          <div className={`mt-8 ${isSidebarCollapsed ? 'hidden' : ''}`}>
             <p className="px-3 text-xs font-semibold text-[#7e7a76]">Favorites</p>
             <div className="mt-2 space-y-0.5">
               <RailLink to="/search/no-due" icon={Circle} label="Tasks without due dates" count={noDueCount} compact />
@@ -999,12 +1135,12 @@ function WorkspaceShell({
             </div>
           </div>
 
-          <div className="mt-8 flex items-center justify-between px-3">
+          <div className={`mt-8 flex items-center justify-between px-3 ${isSidebarCollapsed ? 'hidden' : ''}`}>
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-[#5f5b57]">My Projects</p>
             </div>
           </div>
-          <div className="mt-2 flex-1 space-y-0.5 overflow-y-auto">
+          <div className={`mt-2 flex-1 space-y-0.5 overflow-y-auto ${isSidebarCollapsed ? 'hidden' : ''}`}>
             {regularProjects.map(project => (
               <RailLink
                 key={project.id}
@@ -1018,7 +1154,7 @@ function WorkspaceShell({
             ))}
           </div>
 
-          <div className="mt-4 rounded-[18px] border border-[#ece7e3] bg-white px-3 py-3">
+          <div className={`mt-4 rounded-[18px] border border-[#ece7e3] bg-white px-3 py-3 ${isSidebarCollapsed ? 'hidden' : ''}`}>
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-[#2b2b2b]">Cloud sync</p>
               <StatusPill label={cloudStatus.label} tone={cloudStatus.tone} />
@@ -1110,20 +1246,43 @@ function WorkspaceShell({
                     onMoveTasksToProject={onMoveTasksToProject}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
+                    onPromoteSubtask={onPromoteSubtask}
                   />
                 }
               />
               <Route
                 path="/upcoming"
-                element={<UpcomingPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} />}
+                element={
+                  <UpcomingPage
+                    payload={payload}
+                    onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
+                  />
+                }
               />
               <Route
                 path="/search"
-                element={<SearchPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} />}
+                element={
+                  <SearchPage
+                    payload={payload}
+                    onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
+                  />
+                }
               />
               <Route
                 path="/search/no-due"
-                element={<SearchPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} forcedFilter="NO_DUE" />}
+                element={
+                  <SearchPage
+                    payload={payload}
+                    onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
+                    forcedFilter="NO_DUE"
+                  />
+                }
               />
               <Route
                 path="/browse"
@@ -1131,7 +1290,14 @@ function WorkspaceShell({
               />
               <Route
                 path="/inbox"
-                element={<InboxPage payload={payload} onToggleTask={onToggleTask} onReparentTaskAsSubtask={onReparentTaskAsSubtask} />}
+                element={
+                  <InboxPage
+                    payload={payload}
+                    onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
+                  />
+                }
               />
               <Route
                 path="/project/:projectId"
@@ -1145,6 +1311,7 @@ function WorkspaceShell({
                     onDeleteSection={onDeleteSection}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
                     onOpenQuickAdd={onOpenQuickAdd}
                   />
                 }
@@ -1161,6 +1328,7 @@ function WorkspaceShell({
                     onDeleteTask={onDeleteTask}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
                   />
                 }
               />
@@ -1213,6 +1381,10 @@ function WorkspaceShell({
           onShowBanner={onShowBanner}
         />
       ) : null}
+
+      {isShortcutDialogOpen ? (
+        <KeyboardShortcutsDialog onClose={() => setIsShortcutDialogOpen(false)} />
+      ) : null}
     </div>
   );
 }
@@ -1227,6 +1399,7 @@ function TodayPage({
   onMoveTasksToProject,
   onSetTasksPriority,
   onDeleteTasks,
+  onPromoteSubtask,
 }: {
   payload: SyncPayload;
   showCompletedToday: boolean;
@@ -1237,6 +1410,7 @@ function TodayPage({
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
+  onPromoteSubtask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1289,6 +1463,57 @@ function TodayPage({
   function closeDialog() {
     setActiveDialog(null);
   }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setSelectionMode(true);
+        setSelectedTaskIds(new Set(visibleTasks.map(task => task.id)));
+        return;
+      }
+
+      if (selectionMode && !activeDialog) {
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+          event.preventDefault();
+          openDateDialog('reschedule-selected');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          setActiveDialog('move');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'y') {
+          event.preventDefault();
+          setActiveDialog('priority');
+          return;
+        }
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+          event.preventDefault();
+          setActiveDialog('delete');
+          return;
+        }
+      }
+
+      if (event.key === 'Escape') {
+        if (activeDialog) {
+          event.preventDefault();
+          closeDialog();
+          return;
+        }
+        if (selectionMode) {
+          event.preventDefault();
+          clearSelection();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDialog, selectionMode, visibleTasks]);
 
   function submitReschedule(taskIds: string[]) {
     if (!rescheduleDate || !taskIds.length) return;
@@ -1408,6 +1633,8 @@ function TodayPage({
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
+        onStartSelection={openSelection}
+        onPromoteSubtask={onPromoteSubtask}
         headerActions={
           data.overdue.length ? (
             <button
@@ -1434,6 +1661,8 @@ function TodayPage({
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
+        onStartSelection={openSelection}
+        onPromoteSubtask={onPromoteSubtask}
       />
 
       {showCompletedToday ? (
@@ -1452,6 +1681,8 @@ function TodayPage({
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
+          onStartSelection={openSelection}
+          onPromoteSubtask={onPromoteSubtask}
         />
       ) : null}
 
@@ -1599,6 +1830,7 @@ function TodayPage({
           )}
         />
       ) : null}
+
     </div>
   );
 }
@@ -1607,10 +1839,12 @@ function UpcomingPage({
   payload,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1639,6 +1873,7 @@ function UpcomingPage({
           emptyMessage="Nothing overdue."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
         />
       ) : null}
@@ -1654,6 +1889,7 @@ function UpcomingPage({
             emptyMessage="No tasks."
             onToggleTask={onToggleTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onPromoteSubtask={onPromoteSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
           />
         ))
@@ -1674,6 +1910,7 @@ function UpcomingPage({
           emptyMessage="No completed tasks."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1687,15 +1924,19 @@ function SearchPage({
   payload,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
   forcedFilter,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
   forcedFilter?: SearchFilter;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const todayStartMs = useTodayStartMs();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState('');
   const [userFilters, setUserFilters] = useState<Set<SearchFilter>>(new Set());
   const deferredQuery = useDeferredValue(query);
@@ -1750,6 +1991,12 @@ function SearchPage({
     });
   }
 
+  useEffect(() => {
+    const focusToken = (location as { state?: { focusSearchToken?: number } }).state?.focusSearchToken;
+    if (!focusToken) return;
+    window.setTimeout(() => inputRef.current?.focus(), 0);
+  }, [location]);
+
   return (
     <div className="space-y-6">
       <HeroCard
@@ -1766,6 +2013,7 @@ function SearchPage({
         <div className="flex items-center gap-3 rounded-[22px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3">
           <Search size={18} className="text-[#9F7B63]" />
           <input
+            ref={inputRef}
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="Search tasks, projects, and notes"
@@ -1802,6 +2050,7 @@ function SearchPage({
         emptyMessage="No open tasks match this search yet."
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+        onPromoteSubtask={onPromoteSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
       />
 
@@ -1815,6 +2064,7 @@ function SearchPage({
           emptyMessage="No completed tasks match this search."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1834,12 +2084,26 @@ function BrowsePage({
   const projects = getActiveProjects(payload);
   const inboxCount = getInboxTasks(payload).length;
   const [projectName, setProjectName] = useState('');
+  const projectInputRef = useRef<HTMLInputElement | null>(null);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onCreateProject(projectName);
     setProjectName('');
   }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.toLowerCase() !== 'a') return;
+      event.preventDefault();
+      projectInputRef.current?.focus();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -1899,6 +2163,7 @@ function BrowsePage({
           </p>
           <form onSubmit={submit} className="mt-5 space-y-3">
             <input
+              ref={projectInputRef}
               value={projectName}
               onChange={event => setProjectName(event.target.value)}
               placeholder="Project name"
@@ -1922,10 +2187,12 @@ function InboxPage({
   payload,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -1947,6 +2214,7 @@ function InboxPage({
         emptyMessage="Inbox is clear."
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+        onPromoteSubtask={onPromoteSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
       />
 
@@ -1960,6 +2228,7 @@ function InboxPage({
           emptyMessage="No completed Inbox tasks."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
@@ -1978,6 +2247,7 @@ function ProjectPage({
   onDeleteSection,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
   onOpenQuickAdd,
 }: {
   payload: SyncPayload;
@@ -1988,12 +2258,27 @@ function ProjectPage({
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const { projectId } = useParams();
   const [sectionName, setSectionName] = useState('');
+  const sectionInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key.toLowerCase() !== 's') return;
+      event.preventDefault();
+      sectionInputRef.current?.focus();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   if (!projectId) {
     return <EmptyState title="Project not found" description="Select a project from Browse." />;
@@ -2079,6 +2364,7 @@ function ProjectPage({
             emptyMessage="No unsectioned tasks here."
             onToggleTask={onToggleTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onPromoteSubtask={onPromoteSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
           />
 
@@ -2127,6 +2413,7 @@ function ProjectPage({
                   emptyMessage="No tasks in this section yet."
                   onToggleTask={onToggleTask}
                   onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                  onPromoteSubtask={onPromoteSubtask}
                   onOpenTask={taskId => navigate(`/task/${taskId}`)}
                 />
               </div>
@@ -2143,6 +2430,7 @@ function ProjectPage({
               emptyMessage="No completed tasks in this project."
               onToggleTask={onToggleTask}
               onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+              onPromoteSubtask={onPromoteSubtask}
               onOpenTask={taskId => navigate(`/task/${taskId}`)}
               collapsible
               defaultCollapsed
@@ -2158,6 +2446,7 @@ function ProjectPage({
           </p>
           <form onSubmit={submitSection} className="mt-5 flex gap-3">
             <input
+              ref={sectionInputRef}
               value={sectionName}
               onChange={event => setSectionName(event.target.value)}
               placeholder="New section"
@@ -2207,6 +2496,7 @@ function TaskDetailPage({
   onDeleteTask,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
 }: {
   payload: SyncPayload;
   onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
@@ -2220,6 +2510,7 @@ function TaskDetailPage({
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
 }) {
   const { taskId } = useParams();
   const task = taskId ? getTaskById(payload, taskId) : undefined;
@@ -2241,6 +2532,7 @@ function TaskDetailPage({
       onDeleteTask={onDeleteTask}
       onToggleTask={onToggleTask}
       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+      onPromoteSubtask={onPromoteSubtask}
     />
   );
 }
@@ -2256,6 +2548,7 @@ function TaskEditor({
   onDeleteTask,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
 }: {
   payload: SyncPayload;
   task: Task;
@@ -2271,12 +2564,17 @@ function TaskEditor({
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
   const projects = getActiveProjects(payload, true);
   const todayStartMs = useTodayStartMs();
   const subtasks = useMemo(() => getSubtasks(payload, task.id), [payload, task.id]);
   const taskReminders = useMemo(() => getTaskReminderDrafts(payload, task.id), [payload, task.id]);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
+  const prioritySelectRef = useRef<HTMLSelectElement | null>(null);
+  const dueInputRef = useRef<HTMLInputElement | null>(null);
+  const deadlineInputRef = useRef<HTMLInputElement | null>(null);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [projectId, setProjectId] = useState<string>(task.projectId ?? '');
@@ -2438,6 +2736,70 @@ function TaskEditor({
     navigate(returnPath);
   }
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const lowerKey = event.key.toLowerCase();
+      const typing = isTypingTarget(event.target);
+      const attemptGoBack = () => {
+        if (isDirty && !window.confirm('Discard your unsaved task changes?')) {
+          return;
+        }
+        navigate(returnPath);
+      };
+
+      if ((event.metaKey || event.ctrlKey) && lowerKey === 's') {
+        event.preventDefault();
+        titleInputRef.current?.form?.requestSubmit();
+        return;
+      }
+
+      if (typing) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        attemptGoBack();
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'e') {
+        event.preventDefault();
+        onToggleTask(task.id);
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'y') {
+        event.preventDefault();
+        prioritySelectRef.current?.focus();
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 't') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          setDueAt('');
+          return;
+        }
+        dueInputRef.current?.focus();
+        return;
+      }
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'd') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          setDeadlineEnabled(false);
+          setDeadlineAt('');
+          setDeadlineRecurringRule(null);
+          return;
+        }
+        if (!deadlineEnabled) {
+          setDeadlineEnabled(true);
+          window.setTimeout(() => deadlineInputRef.current?.focus(), 0);
+          return;
+        }
+        deadlineInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deadlineEnabled, isDirty, navigate, onToggleTask, returnPath, task.id]);
+
   async function createSubtaskDrafts(mode: 'single' | 'many') {
     const subtaskContext: QuickAddContext = {
       defaultProjectId: task.projectId,
@@ -2580,6 +2942,8 @@ function TaskEditor({
           </div>
           <Field label="Title">
             <input
+              ref={titleInputRef}
+              autoFocus
               value={title}
               onChange={event => setTitle(event.target.value)}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
@@ -2635,6 +2999,7 @@ function TaskEditor({
         <section className="space-y-4 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
           <Field label="Priority">
             <select
+              ref={prioritySelectRef}
               value={priority}
               onChange={event => setPriority(event.target.value as Priority)}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
@@ -2658,6 +3023,7 @@ function TaskEditor({
 
           <Field label="Due date">
             <input
+              ref={dueInputRef}
               type={allDay ? 'date' : 'datetime-local'}
               value={dueAt}
               onChange={event => setDueAt(event.target.value)}
@@ -2695,6 +3061,7 @@ function TaskEditor({
               </label>
               <Field label="Deadline">
                 <input
+                  ref={deadlineInputRef}
                   type={deadlineAllDay ? 'date' : 'datetime-local'}
                   value={deadlineAt}
                   onChange={event => setDeadlineAt(event.target.value)}
@@ -2755,6 +3122,7 @@ function TaskEditor({
             emptyMessage="No subtasks yet."
             onToggleTask={onToggleTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onPromoteSubtask={onPromoteSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
             baseDepth={1}
           />
@@ -2989,6 +3357,8 @@ function QuickAddDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [showBulkChoices, setShowBulkChoices] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(async () => undefined);
+  const createBulkTasksRef = useRef<(mode: 'single' | 'many') => Promise<void>>(async () => undefined);
   const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
   const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
   const hasInput = input.trim().length > 0;
@@ -3049,6 +3419,17 @@ function QuickAddDialog({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const lowerKey = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey) && lowerKey === 'enter') {
+        event.preventDefault();
+        if (showBulkChoices) {
+          void createBulkTasksRef.current(event.shiftKey ? 'many' : 'single');
+          return;
+        }
+        void submitDraftRef.current(event.shiftKey ? 'continue' : 'close');
+        return;
+      }
+
       if (event.key !== 'Escape') return;
       if (isSaving) return;
 
@@ -3170,8 +3551,11 @@ function QuickAddDialog({
     }
   }
 
+  submitDraftRef.current = submitDraft;
+  createBulkTasksRef.current = createBulkTasks;
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
+    <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
       <div className="w-full max-w-2xl rounded-[32px] border border-[#E7DDD4] bg-[#F7F4F0] p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -3437,12 +3821,14 @@ function TaskGroup({
   emptyMessage,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
   onOpenTask,
   collapsible = false,
   defaultCollapsed = false,
   selectionMode = false,
   selectedTaskIds,
   onToggleSelection,
+  onStartSelection,
   headerActions,
 }: {
   title: string;
@@ -3453,12 +3839,14 @@ function TaskGroup({
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   collapsible?: boolean;
   defaultCollapsed?: boolean;
   selectionMode?: boolean;
   selectedTaskIds?: Set<string>;
   onToggleSelection?: (taskId: string) => void;
+  onStartSelection?: () => void;
   headerActions?: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -3493,10 +3881,12 @@ function TaskGroup({
           emptyMessage={emptyMessage}
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
           onOpenTask={onOpenTask}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={onToggleSelection}
+          onStartSelection={onStartSelection}
         />
       ) : null}
     </section>
@@ -3510,11 +3900,13 @@ function TaskListBlock({
   emptyMessage,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
   onOpenTask,
   baseDepth = 0,
   selectionMode = false,
   selectedTaskIds,
   onToggleSelection,
+  onStartSelection,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -3522,11 +3914,13 @@ function TaskListBlock({
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   baseDepth?: number;
   selectionMode?: boolean;
   selectedTaskIds?: Set<string>;
   onToggleSelection?: (taskId: string) => void;
+  onStartSelection?: () => void;
 }) {
   const flattenedTasks = useMemo(() => flattenTasksWithSubtasks(tasks), [tasks]);
 
@@ -3547,10 +3941,12 @@ function TaskListBlock({
           visibleSubtaskCount={item.visibleSubtaskCount}
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
           onOpenTask={onOpenTask}
           selectionMode={selectionMode}
           selected={selectedTaskIds?.has(item.task.id) ?? false}
           onToggleSelection={onToggleSelection}
+          onStartSelection={onStartSelection}
         />
       ))}
     </div>
@@ -3566,10 +3962,12 @@ function TaskRow({
   visibleSubtaskCount,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onPromoteSubtask,
   onOpenTask,
   selectionMode = false,
   selected = false,
   onToggleSelection,
+  onStartSelection,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -3579,10 +3977,12 @@ function TaskRow({
   visibleSubtaskCount: number;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onPromoteSubtask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelection?: (taskId: string) => void;
+  onStartSelection?: () => void;
 }) {
   const completed = task.status === 'COMPLETED';
   const canDrag = !selectionMode && task.status === 'OPEN';
@@ -3658,14 +4058,58 @@ function TaskRow({
     <div
       role="button"
       tabIndex={0}
+      data-task-row="true"
+      data-task-id={task.id}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={handleRowAction}
       onKeyDown={event => {
+        const lowerKey = event.key.toLowerCase();
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           handleRowAction();
+          return;
+        }
+        if (event.key === 'ArrowDown' || lowerKey === 'j') {
+          event.preventDefault();
+          focusAdjacentTaskRow(task.id, 1);
+          return;
+        }
+        if (event.key === 'ArrowUp' || lowerKey === 'k') {
+          event.preventDefault();
+          focusAdjacentTaskRow(task.id, -1);
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'e') {
+          event.preventDefault();
+          onToggleTask(task.id);
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && lowerKey === 'e') {
+          event.preventDefault();
+          onOpenTask(task.id);
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'x' && onToggleSelection) {
+          event.preventDefault();
+          if (!selectionMode) {
+            onStartSelection?.();
+          }
+          onToggleSelection(task.id);
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === ']') {
+          event.preventDefault();
+          const previousTaskId = getAdjacentTaskRowId(task.id, -1);
+          if (previousTaskId && canReparentTaskAsSubtask(payload, task.id, previousTaskId)) {
+            onReparentTaskAsSubtask(task.id, previousTaskId);
+          }
+          return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key === '[') {
+          event.preventDefault();
+          onPromoteSubtask(task.id);
         }
       }}
       className={`flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${isDropActive
@@ -3673,7 +4117,7 @@ function TaskRow({
         : selected
         ? 'bg-[#FFF3EE]'
         : 'hover:bg-[#fcfaf7]'
-        }`}
+        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]`}
     >
       {canDrag ? (
         <button
@@ -3786,8 +4230,19 @@ function ChoiceDialog({
   footer?: ReactNode;
   onClose: () => void;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
+    <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
       <div className="w-full max-w-lg rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -3807,6 +4262,32 @@ function ChoiceDialog({
         {footer ? <div className="mt-5">{footer}</div> : null}
       </div>
     </div>
+  );
+}
+
+function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <ChoiceDialog
+      title="Keyboard shortcuts"
+      description="These are the shortcuts currently supported in the web app."
+      onClose={onClose}
+    >
+      <div className="space-y-5">
+        {shortcutSections.map(section => (
+          <section key={section.title}>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">{section.title}</p>
+            <div className="mt-3 space-y-2">
+              {section.items.map(item => (
+                <div key={`${section.title}-${item.keys}`} className="flex items-start justify-between gap-4 rounded-[16px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3">
+                  <span className="text-sm font-semibold text-[#1E2D2F]">{item.keys}</span>
+                  <span className="text-sm text-right text-[#6D5C50]">{item.description}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </ChoiceDialog>
   );
 }
 
@@ -4069,6 +4550,7 @@ function RailLink({
   compact = false,
   count,
   tint,
+  collapsed = false,
 }: {
   to: string;
   icon: ComponentType<{ size?: number; className?: string; style?: CSSProperties }>;
@@ -4076,20 +4558,22 @@ function RailLink({
   compact?: boolean;
   count?: number;
   tint?: string;
+  collapsed?: boolean;
 }) {
   return (
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 rounded-[10px] px-3 py-2 text-sm transition ${isActive
+        `flex items-center rounded-[10px] px-3 py-2 text-sm transition ${isActive
           ? 'bg-[#fff1ed] text-[#dc4c3e]'
           : 'text-[#4f4a45] hover:bg-[#f7f3ef]'
-        } ${compact ? 'py-1.5' : ''}`
+        } ${compact ? 'py-1.5' : ''} ${collapsed ? 'justify-center' : 'gap-3'}`
       }
+      title={collapsed ? label : undefined}
     >
       <Icon size={16} className={tint ? '' : undefined} style={tint ? { color: tint } : undefined} />
-      <span className="truncate">{label}</span>
-      {typeof count === 'number' ? <span className="ml-auto text-xs text-[#9a928a]">{count}</span> : null}
+      <span className={`truncate ${collapsed ? 'hidden' : ''}`}>{label}</span>
+      {typeof count === 'number' && !collapsed ? <span className="ml-auto text-xs text-[#9a928a]">{count}</span> : null}
     </NavLink>
   );
 }
@@ -4483,6 +4967,36 @@ function renderRecurrenceLabel(rule: string): string {
           ? 'year'
           : 'custom';
   return interval <= 1 ? `Every ${label}` : `Every ${interval} ${label}s`;
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const input = target.closest('input, textarea, select, [contenteditable="true"]');
+  return input !== null;
+}
+
+function hasOpenOverlayDialog(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.querySelector('[data-overlay-dialog="true"]') !== null;
+}
+
+function getAdjacentTaskRowId(taskId: string, direction: -1 | 1): string | null {
+  if (typeof document === 'undefined') return null;
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
+  const index = rows.findIndex(row => row.dataset.taskId === taskId);
+  if (index === -1) return null;
+  const nextRow = rows[index + direction];
+  return nextRow?.dataset.taskId ?? null;
+}
+
+function focusAdjacentTaskRow(taskId: string, direction: -1 | 1) {
+  if (typeof document === 'undefined') return;
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
+  const index = rows.findIndex(row => row.dataset.taskId === taskId);
+  if (index === -1) return;
+  const nextRow = rows[index + direction];
+  nextRow?.focus();
 }
 
 function getWorkspaceIdentity(cloudSession: CloudSession | null): { label: string; initial: string } {

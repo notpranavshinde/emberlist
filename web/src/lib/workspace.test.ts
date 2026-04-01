@@ -10,6 +10,7 @@ import {
   getTaskReminderDrafts,
   getTodayViewData,
   moveTasksToProject,
+  promoteSubtask,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   setPriorityForTasks,
@@ -304,6 +305,25 @@ describe('workspace bulk task helpers', () => {
     expect(canReparentTaskAsSubtask(payload, 'task-parent', 'task-child')).toBe(false);
     expect(canReparentTaskAsSubtask(payload, 'task-child', 'task-parent')).toBe(false);
     expect(reparentTaskAsSubtask(payload, 'task-parent', 'task-child')).toBe(payload);
+  });
+
+  it('promotes a subtask back out one level while keeping the parent location', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9600);
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-parent', title: 'Parent', projectId: 'project-home', sectionId: 'section-weekend', order: 2 }),
+      createTask({ id: 'task-child', title: 'Child', parentTaskId: 'task-parent', projectId: 'project-home', sectionId: 'section-weekend', order: 0 }),
+    );
+
+    const updated = promoteSubtask(payload, 'task-child');
+    const promotedTask = updated.tasks.find(task => task.id === 'task-child');
+
+    expect(promotedTask).toMatchObject({
+      parentTaskId: null,
+      projectId: 'project-home',
+      sectionId: 'section-weekend',
+      updatedAt: 9600,
+    });
   });
 
   it('reads reminder drafts for a task in a stable order', () => {

@@ -386,6 +386,36 @@ export function reparentTaskAsSubtask(payload: SyncPayload, draggedTaskId: strin
     });
 }
 
+export function promoteSubtask(payload: SyncPayload, taskId: string): SyncPayload {
+    const task = payload.tasks.find(candidate => candidate.id === taskId && !candidate.deletedAt) ?? null;
+    if (!task || task.parentTaskId === null) return payload;
+
+    const parent = payload.tasks.find(candidate => candidate.id === task.parentTaskId && !candidate.deletedAt) ?? null;
+    if (!parent) return payload;
+
+    const now = Date.now();
+    const nextParentTaskId = parent.parentTaskId ?? null;
+    const nextOrder = payload.tasks
+        .filter(candidate => candidate.parentTaskId === nextParentTaskId && !candidate.deletedAt && candidate.id !== taskId)
+        .reduce((max, candidate) => Math.max(max, candidate.order), -1) + 1;
+
+    return finalizePayload({
+        ...payload,
+        tasks: payload.tasks.map(candidate =>
+            candidate.id === taskId
+                ? {
+                    ...candidate,
+                    parentTaskId: nextParentTaskId,
+                    projectId: parent.projectId,
+                    sectionId: parent.sectionId,
+                    order: nextOrder,
+                    updatedAt: now,
+                }
+                : candidate
+        ),
+    });
+}
+
 export function updateTask(payload: SyncPayload, taskId: string, updater: (task: Task) => Task): SyncPayload {
     const nextTasks = payload.tasks.map(task => {
         if (task.id !== taskId) return task;

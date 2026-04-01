@@ -73,6 +73,7 @@
 ## Web Feature Parity Backlog
 
 ### High Priority
+- [x] Make the web app operable from the keyboard with task focus movement, global shortcuts, and keyboard-only task actions.
 - [x] Add global undo snackbar flows on web for task changes instead of banner-only recovery.
 - [x] Add multi-select selection mode on Today.
 - [x] Add bulk reschedule on Today.
