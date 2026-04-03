@@ -70,6 +70,14 @@
 - Added web auto-sync orchestration with debounce, silent auto-auth attempts, reconnect/focus/visibility triggers, and visible-tab polling.
 - Added sync runtime status tracking for pending local changes, offline state, sync in progress, and errors.
 
+## Android Core Parity Audit Progress
+- [x] Match Android/web sync import compatibility for wrapped backups, legacy flat backups, and newer-schema rejection.
+- [x] Match Android Drive sync service behavior for overlapping sync deduplication and safe malformed-remote failure handling.
+- [x] Match Android SyncCoordinator policy for activation sync, reconnect sync, and recent-sync suppression before debounced local sync.
+- [x] Match Android task-detail parser fallback for spaced project names when only a single-token project exists.
+- [x] Match Android parent-completion behavior so completing a task also completes its direct subtasks on web.
+- [x] Match Android bulk subtask creation behavior for per-line project overrides, reminder carry-through, and sibling ordering.
+
 ## Web Feature Parity Backlog
 
 ### High Priority

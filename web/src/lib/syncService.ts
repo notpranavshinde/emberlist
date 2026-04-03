@@ -1,5 +1,5 @@
 import type { SyncPayload } from '../types/sync';
-import { ensureSyncPayload } from './syncPayload';
+import { assertSupportedSyncPayload, ensureSyncPayload } from './syncPayload';
 import { SyncEngine } from './syncEngine';
 import { db } from './db';
 
@@ -33,6 +33,7 @@ export class DriveSyncService {
     private session: CloudSession | null = null;
     private readonly syncEngine = new SyncEngine();
     private readonly clientId: string;
+    private syncInFlight: Promise<SyncPayload> | null = null;
 
     constructor(clientId: string) {
         this.clientId = clientId;
@@ -68,6 +69,22 @@ export class DriveSyncService {
     }
 
     async sync(options: SyncOptions = {}) {
+        if (this.syncInFlight) {
+            return this.syncInFlight;
+        }
+
+        const syncPromise = this.performSync(options);
+        this.syncInFlight = syncPromise;
+        try {
+            return await syncPromise;
+        } finally {
+            if (this.syncInFlight === syncPromise) {
+                this.syncInFlight = null;
+            }
+        }
+    }
+
+    private async performSync(options: SyncOptions = {}) {
         const interactiveAuth = options.interactiveAuth ?? true;
         if (!this.accessToken) await this.login(interactiveAuth);
 
@@ -83,8 +100,14 @@ export class DriveSyncService {
             );
             if (response.ok) {
                 try {
-                    remotePayload = ensureSyncPayload(await response.json(), 'Cloud sync file');
+                    remotePayload = assertSupportedSyncPayload(
+                        ensureSyncPayload(await response.json(), 'Cloud sync file'),
+                        'Cloud sync file'
+                    );
                 } catch (error) {
+                    if (error instanceof Error && error.message.includes('newer app version')) {
+                        throw error;
+                    }
                     if (error instanceof Error && error.message.startsWith('Cloud sync file')) {
                         throw new Error(
                             'Cloud sync file is invalid or corrupted. Local web data was not changed. Reset cloud sync and sync again to recreate it.'

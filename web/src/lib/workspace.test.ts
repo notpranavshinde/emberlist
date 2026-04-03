@@ -567,6 +567,42 @@ describe('workspace bulk task helpers', () => {
     ]);
   });
 
+  it('completes direct subtasks when completing a parent task', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-03T09:30:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-parent-complete',
+        title: 'Parent task',
+      }),
+      createTask({
+        id: 'task-child-one',
+        title: 'Child one',
+        parentTaskId: 'task-parent-complete',
+      }),
+      createTask({
+        id: 'task-child-two',
+        title: 'Child two',
+        parentTaskId: 'task-parent-complete',
+      }),
+    );
+
+    const updated = toggleTaskCompletion(payload, 'task-parent-complete');
+
+    expect(updated.tasks.find(task => task.id === 'task-parent-complete')).toMatchObject({
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-03T09:30:00').getTime(),
+    });
+    expect(updated.tasks.find(task => task.id === 'task-child-one')).toMatchObject({
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-03T09:30:00').getTime(),
+    });
+    expect(updated.tasks.find(task => task.id === 'task-child-two')).toMatchObject({
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-03T09:30:00').getTime(),
+    });
+  });
+
   it('uses the completion day as the recurrence base for overdue recurring tasks', () => {
     vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-05T11:15:00').getTime());
     const payload = createPayload();

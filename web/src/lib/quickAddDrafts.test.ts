@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildDraftFromParsed, createMergedBulkDraft, mergeBulkDraftWithDefaults, type QuickAddContext } from './quickAddDrafts';
+import {
+  buildDraftFromParsed,
+  buildTaskDetailDraftFromInput,
+  createMergedBulkDraft,
+  mergeBulkDraftWithDefaults,
+  type QuickAddContext,
+} from './quickAddDrafts';
 import { parseQuickAdd } from './quickParser';
 import { createEmptySyncPayload } from './syncPayload';
 import type { Project, Section, SyncPayload } from '../types/sync';
@@ -131,16 +137,16 @@ describe('quickAddDrafts', () => {
     const payload = createPayload();
     const todayStart = new Date(2026, 1, 6, 0, 0, 0, 0).getTime();
 
-    const spacedProjectDraft = buildDraftFromParsed(
+    const spacedProjectDraft = buildTaskDetailDraftFromInput(
       payload,
-      parseQuickAdd('pillows #to buy'),
+      'pillows #to buy',
       '',
       CONTEXT,
       todayStart,
     );
-    const sectionOverrideDraft = buildDraftFromParsed(
+    const sectionOverrideDraft = buildTaskDetailDraftFromInput(
       payload,
-      parseQuickAdd('pay rent p1 #bills/monthly'),
+      'pay rent p1 #bills/monthly',
       '',
       {
         defaultProjectId: 'project-dailies',
@@ -159,6 +165,79 @@ describe('quickAddDrafts', () => {
       projectId: 'project-bills',
       sectionId: 'section-monthly',
       priority: 'P1',
+    });
+  });
+
+  it('falls back to single-token project matching when a spaced project does not exist', () => {
+    const basePayload = createPayload();
+    const payload = {
+      ...basePayload,
+      projects: basePayload.projects.filter(project => project.id !== 'project-to-buy'),
+    };
+    payload.projects.push({
+      id: 'project-to',
+      name: 'to',
+      color: '#EE6A3C',
+      favorite: false,
+      order: 3,
+      archived: false,
+      viewPreference: 'LIST',
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    });
+
+    const draft = buildTaskDetailDraftFromInput(
+      payload,
+      'pillows #to buy',
+      '',
+      CONTEXT,
+      new Date(2026, 1, 6, 0, 0, 0, 0).getTime(),
+    );
+
+    expect(draft).toMatchObject({
+      title: 'pillows',
+      projectId: 'project-to',
+      sectionId: null,
+    });
+  });
+
+  it('matches spaced sections under a single-token project', () => {
+    const payload = createPayload();
+    payload.projects.push({
+      id: 'project-shopping',
+      name: 'shopping',
+      color: '#EE6A3C',
+      favorite: false,
+      order: 4,
+      archived: false,
+      viewPreference: 'LIST',
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    });
+    payload.sections.push({
+      id: 'section-home-decor',
+      projectId: 'project-shopping',
+      name: 'home decor',
+      order: 0,
+      createdAt: 0,
+      updatedAt: 0,
+      deletedAt: null,
+    });
+
+    const draft = buildTaskDetailDraftFromInput(
+      payload,
+      'pillows #shopping/home decor',
+      '',
+      CONTEXT,
+      new Date(2026, 1, 6, 0, 0, 0, 0).getTime(),
+    );
+
+    expect(draft).toMatchObject({
+      title: 'pillows',
+      projectId: 'project-shopping',
+      sectionId: 'section-home-decor',
     });
   });
 

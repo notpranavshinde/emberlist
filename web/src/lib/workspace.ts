@@ -337,7 +337,7 @@ export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload 
         parentTaskId: draft.parentTaskId,
         locationId: null,
         locationTriggerType: null,
-        order: nextTaskOrder(payload, projectId, sectionId),
+        order: nextTaskOrder(payload, projectId, sectionId, draft.parentTaskId),
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -544,6 +544,7 @@ export function toggleTaskCompletion(payload: SyncPayload, taskId: string): Sync
 
     const now = Date.now();
     const isCompleted = task.status === 'COMPLETED';
+    const subtaskIds = getDirectOpenSubtaskIds(payload, taskId);
 
     if (isCompleted) {
         const successor = findRecurringSuccessor(payload, task, task.completedAt ?? now);
@@ -590,7 +591,20 @@ export function toggleTaskCompletion(payload: SyncPayload, taskId: string): Sync
     return finalizePayload({
         ...payload,
         tasks: [
-            ...payload.tasks.map(candidate => candidate.id === taskId ? completedTask : candidate),
+            ...payload.tasks.map(candidate => {
+                if (candidate.id === taskId) {
+                    return completedTask;
+                }
+                if (subtaskIds.has(candidate.id)) {
+                    return {
+                        ...candidate,
+                        status: 'COMPLETED' as TaskStatus,
+                        completedAt: now,
+                        updatedAt: now,
+                    };
+                }
+                return candidate;
+            }),
             ...(successor ? [successor.task] : []),
         ],
         reminders: successor
@@ -1012,10 +1026,32 @@ function nextSectionOrder(payload: SyncPayload, projectId: string): number {
         .reduce((max, section) => Math.max(max, section.order), -1) + 1;
 }
 
-function nextTaskOrder(payload: SyncPayload, projectId: string | null, sectionId: string | null): number {
+function nextTaskOrder(
+    payload: SyncPayload,
+    projectId: string | null,
+    sectionId: string | null,
+    parentTaskId: string | null,
+): number {
     return payload.tasks
-        .filter(task => task.projectId === projectId && task.sectionId === sectionId && !task.deletedAt)
+        .filter(task =>
+            task.projectId === projectId &&
+            task.sectionId === sectionId &&
+            task.parentTaskId === parentTaskId &&
+            !task.deletedAt
+        )
         .reduce((max, task) => Math.max(max, task.order), -1) + 1;
+}
+
+function getDirectOpenSubtaskIds(payload: SyncPayload, parentTaskId: string): Set<string> {
+    return new Set(
+        payload.tasks
+            .filter(task =>
+                task.parentTaskId === parentTaskId &&
+                !task.deletedAt &&
+                task.status !== 'COMPLETED'
+            )
+            .map(task => task.id)
+    );
 }
 
 function resolveProject(payload: SyncPayload, draft: TaskDraft, now: number): Project | null {

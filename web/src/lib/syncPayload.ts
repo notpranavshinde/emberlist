@@ -11,7 +11,7 @@ import type {
     TaskStatus,
 } from '../types/sync';
 
-const CURRENT_SYNC_SCHEMA_VERSION = 1;
+export const CURRENT_SYNC_SCHEMA_VERSION = 1;
 
 type PlainObject = Record<string, unknown>;
 type EntityMetadata = PlainObject & {
@@ -71,6 +71,43 @@ export function ensureSyncPayload(input: unknown, label: string): SyncPayload {
     };
 }
 
+export function assertSupportedSyncPayload(payload: SyncPayload, label: string): SyncPayload {
+    if (payload.schemaVersion > CURRENT_SYNC_SCHEMA_VERSION) {
+        throw new Error(`${label} is from a newer app version.`);
+    }
+    return payload;
+}
+
+export function normalizeImportedPayload(input: unknown, label: string): SyncPayload {
+    if (isObject(input) && isObject(input.sync)) {
+        return assertSupportedSyncPayload(
+            ensureSyncPayload(input.sync, `${label}.sync`),
+            `${label}.sync`
+        );
+    }
+
+    if (looksLikeLegacyBackupPayload(input)) {
+        const legacy = input as PlainObject;
+        return assertSupportedSyncPayload(
+            ensureSyncPayload({
+                schemaVersion: legacy.schemaVersion ?? CURRENT_SYNC_SCHEMA_VERSION,
+                exportedAt: legacy.exportedAt ?? 0,
+                deviceId: legacy.deviceId ?? '',
+                payloadId: legacy.payloadId ?? '',
+                source: legacy.source ?? 'android-legacy-backup',
+                projects: legacy.projects ?? [],
+                sections: legacy.sections ?? [],
+                tasks: legacy.tasks ?? [],
+                reminders: legacy.reminders ?? [],
+                locations: legacy.locations ?? [],
+            }, label),
+            label
+        );
+    }
+
+    return assertSupportedSyncPayload(ensureSyncPayload(input, label), label);
+}
+
 function validateProject(input: unknown, label: string): Project {
     const value = validateSyncMetadata(input, label);
     return {
@@ -86,6 +123,15 @@ function validateProject(input: unknown, label: string): Project {
             PROJECT_VIEW_PREFERENCES
         ),
     };
+}
+
+function looksLikeLegacyBackupPayload(input: unknown): input is PlainObject {
+    if (!isObject(input) || 'sync' in input) return false;
+    return Array.isArray(input.projects)
+        && Array.isArray(input.sections)
+        && Array.isArray(input.tasks)
+        && Array.isArray(input.reminders)
+        && Array.isArray(input.locations);
 }
 
 function validateSection(input: unknown, label: string): Section {

@@ -1,4 +1,4 @@
-import type { QuickAddResult, ReminderSpec as ParsedReminderSpec } from './quickParser';
+import { parseQuickAdd, type QuickAddResult, type ReminderSpec as ParsedReminderSpec } from './quickParser';
 import type { SyncPayload } from '../types/sync';
 import {
   getActiveProjects,
@@ -52,6 +52,43 @@ export function buildDraftFromParsed(
     deadlineRecurringRule: parsed.deadlineRecurringRule,
     parentTaskId: null,
     reminders: parsed.reminders.map(mapParsedReminder),
+  };
+}
+
+export function buildTaskDetailDraftFromInput(
+  payload: SyncPayload,
+  input: string,
+  description: string,
+  context: QuickAddContext,
+  todayStartMs: number,
+): TaskDraft {
+  const parsed = resolveTaskDetailParsedResult(payload, input);
+  const draft = buildDraftFromParsed(
+    payload,
+    parsed,
+    description,
+    context,
+    todayStartMs,
+  );
+
+  if (draft.projectId !== null || !parsed.projectName || !hasWhitespace(parsed.projectName)) {
+    return draft;
+  }
+
+  const fallbackProjectToken = parsed.projectName.split(/\s+/)[0] ?? '';
+  const fallbackProject = getActiveProjects(payload, true).find(project =>
+    project.name.localeCompare(fallbackProjectToken, undefined, { sensitivity: 'base' }) === 0
+  );
+  if (!fallbackProject) {
+    return draft;
+  }
+
+  return {
+    ...draft,
+    projectId: fallbackProject.id,
+    projectName: null,
+    sectionId: null,
+    sectionName: null,
   };
 }
 
@@ -120,4 +157,108 @@ function mapParsedReminder(reminder: ParsedReminderSpec): TaskReminderDraft {
   return reminder.kind === 'ABSOLUTE'
     ? { kind: 'ABSOLUTE', timeAt: reminder.timeAt }
     : { kind: 'OFFSET', offsetMinutes: reminder.minutes };
+}
+
+type TaskDetailHashContext = {
+  hashIndex: number;
+  rawAfterHash: string;
+};
+
+type ExistingProjectSectionMatch = {
+  projectName: string;
+  sectionName: string | null;
+  sanitizedInput: string;
+};
+
+const PROJECT_PLACEHOLDER = '__taskdetailproject__';
+const SECTION_PLACEHOLDER = '__taskdetailsection__';
+
+function resolveTaskDetailParsedResult(payload: SyncPayload, input: string): QuickAddResult {
+  const spacedMatch = findExistingProjectSectionMatch(payload, input);
+  if (!spacedMatch) {
+    return parseQuickAdd(input);
+  }
+
+  const reparsed = parseQuickAdd(spacedMatch.sanitizedInput);
+  return {
+    ...reparsed,
+    projectName: spacedMatch.projectName,
+    sectionName: spacedMatch.sectionName ?? reparsed.sectionName,
+  };
+}
+
+function findExistingProjectSectionMatch(payload: SyncPayload, input: string): ExistingProjectSectionMatch | null {
+  const hashContext = parseTaskDetailHashContext(input);
+  if (!hashContext) return null;
+
+  const activeProjects = getActiveProjects(payload, true)
+    .filter(project => !project.deletedAt && !project.archived)
+    .sort((left, right) => right.name.length - left.name.length);
+  const matchedProject = activeProjects.find(project =>
+    hashContext.rawAfterHash.toLowerCase().startsWith(project.name.toLowerCase()) &&
+    isProjectBoundary(hashContext.rawAfterHash.charAt(project.name.length) || null),
+  );
+  if (!matchedProject) return null;
+
+  const projectRemainder = hashContext.rawAfterHash.slice(matchedProject.name.length);
+  const matchingSection = projectRemainder.startsWith('/')
+    ? getProjectSections(payload, matchedProject.id)
+        .filter(section => !section.deletedAt)
+        .sort((left, right) => right.name.length - left.name.length)
+        .find(section => {
+          const sectionSource = projectRemainder.slice(1);
+          return (
+            sectionSource.toLowerCase().startsWith(section.name.toLowerCase()) &&
+            isSectionBoundary(sectionSource.charAt(section.name.length) || null)
+          );
+        }) ?? null
+    : null;
+
+  const projectNeedsRewrite = hasWhitespace(matchedProject.name);
+  const sectionNeedsRewrite = matchingSection ? hasWhitespace(matchingSection.name) : false;
+  if (!projectNeedsRewrite && !sectionNeedsRewrite) {
+    return null;
+  }
+
+  const sanitizedAfterHash = (() => {
+    let nextValue = PROJECT_PLACEHOLDER;
+    if (matchingSection) {
+      nextValue += '/';
+      if (sectionNeedsRewrite) {
+        nextValue += SECTION_PLACEHOLDER + projectRemainder.slice(1 + matchingSection.name.length);
+      } else {
+        nextValue += projectRemainder.slice(1);
+      }
+      return nextValue;
+    }
+    return nextValue + projectRemainder;
+  })();
+
+  return {
+    projectName: matchedProject.name,
+    sectionName: matchingSection?.name ?? null,
+    sanitizedInput: input.slice(0, hashContext.hashIndex + 1) + sanitizedAfterHash,
+  };
+}
+
+function parseTaskDetailHashContext(text: string): TaskDetailHashContext | null {
+  const hashIndex = text.lastIndexOf('#');
+  if (hashIndex === -1) return null;
+
+  return {
+    hashIndex,
+    rawAfterHash: text.slice(hashIndex + 1),
+  };
+}
+
+function isProjectBoundary(value: string | null): boolean {
+  return value === null || value === '' || value === '/' || /\s/.test(value);
+}
+
+function isSectionBoundary(value: string | null): boolean {
+  return value === null || value === '' || /\s/.test(value);
+}
+
+function hasWhitespace(value: string): boolean {
+  return /\s/.test(value);
 }

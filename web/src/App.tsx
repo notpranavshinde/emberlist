@@ -32,12 +32,25 @@ import {
 import { addDays, endOfDay, format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
 import { RecoveryScreen } from './components/RecoveryScreen';
 import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './lib/banner';
+import {
+  AUTO_SYNC_DEBOUNCE_MS,
+  shouldRunActivationSync,
+  shouldRunConnectivityRegainSync,
+  shouldScheduleDebouncedSync,
+} from './lib/autoSync';
 import { appendActivityEntry, buildTaskTimeline, type ActivityEntry } from './lib/activity';
 import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
-import { buildDraftFromParsed, createMergedBulkDraft, mergeBulkDraftWithDefaults, type QuickAddContext } from './lib/quickAddDrafts';
+import {
+  buildDraftFromParsed,
+  buildTaskDetailDraftFromInput,
+  createMergedBulkDraft,
+  mergeBulkDraftWithDefaults,
+  type QuickAddContext,
+} from './lib/quickAddDrafts';
 import { getQuickAddEscapeAction, shouldCloseQuickAddAfterCreate, type QuickAddSubmitMode } from './lib/quickAddFlow';
 import { parseQuickAdd } from './lib/quickParser';
+import { buildBulkSubtaskDrafts, buildCombinedSubtaskDraft, buildSubtaskDraft } from './lib/subtaskDrafts';
 import {
   buildReminderEditors,
   createReminderEditor,
@@ -48,7 +61,7 @@ import {
   type ReminderEditorDraft,
   type RecurrencePreset,
 } from './lib/taskEditing';
-import { ensureSyncPayload } from './lib/syncPayload';
+import { normalizeImportedPayload } from './lib/syncPayload';
 import { DriveSyncService, type CloudSession } from './lib/syncService';
 import { SyncEngine } from './lib/syncEngine';
 import {
@@ -181,12 +194,17 @@ function App() {
   const hasPendingLocalChangesRef = useRef(hasPendingLocalChanges);
   const autoSyncEnabledRef = useRef(autoSyncEnabled);
   const autoBackupEnabledRef = useRef(autoBackupEnabled);
+  const lastCloudSyncAtRef = useRef(lastCloudSyncAt);
   const followUpSyncRequestedRef = useRef(false);
   const debounceTimerRef = useRef<number | null>(null);
   const backoffTimerRef = useRef<number | null>(null);
   const backoffAttemptRef = useRef(0);
   const backoffUntilRef = useRef<number | null>(null);
   const hasAutoSyncedOnLoadRef = useRef(false);
+  const previousAutoSyncStateRef = useRef({
+    autoSyncEnabled,
+    hasCloudSession: Boolean(cloudSession),
+  });
   const bannerIdRef = useRef(0);
   const undoActivityMapRef = useRef(new Map<string, { previousPayload: SyncPayload; undoMessage: string; taskIds: string[]; title: string }>());
   const syncService = useMemo(
@@ -238,6 +256,10 @@ function App() {
   useEffect(() => {
     autoBackupEnabledRef.current = autoBackupEnabled;
   }, [autoBackupEnabled]);
+
+  useEffect(() => {
+    lastCloudSyncAtRef.current = lastCloudSyncAt;
+  }, [lastCloudSyncAt]);
 
   useEffect(() => {
     window.localStorage.setItem('emberlist.showCompletedToday', JSON.stringify(showCompletedToday));
@@ -453,7 +475,7 @@ function App() {
         clearDebounceTimer();
         debounceTimerRef.current = window.setTimeout(() => {
           void runCloudSync({ interactiveAuth: false, automatic: true });
-        }, 5_000);
+        }, AUTO_SYNC_DEBOUNCE_MS);
       }
     }
   }
@@ -467,11 +489,22 @@ function App() {
       setHasPendingLocalChanges(true);
       if (isSyncingRef.current) {
         followUpSyncRequestedRef.current = true;
-      } else if (autoSyncEnabledRef.current && isOnlineRef.current && syncService && cloudSessionRef.current) {
+      } else if (
+        syncService &&
+        shouldScheduleDebouncedSync({
+          autoSyncEnabled: autoSyncEnabledRef.current,
+          hasCloudSession: Boolean(cloudSessionRef.current),
+          isOnline: isOnlineRef.current,
+          isSyncing: false,
+          applyingRemoteChanges: false,
+          lastSyncedAt: lastCloudSyncAtRef.current,
+          now: Date.now(),
+        })
+      ) {
         clearDebounceTimer();
         debounceTimerRef.current = window.setTimeout(() => {
           void runCloudSync({ interactiveAuth: false, automatic: true });
-        }, 5_000);
+        }, AUTO_SYNC_DEBOUNCE_MS);
       }
     }
   }
@@ -548,7 +581,7 @@ function App() {
     if (!file) return;
 
     try {
-      const remotePayload = ensureSyncPayload(JSON.parse(await file.text()), 'Imported JSON file');
+      const remotePayload = normalizeImportedPayload(JSON.parse(await file.text()), 'Imported JSON file');
       const localPayload = payloadRef.current ?? (await db.getPayload());
       const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
       const repaired = repairRecurringTasks(mergedPayload);
@@ -947,7 +980,7 @@ function App() {
     if (!confirmed) return;
 
     try {
-      const backupPayload = ensureSyncPayload(JSON.parse(raw), 'Browser backup snapshot');
+      const backupPayload = normalizeImportedPayload(JSON.parse(raw), 'Browser backup snapshot');
       const current = payloadRef.current ?? (await db.getPayload());
       const mergedPayload = syncEngine.mergePayloads(current, backupPayload);
       const repaired = repairRecurringTasks(mergedPayload);
@@ -971,9 +1004,39 @@ function App() {
   }, [bootState, cloudSession, syncService]);
 
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
+    const previous = previousAutoSyncStateRef.current;
+    const current = {
+      autoSyncEnabled,
+      hasCloudSession: Boolean(cloudSession),
+    };
+    previousAutoSyncStateRef.current = current;
+
+    if (bootState !== 'ready' || !syncService) {
+      return;
+    }
+
+    if (shouldRunActivationSync(previous, current) && hasAutoSyncedOnLoadRef.current) {
       void runCloudSync({ interactiveAuth: false, automatic: true });
+      return;
+    }
+
+    if (!current.autoSyncEnabled || !current.hasCloudSession) {
+      clearDebounceTimer();
+      clearBackoffTimer();
+      followUpSyncRequestedRef.current = false;
+    }
+  }, [autoSyncEnabled, bootState, cloudSession, syncService]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      const shouldSync = shouldRunConnectivityRegainSync(isOnlineRef.current, true, {
+        autoSyncEnabled: autoSyncEnabledRef.current,
+        hasCloudSession: Boolean(cloudSessionRef.current),
+      });
+      setIsOnline(true);
+      if (shouldSync) {
+        void runCloudSync({ interactiveAuth: false, automatic: true });
+      }
     };
     const handleOffline = () => setIsOnline(false);
 
@@ -4223,23 +4286,10 @@ function TaskEditor({
   }, [deadlineEnabled, isDirty, navigate, onToggleTask, returnPath, task.id]);
 
   async function createSubtaskDrafts(mode: 'single' | 'many') {
-    const subtaskContext: QuickAddContext = {
-      defaultProjectId: task.projectId,
-      defaultSectionId: task.sectionId,
-      defaultDueToday: false,
-    };
-
     setIsCreatingSubtasks(true);
     try {
       if (mode === 'single') {
-        const mergedDraft = {
-          ...createMergedBulkDraft(payload, bulkSubtaskLines, '', subtaskContext, todayStartMs),
-          parentTaskId: task.id,
-          projectId: task.projectId,
-          projectName: null,
-          sectionId: task.sectionId,
-          sectionName: null,
-        };
+        const mergedDraft = buildCombinedSubtaskDraft(payload, task, bulkSubtaskLines, todayStartMs);
         const createdTaskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 subtask.' });
         if (createdTaskId) {
           setNewSubtask('');
@@ -4248,16 +4298,7 @@ function TaskEditor({
       }
 
       let createdCount = 0;
-      for (const line of bulkSubtaskLines) {
-        const parsedLine = parseQuickAdd(line);
-        const draft = {
-          ...buildDraftFromParsed(payload, parsedLine, '', subtaskContext, todayStartMs),
-          parentTaskId: task.id,
-          projectId: task.projectId,
-          projectName: null,
-          sectionId: task.sectionId,
-          sectionName: null,
-        };
+      for (const draft of buildBulkSubtaskDrafts(payload, task, bulkSubtaskLines, todayStartMs)) {
         const createdTaskId = await onCreateTask(draft, { silent: true });
         if (createdTaskId) {
           createdCount += 1;
@@ -4281,20 +4322,7 @@ function TaskEditor({
       return;
     }
 
-    const subtaskContext: QuickAddContext = {
-      defaultProjectId: task.projectId,
-      defaultSectionId: task.sectionId,
-      defaultDueToday: false,
-    };
-    const parsed = parseQuickAdd(newSubtask);
-    const draft = {
-      ...buildDraftFromParsed(payload, parsed, '', subtaskContext, todayStartMs),
-      parentTaskId: task.id,
-      projectId: task.projectId,
-      projectName: null,
-      sectionId: task.sectionId,
-      sectionName: null,
-    };
+    const draft = buildSubtaskDraft(payload, task, newSubtask, todayStartMs);
 
     setIsCreatingSubtasks(true);
     try {
@@ -4309,9 +4337,9 @@ function TaskEditor({
 
   function applyParserLine() {
     if (!parserLine.trim()) return;
-    const parsedDraft = buildDraftFromParsed(
+    const parsedDraft = buildTaskDetailDraftFromInput(
       payload,
-      parseQuickAdd(parserLine),
+      parserLine,
       description,
       {
         defaultProjectId: projectId || null,
