@@ -14,6 +14,7 @@ import {
   promoteSubtask,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
+  searchTasks,
   setPriorityForTasks,
   updateTaskFromDraft,
 } from './workspace';
@@ -242,6 +243,21 @@ describe('workspace bulk task helpers', () => {
     expect(upcoming.map(task => task.id)).toEqual([
       'task-overdue',
       'task-future',
+    ]);
+  });
+
+  it('keeps matching subtasks attached to their parent in search results', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-parent-search', title: 'Plan launch', order: 10 }),
+      createTask({ id: 'task-child-search', title: 'Draft launch copy', parentTaskId: 'task-parent-search', order: 11 }),
+    );
+
+    const results = searchTasks(payload, 'draft launch', new Set(['ALL']));
+
+    expect(results.map(task => task.id)).toEqual([
+      'task-parent-search',
+      'task-child-search',
     ]);
   });
 

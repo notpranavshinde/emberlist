@@ -112,10 +112,10 @@
 - [ ] Add gesture-driven scheduling interactions on Upcoming.
 - [x] Add drag-to-subtask behavior on Upcoming.
 - [ ] Make Upcoming more action-oriented, closer to Android's management flow.
-- [ ] Add multi-select selection mode in Search.
-- [ ] Add bulk task actions from Search results.
-- [ ] Add subtask-aware Search result presentation with flattened parent/subtask rendering.
-- [ ] Make Search more action-oriented, closer to Android's behavior.
+- [x] Add multi-select selection mode in Search.
+- [x] Add bulk task actions from Search results.
+- [x] Add subtask-aware Search result presentation with flattened parent/subtask rendering.
+- [x] Make Search more action-oriented, closer to Android's behavior.
 - [x] Add deadline recurrence UI in web task detail.
 - [x] Strengthen post-create reminder and recurrence management surfaces on web beyond parser-only entry.
 - [ ] Improve deadline and scheduling controls on web task detail to better match Android.

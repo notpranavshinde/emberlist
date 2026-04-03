@@ -214,20 +214,37 @@ export function searchTasks(payload: SyncPayload, query: string, filters: Set<Se
     const projects = new Map(payload.projects.map(project => [project.id, project]));
     const sections = new Map(payload.sections.map(section => [section.id, section]));
     const reminderTaskIds = new Set(payload.reminders.filter(reminder => !reminder.deletedAt).map(reminder => reminder.taskId));
+    const openTasks = getOpenTasks(payload);
+    const matchedTasks = openTasks.filter(task => {
+        if (!normalizedQuery) return true;
+        const projectName = task.projectId ? projects.get(task.projectId)?.name ?? '' : 'inbox';
+        const sectionName = task.sectionId ? sections.get(task.sectionId)?.name ?? '' : '';
+        return [
+            task.title,
+            task.description,
+            projectName,
+            sectionName,
+        ].join(' ').toLowerCase().includes(normalizedQuery);
+    }).filter(task => matchesFilters(task, filters, reminderTaskIds));
 
-    return getOpenTasks(payload)
-        .filter(task => {
-            if (!normalizedQuery) return true;
-            const projectName = task.projectId ? projects.get(task.projectId)?.name ?? '' : 'inbox';
-            const sectionName = task.sectionId ? sections.get(task.sectionId)?.name ?? '' : '';
-            return [
-                task.title,
-                task.description,
-                projectName,
-                sectionName,
-            ].join(' ').toLowerCase().includes(normalizedQuery);
-        })
-        .filter(task => matchesFilters(task, filters, reminderTaskIds))
+    if (!matchedTasks.length) {
+        return [];
+    }
+
+    const tasksById = new Map(openTasks.map(task => [task.id, task]));
+    const includedIds = new Set<string>();
+
+    matchedTasks.forEach(task => {
+        let current: Task | undefined = task;
+        while (current) {
+            if (includedIds.has(current.id)) break;
+            includedIds.add(current.id);
+            current = current.parentTaskId ? tasksById.get(current.parentTaskId) : undefined;
+        }
+    });
+
+    return openTasks
+        .filter(task => includedIds.has(task.id))
         .sort(compareTasks);
 }
 
