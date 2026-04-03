@@ -10,6 +10,7 @@ import {
   getTaskReminderDrafts,
   getTodayViewData,
   getUpcomingOpenTasks,
+  moveTasksToSection,
   moveTasksToProject,
   promoteSubtask,
   reparentTaskAsSubtask,
@@ -175,6 +176,19 @@ describe('workspace bulk task helpers', () => {
     expect(updated.tasks.find(task => task.id === 'task-today')).toMatchObject({
       projectId: 'project-home',
       sectionId: 'section-weekend',
+    });
+  });
+
+  it('moves selected tasks into a section and aligns the project automatically', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(6500);
+    const payload = createPayload();
+
+    const updated = moveTasksToSection(payload, ['task-open'], 'section-weekend');
+
+    expect(updated.tasks.find(task => task.id === 'task-open')).toMatchObject({
+      projectId: 'project-home',
+      sectionId: 'section-weekend',
+      updatedAt: 6500,
     });
   });
 

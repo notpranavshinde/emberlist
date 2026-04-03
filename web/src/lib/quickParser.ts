@@ -97,7 +97,7 @@ function parsePriority(input: string): Priority | null {
 function parseProjectSection(input: string): [string | null, string | null] {
   const hashIndex = input.lastIndexOf('#');
   if (hashIndex === -1) return [null, null];
-  const token = input.slice(hashIndex + 1).split(/\s/, 1)[0]?.trim() ?? '';
+  const token = input.slice(hashIndex + 1).trim();
   if (!token) return [null, null];
   const [projectName = '', sectionName = ''] = token.split('/', 2);
   return [projectName.trim() || null, sectionName.trim() || null];
@@ -377,7 +377,7 @@ function monthNameToNumber(token: string): number | null {
 
 function stripTokens(input: string): string {
   return input
-    .replace(/#[^\s]+/g, '')
+    .replace(/#.+$/g, '')
     .replace(/\bp[1-4]\b/gi, '')
     .replace(/today|tomorrow|next week|this weekend|next weekend|in\s+\d+\s+days/gi, '')
     .replace(/deadline\s+[^#]+/gi, '')

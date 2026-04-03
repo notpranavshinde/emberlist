@@ -98,32 +98,32 @@
 - [x] Keep Quick Add open for repeated task entry on web, while also letting `Esc` close it.
 
 ### Low Priority
-- [ ] Add web project board view.
-- [ ] Add a toggle between list and board view for projects on web.
-- [ ] Add richer direct task operations in the web project view, including reschedule and stronger row actions.
-- [ ] Add task-level activity timeline inside web task detail.
-- [ ] Add parser-style inline task editing on web task detail for faster project and section assignment.
-- [ ] Add richer undo behavior for archive, unarchive, and update flows in web task detail.
+- [x] Add web project board view.
+- [x] Add a toggle between list and board view for projects on web.
+- [x] Add richer direct task operations in the web project view, including reschedule and stronger row actions.
+- [x] Add task-level activity timeline inside web task detail.
+- [x] Add parser-style inline task editing on web task detail for faster project and section assignment.
+- [x] Add richer undo behavior for archive, unarchive, and update flows in web task detail.
 - [x] Add multi-select selection mode on Upcoming.
 - [x] Add bulk reschedule on Upcoming.
 - [x] Add bulk move-to-project on Upcoming.
 - [x] Add bulk priority change on Upcoming.
 - [x] Add bulk delete on Upcoming.
-- [ ] Add gesture-driven scheduling interactions on Upcoming.
+- [x] Add gesture-driven scheduling interactions on Upcoming.
 - [x] Add drag-to-subtask behavior on Upcoming.
-- [ ] Make Upcoming more action-oriented, closer to Android's management flow.
+- [x] Make Upcoming more action-oriented, closer to Android's management flow.
 - [x] Add multi-select selection mode in Search.
 - [x] Add bulk task actions from Search results.
 - [x] Add subtask-aware Search result presentation with flattened parent/subtask rendering.
 - [x] Make Search more action-oriented, closer to Android's behavior.
 - [x] Add deadline recurrence UI in web task detail.
 - [x] Strengthen post-create reminder and recurrence management surfaces on web beyond parser-only entry.
-- [ ] Improve deadline and scheduling controls on web task detail to better match Android.
-- [ ] Add week-start preference to web Settings.
-- [ ] Add 24-hour time preference to web Settings.
-- [ ] Expand web Settings with richer sync and backup controls closer to Android.
-- [ ] Add JSON export or equivalent backup/export flow on web.
-- [ ] Make web project and task flows more operational without requiring detail-page round trips.
+- [x] Improve deadline and scheduling controls on web task detail to better match Android.
+- [x] Add week-start preference to web Settings.
+- [x] Add 24-hour time preference to web Settings.
+- [x] Expand web Settings with richer sync and backup controls closer to Android.
+- [x] Add JSON export or equivalent backup/export flow on web.
+- [x] Make web project and task flows more operational without requiring detail-page round trips.
 
 ### Recommended Implementation Order
 1. [x] Build a shared web task-selection state and bulk-action infrastructure.
@@ -135,7 +135,7 @@
 3. [x] Implement Today bulk workflows.
    - Scope: multi-select, bulk reschedule, bulk move-to-project, bulk priority change, bulk delete, and reschedule-overdue action.
    - Why third: highest-value operational screen and the user-marked top priority area.
-4. [ ] Expose task hierarchy in the shared web data/view layer.
+4. [x] Expose task hierarchy in the shared web data/view layer.
    - Scope: parent/child selectors, nested rendering helpers, flatten/expand behavior, and parent-aware task mutations.
    - Why fourth: subtasks affect task lists, task detail, projects, Today, Upcoming, and Search.
    - Progress: shared hierarchy selectors, nested rendering helpers, and parent-aware reparent mutations are in place; expand/collapse behavior is still pending.
@@ -149,7 +149,7 @@
    - Scope: repeated-entry Quick Add, `Esc` close behavior, explicit metadata controls, reminder UI, recurrence UI, and stronger task detail editing.
    - Why seventh: builds on the shared task mutation patterns and hierarchy support.
    - Progress: repeated-entry Quick Add, explicit metadata controls, reminder UI, recurrence UI, deadline recurrence UI, and stronger task detail editing are now in place.
-8. [ ] Add project-page operational parity.
+8. [x] Add project-page operational parity.
    - Scope: richer row actions, direct reschedule, and improved in-project task operations.
    - Why eighth: safer after undo, hierarchy, and task-editing improvements are already in place.
 

@@ -14,6 +14,7 @@ import type {
     Task,
     TaskStatus,
 } from '../types/sync';
+import { resolveWeekInterval } from './webPreferences';
 
 export type SearchFilter =
     | 'ALL'
@@ -587,6 +588,20 @@ export function moveTasksToProject(payload: SyncPayload, taskIds: string[], proj
     }));
 }
 
+export function moveTasksToSection(payload: SyncPayload, taskIds: string[], sectionId: string | null): SyncPayload {
+    if (!taskIds.length) return payload;
+    const section = sectionId
+        ? payload.sections.find(candidate => candidate.id === sectionId && !candidate.deletedAt) ?? null
+        : null;
+
+    return updateTasks(payload, taskIds, task => ({
+        ...task,
+        projectId: section ? section.projectId : task.projectId,
+        sectionId: section?.id ?? null,
+        parentTaskId: task.parentTaskId,
+    }));
+}
+
 export function setPriorityForTasks(payload: SyncPayload, taskIds: string[], priority: Priority): SyncPayload {
     return updateTasks(payload, taskIds, task => ({
         ...task,
@@ -848,7 +863,7 @@ function matchesFilters(task: Task, filters: Set<SearchFilter>, reminderTaskIds:
     const now = Date.now();
     const todayStart = startOfDay(now).getTime();
     const todayEnd = endOfDay(now).getTime();
-    const weekEnd = endOfDay(addDays(now, 6)).getTime();
+    const weekInterval = resolveWeekInterval(now);
 
     return Array.from(filters).every(filter => {
         switch (filter) {
@@ -857,7 +872,7 @@ function matchesFilters(task: Task, filters: Set<SearchFilter>, reminderTaskIds:
             case 'TODAY':
                 return task.dueAt !== null && isWithinInterval(task.dueAt, { start: todayStart, end: todayEnd });
             case 'THIS_WEEK':
-                return task.dueAt !== null && isWithinInterval(task.dueAt, { start: todayStart, end: weekEnd });
+                return task.dueAt !== null && isWithinInterval(task.dueAt, weekInterval);
             case 'HIGH_PRIORITY':
                 return HIGH_PRIORITIES.includes(task.priority);
             case 'INBOX':

@@ -6,6 +6,7 @@ import {
   Circle,
   ChevronRight,
   Cloud,
+  Download,
   Folder,
   GripVertical,
   Home,
@@ -31,6 +32,7 @@ import {
 import { addDays, endOfDay, format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
 import { RecoveryScreen } from './components/RecoveryScreen';
 import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './lib/banner';
+import { appendActivityEntry, buildTaskTimeline, type ActivityEntry } from './lib/activity';
 import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
 import { getQuickAddEscapeAction, shouldCloseQuickAddAfterCreate, type QuickAddSubmitMode } from './lib/quickAddFlow';
@@ -48,6 +50,13 @@ import {
 import { ensureSyncPayload } from './lib/syncPayload';
 import { DriveSyncService, type CloudSession } from './lib/syncService';
 import { SyncEngine } from './lib/syncEngine';
+import {
+  formatClock,
+  formatDateTimeValue,
+  getDefaultWebDisplayPreferences,
+  setGlobalWebDisplayPreferences,
+  type WeekStartsOn,
+} from './lib/webPreferences';
 import { resolveGoShortcut, shortcutSections } from './lib/webShortcuts';
 import {
   archiveTask,
@@ -74,6 +83,7 @@ import {
   getUpcomingCompletedTasks,
   getUpcomingGroups,
   getUpcomingOpenTasks,
+  moveTasksToSection,
   moveTasksToProject,
   promoteSubtask,
   reparentTaskAsSubtask,
@@ -145,17 +155,35 @@ function App() {
   const [showCompletedToday, setShowCompletedToday] = useState(() =>
     readStoredBoolean('emberlist.showCompletedToday', true)
   );
+  const [weekStartsOn, setWeekStartsOn] = useState<WeekStartsOn>(() =>
+    readStoredWeekStartsOn('emberlist.weekStartsOn', getDefaultWebDisplayPreferences().weekStartsOn)
+  );
+  const [use24HourTime, setUse24HourTime] = useState(() =>
+    readStoredBoolean('emberlist.use24HourTime', getDefaultWebDisplayPreferences().use24HourTime)
+  );
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(() =>
+    readStoredBoolean('emberlist.autoSyncEnabled', true)
+  );
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(() =>
+    readStoredBoolean('emberlist.autoBackupEnabled', true)
+  );
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() =>
     readStoredNumber('emberlist.lastCloudSyncAt')
   );
+  const [lastLocalBackupAt, setLastLocalBackupAt] = useState<number | null>(() =>
+    readStoredNumber('emberlist.lastLocalBackupAt')
+  );
   const [cloudSession, setCloudSession] = useState<CloudSession | null>(() => readStoredCloudSession());
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>(() => readStoredActivityEntries());
 
   const payloadRef = useRef<SyncPayload | null>(null);
   const cloudSessionRef = useRef<CloudSession | null>(cloudSession);
   const isSyncingRef = useRef(false);
   const isOnlineRef = useRef(isOnline);
   const hasPendingLocalChangesRef = useRef(hasPendingLocalChanges);
+  const autoSyncEnabledRef = useRef(autoSyncEnabled);
+  const autoBackupEnabledRef = useRef(autoBackupEnabled);
   const followUpSyncRequestedRef = useRef(false);
   const debounceTimerRef = useRef<number | null>(null);
   const backoffTimerRef = useRef<number | null>(null);
@@ -163,6 +191,7 @@ function App() {
   const backoffUntilRef = useRef<number | null>(null);
   const hasAutoSyncedOnLoadRef = useRef(false);
   const bannerIdRef = useRef(0);
+  const undoActivityMapRef = useRef(new Map<string, { previousPayload: SyncPayload; undoMessage: string; taskIds: string[]; title: string }>());
   const syncService = useMemo(
     () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
     []
@@ -206,8 +235,33 @@ function App() {
   }, [hasPendingLocalChanges]);
 
   useEffect(() => {
+    autoSyncEnabledRef.current = autoSyncEnabled;
+  }, [autoSyncEnabled]);
+
+  useEffect(() => {
+    autoBackupEnabledRef.current = autoBackupEnabled;
+  }, [autoBackupEnabled]);
+
+  useEffect(() => {
     window.localStorage.setItem('emberlist.showCompletedToday', JSON.stringify(showCompletedToday));
   }, [showCompletedToday]);
+
+  useEffect(() => {
+    window.localStorage.setItem('emberlist.weekStartsOn', String(weekStartsOn));
+    setGlobalWebDisplayPreferences({ weekStartsOn, use24HourTime });
+  }, [use24HourTime, weekStartsOn]);
+
+  useEffect(() => {
+    window.localStorage.setItem('emberlist.use24HourTime', JSON.stringify(use24HourTime));
+  }, [use24HourTime]);
+
+  useEffect(() => {
+    window.localStorage.setItem('emberlist.autoSyncEnabled', JSON.stringify(autoSyncEnabled));
+  }, [autoSyncEnabled]);
+
+  useEffect(() => {
+    window.localStorage.setItem('emberlist.autoBackupEnabled', JSON.stringify(autoBackupEnabled));
+  }, [autoBackupEnabled]);
 
   useEffect(() => {
     if (lastCloudSyncAt === null) {
@@ -220,6 +274,18 @@ function App() {
   useEffect(() => {
     writeStoredCloudSession(cloudSession);
   }, [cloudSession]);
+
+  useEffect(() => {
+    if (lastLocalBackupAt === null) {
+      window.localStorage.removeItem('emberlist.lastLocalBackupAt');
+      return;
+    }
+    window.localStorage.setItem('emberlist.lastLocalBackupAt', String(lastLocalBackupAt));
+  }, [lastLocalBackupAt]);
+
+  useEffect(() => {
+    writeStoredActivityEntries(activityEntries);
+  }, [activityEntries]);
 
   useEffect(() => {
     const autoDismissMs = resolveBannerAutoDismissMs(banner);
@@ -268,6 +334,47 @@ function App() {
     }
   }
 
+  function recordActivity(taskIds: string[], title: string, detail?: string | null): string {
+    const entry: ActivityEntry = {
+      id: crypto.randomUUID(),
+      createdAt: Date.now(),
+      taskIds,
+      title,
+      detail: detail ?? null,
+    };
+    setActivityEntries(current => appendActivityEntry(current, entry));
+    return entry.id;
+  }
+
+  function saveBrowserBackupSnapshot(nextPayload: SyncPayload, automatic: boolean) {
+    if (typeof window === 'undefined') return;
+    if (automatic && !autoBackupEnabledRef.current) return;
+    window.localStorage.setItem('emberlist.browserBackup', JSON.stringify(nextPayload));
+    setLastLocalBackupAt(Date.now());
+  }
+
+  async function handleUndoActivity(activityId: string) {
+    const undoRecord = undoActivityMapRef.current.get(activityId);
+    if (!undoRecord) return;
+    undoActivityMapRef.current.delete(activityId);
+    await persistPayload(undoRecord.previousPayload, true);
+    recordActivity(undoRecord.taskIds, 'Undid recent change', undoRecord.undoMessage);
+    showBanner('info', undoRecord.undoMessage);
+  }
+
+  function downloadPayloadBackup(nextPayload: SyncPayload) {
+    const json = JSON.stringify(nextPayload, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `emberlist-backup-${format(new Date(), 'yyyyMMdd-HHmmss')}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function runCloudSync({
     interactiveAuth,
     automatic,
@@ -284,6 +391,7 @@ function App() {
       return;
     }
 
+    if (automatic && !autoSyncEnabledRef.current) return;
     if (automatic && !cloudSessionRef.current) return;
     if (!interactiveAuth && !isOnlineRef.current) return;
 
@@ -343,11 +451,12 @@ function App() {
     await db.savePayload(nextPayload);
     payloadRef.current = nextPayload;
     setPayload(nextPayload);
+    saveBrowserBackupSnapshot(nextPayload, markDirty);
     if (markDirty) {
       setHasPendingLocalChanges(true);
       if (isSyncingRef.current) {
         followUpSyncRequestedRef.current = true;
-      } else if (isOnlineRef.current && syncService && cloudSessionRef.current) {
+      } else if (autoSyncEnabledRef.current && isOnlineRef.current && syncService && cloudSessionRef.current) {
         clearDebounceTimer();
         debounceTimerRef.current = window.setTimeout(() => {
           void runCloudSync({ interactiveAuth: false, automatic: true });
@@ -356,12 +465,21 @@ function App() {
     }
   }
 
-  function showUndoBanner(message: string, previousPayload: SyncPayload, undoMessage: string = 'Change undone.') {
+  function showUndoBanner(
+    message: string,
+    previousPayload: SyncPayload,
+    undoMessage: string = 'Change undone.',
+    activityId?: string
+  ) {
     showBanner('success', message, {
       actionLabel: 'Undo',
       persistOnNavigation: true,
       autoDismissMs: 8_000,
       onAction: async () => {
+        if (activityId) {
+          await handleUndoActivity(activityId);
+          return;
+        }
         await persistPayload(previousPayload, true);
         showBanner('info', undoMessage);
       },
@@ -373,13 +491,28 @@ function App() {
     options: {
       message: string;
       undoMessage?: string;
+      activity?: {
+        taskIds: string[];
+        title: string;
+        detail?: string | null;
+      };
     }
   ): Promise<SyncPayload | null> {
     const current = payloadRef.current;
     if (!current) return null;
     const nextPayload = updater(current);
     await persistPayload(nextPayload, true);
-    showUndoBanner(options.message, current, options.undoMessage);
+    let activityId: string | undefined;
+    if (options.activity) {
+      activityId = recordActivity(options.activity.taskIds, options.activity.title, options.activity.detail);
+      undoActivityMapRef.current.set(activityId, {
+        previousPayload: current,
+        undoMessage: options.undoMessage ?? 'Change undone.',
+        taskIds: options.activity.taskIds,
+        title: options.activity.title,
+      });
+    }
+    showUndoBanner(options.message, current, options.undoMessage, activityId);
     return nextPayload;
   }
 
@@ -538,6 +671,11 @@ function App() {
       {
         message: completed ? `Reopened "${task.title}".` : `Completed "${task.title}".`,
         undoMessage: completed ? `Marked "${task.title}" complete again.` : `Reopened "${task.title}".`,
+        activity: {
+          taskIds: [taskId],
+          title: completed ? 'Reopened task' : 'Completed task',
+          detail: task.title,
+        },
       }
     );
   }
@@ -551,6 +689,11 @@ function App() {
       {
         message: archived ? `Unarchived "${task.title}".` : `Archived "${task.title}".`,
         undoMessage: archived ? `Archived "${task.title}" again.` : `Unarchived "${task.title}".`,
+        activity: {
+          taskIds: [taskId],
+          title: archived ? 'Unarchived task' : 'Archived task',
+          detail: task.title,
+        },
       }
     );
   }
@@ -563,6 +706,11 @@ function App() {
       {
         message: `Deleted "${task.title}".`,
         undoMessage: `Restored "${task.title}".`,
+        activity: {
+          taskIds: [taskId],
+          title: 'Deleted task',
+          detail: task.title,
+        },
       }
     );
   }
@@ -574,6 +722,11 @@ function App() {
       {
         message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`,
         undoMessage: 'Reverted task dates.',
+        activity: {
+          taskIds,
+          title: taskIds.length === 1 ? 'Rescheduled task' : 'Rescheduled tasks',
+          detail: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to a new date.`,
+        },
       }
     );
   }
@@ -588,6 +741,30 @@ function App() {
       {
         message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`,
         undoMessage: 'Reverted task moves.',
+        activity: {
+          taskIds,
+          title: taskIds.length === 1 ? 'Moved task' : 'Moved tasks',
+          detail: `Moved into ${targetName}.`,
+        },
+      }
+    );
+  }
+
+  async function handleMoveTasksToSection(taskIds: string[], sectionId: string | null) {
+    if (!taskIds.length) return;
+    const targetName = sectionId
+      ? payloadRef.current?.sections.find(section => section.id === sectionId && !section.deletedAt)?.name ?? 'section'
+      : 'Loose tasks';
+    await applyUndoablePayloadUpdate(
+      current => moveTasksToSection(current, taskIds, sectionId),
+      {
+        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`,
+        undoMessage: 'Reverted section moves.',
+        activity: {
+          taskIds,
+          title: taskIds.length === 1 ? 'Moved task within project' : 'Moved tasks within project',
+          detail: `Placed into ${targetName}.`,
+        },
       }
     );
   }
@@ -599,6 +776,11 @@ function App() {
       {
         message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} set to ${priority}.`,
         undoMessage: 'Reverted task priorities.',
+        activity: {
+          taskIds,
+          title: taskIds.length === 1 ? 'Changed priority' : 'Changed priorities',
+          detail: `Updated to ${priority}.`,
+        },
       }
     );
   }
@@ -610,6 +792,11 @@ function App() {
       {
         message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} deleted.`,
         undoMessage: 'Restored deleted tasks.',
+        activity: {
+          taskIds,
+          title: taskIds.length === 1 ? 'Deleted task' : 'Deleted tasks',
+          detail: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} removed.`,
+        },
       }
     );
   }
@@ -627,6 +814,11 @@ function App() {
       {
         message: `Moved "${draggedTask.title}" under "${parentTask.title}".`,
         undoMessage: `Moved "${draggedTask.title}" back.`,
+        activity: {
+          taskIds: [draggedTaskId, parentTaskId],
+          title: 'Nested task',
+          detail: `${draggedTask.title} now sits under ${parentTask.title}.`,
+        },
       }
     );
   }
@@ -646,6 +838,11 @@ function App() {
           ? `Moved "${task.title}" out from "${parentTask.title}".`
           : `Promoted "${task.title}".`,
         undoMessage: `Moved "${task.title}" back.`,
+        activity: {
+          taskIds: [taskId, ...(parentTask ? [parentTask.id] : [])],
+          title: 'Promoted subtask',
+          detail: parentTask ? `${task.title} moved out from ${parentTask.title}.` : task.title,
+        },
       }
     );
   }
@@ -666,11 +863,21 @@ function App() {
     const nextPayload = createTask(current, draft);
     const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
     await persistPayload(nextPayload, true);
+    const activityId = createdTask ? recordActivity([createdTask.id], 'Created task', createdTask.title) : undefined;
+    if (createdTask) {
+      undoActivityMapRef.current.set(activityId!, {
+        previousPayload: current,
+        undoMessage: `Removed "${draft.title.trim()}".`,
+        taskIds: [createdTask.id],
+        title: 'Created task',
+      });
+    }
     if (!options?.silent) {
       showUndoBanner(
         options?.successMessage ?? `Task "${draft.title.trim()}" created.`,
         current,
-        `Removed "${draft.title.trim()}".`
+        `Removed "${draft.title.trim()}".`,
+        activityId
       );
     }
     return createdTask?.id ?? null;
@@ -682,6 +889,11 @@ function App() {
       {
         message: 'Task saved.',
         undoMessage: 'Reverted task edits.',
+        activity: {
+          taskIds: [taskId],
+          title: 'Saved from task detail',
+          detail: draft.title.trim(),
+        },
       }
     );
     const savedTask = nextPayload?.tasks.find(task => task.id === taskId);
@@ -690,6 +902,42 @@ function App() {
         ? { ...current, message: `Saved "${savedTask.title}".` }
         : current
       );
+    }
+  }
+
+  function handleExportJson() {
+    const current = payloadRef.current;
+    if (!current) return;
+    downloadPayloadBackup(current);
+    showBanner('success', 'Downloaded a JSON backup of this workspace.');
+  }
+
+  function handleSaveBrowserBackupNow() {
+    const current = payloadRef.current;
+    if (!current) return;
+    saveBrowserBackupSnapshot(current, false);
+    showBanner('success', 'Saved a browser backup snapshot.');
+  }
+
+  async function handleRestoreBrowserBackup() {
+    const raw = window.localStorage.getItem('emberlist.browserBackup');
+    if (!raw) {
+      showBanner('error', 'No browser backup snapshot is stored on this device yet.');
+      return;
+    }
+
+    const confirmed = window.confirm('Restore the last browser backup snapshot into this workspace?');
+    if (!confirmed) return;
+
+    try {
+      const backupPayload = ensureSyncPayload(JSON.parse(raw), 'Browser backup snapshot');
+      const current = payloadRef.current ?? (await db.getPayload());
+      const mergedPayload = syncEngine.mergePayloads(current, backupPayload);
+      await persistPayload(mergedPayload, true);
+      showBanner('success', 'Restored the stored browser backup snapshot.');
+    } catch (error) {
+      console.error('Failed to restore browser backup snapshot', error);
+      showBanner('error', error instanceof Error ? error.message : 'Failed to restore the browser backup snapshot.');
     }
   }
 
@@ -793,6 +1041,7 @@ function App() {
         onDeleteTask={taskId => void handleDeleteTask(taskId)}
         onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
         onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
+        onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
         onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
         onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
         onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
@@ -806,6 +1055,14 @@ function App() {
         onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
         showCompletedToday={showCompletedToday}
         onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
+        weekStartsOn={weekStartsOn}
+        onWeekStartsOnChange={value => setWeekStartsOn(value)}
+        use24HourTime={use24HourTime}
+        onToggleUse24HourTime={() => setUse24HourTime(value => !value)}
+        autoSyncEnabled={autoSyncEnabled}
+        onToggleAutoSyncEnabled={() => setAutoSyncEnabled(value => !value)}
+        autoBackupEnabled={autoBackupEnabled}
+        onToggleAutoBackupEnabled={() => setAutoBackupEnabled(value => !value)}
         cloudConfigured={Boolean(syncService)}
         cloudSession={cloudSession}
         lastSyncError={lastSyncError}
@@ -815,6 +1072,10 @@ function App() {
         isResettingCloud={isResettingCloud}
         isResettingCache={isResettingCache}
         lastCloudSyncAt={lastCloudSyncAt}
+        lastLocalBackupAt={lastLocalBackupAt}
+        onExportJson={handleExportJson}
+        onSaveBrowserBackupNow={handleSaveBrowserBackupNow}
+        onRestoreBrowserBackup={() => void handleRestoreBrowserBackup()}
         onDisconnectCloud={() => void handleDisconnectCloud()}
         isQuickAddOpen={isQuickAddOpen}
         quickAddOverride={quickAddOverride}
@@ -826,6 +1087,9 @@ function App() {
           setIsQuickAddOpen(false);
           setQuickAddOverride(null);
         }}
+        activityEntries={activityEntries}
+        onUndoActivity={activityId => void handleUndoActivity(activityId)}
+        canUndoActivity={activityId => undoActivityMapRef.current.has(activityId)}
       />
     </HashRouter>
   );
@@ -852,6 +1116,7 @@ type WorkspaceShellProps = {
   onDeleteTask: (taskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
@@ -865,6 +1130,14 @@ type WorkspaceShellProps = {
   onDeleteSection: (sectionId: string) => void;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
+  weekStartsOn: WeekStartsOn;
+  onWeekStartsOnChange: (value: WeekStartsOn) => void;
+  use24HourTime: boolean;
+  onToggleUse24HourTime: () => void;
+  autoSyncEnabled: boolean;
+  onToggleAutoSyncEnabled: () => void;
+  autoBackupEnabled: boolean;
+  onToggleAutoBackupEnabled: () => void;
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
@@ -874,11 +1147,18 @@ type WorkspaceShellProps = {
   isResettingCloud: boolean;
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
+  lastLocalBackupAt: number | null;
+  onExportJson: () => void;
+  onSaveBrowserBackupNow: () => void;
+  onRestoreBrowserBackup: () => void;
   onDisconnectCloud: () => void;
   isQuickAddOpen: boolean;
   quickAddOverride: Partial<QuickAddContext> | null;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onCloseQuickAdd: () => void;
+  activityEntries: ActivityEntry[];
+  onUndoActivity: (activityId: string) => void;
+  canUndoActivity: (activityId: string) => boolean;
 };
 
 function WorkspaceShell({
@@ -896,6 +1176,7 @@ function WorkspaceShell({
   onDeleteTask,
   onRescheduleTasks,
   onMoveTasksToProject,
+  onMoveTasksToSection,
   onSetTasksPriority,
   onDeleteTasks,
   onReparentTaskAsSubtask,
@@ -909,6 +1190,14 @@ function WorkspaceShell({
   onDeleteSection,
   showCompletedToday,
   onToggleShowCompletedToday,
+  weekStartsOn,
+  onWeekStartsOnChange,
+  use24HourTime,
+  onToggleUse24HourTime,
+  autoSyncEnabled,
+  onToggleAutoSyncEnabled,
+  autoBackupEnabled,
+  onToggleAutoBackupEnabled,
   cloudConfigured,
   cloudSession,
   lastSyncError,
@@ -918,11 +1207,18 @@ function WorkspaceShell({
   isResettingCloud,
   isResettingCache,
   lastCloudSyncAt,
+  lastLocalBackupAt,
+  onExportJson,
+  onSaveBrowserBackupNow,
+  onRestoreBrowserBackup,
   onDisconnectCloud,
   isQuickAddOpen,
   quickAddOverride,
   onOpenQuickAdd,
   onCloseQuickAdd,
+  activityEntries,
+  onUndoActivity,
+  canUndoActivity,
 }: WorkspaceShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -1433,6 +1729,9 @@ function WorkspaceShell({
                     onDeleteSection={onDeleteSection}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onRescheduleTasks={onRescheduleTasks}
+                    onMoveTasksToSection={onMoveTasksToSection}
+                    onSetTasksPriority={onSetTasksPriority}
                     onPromoteSubtask={onPromoteSubtask}
                     onOpenQuickAdd={onOpenQuickAdd}
                   />
@@ -1451,6 +1750,9 @@ function WorkspaceShell({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onPromoteSubtask={onPromoteSubtask}
+                    activityEntries={activityEntries}
+                    onUndoActivity={onUndoActivity}
+                    canUndoActivity={canUndoActivity}
                   />
                 }
               />
@@ -1465,15 +1767,27 @@ function WorkspaceShell({
                     isOnline={isOnline}
                     showCompletedToday={showCompletedToday}
                     onToggleShowCompletedToday={onToggleShowCompletedToday}
+                    weekStartsOn={weekStartsOn}
+                    onWeekStartsOnChange={onWeekStartsOnChange}
+                    use24HourTime={use24HourTime}
+                    onToggleUse24HourTime={onToggleUse24HourTime}
+                    autoSyncEnabled={autoSyncEnabled}
+                    onToggleAutoSyncEnabled={onToggleAutoSyncEnabled}
+                    autoBackupEnabled={autoBackupEnabled}
+                    onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
                     onCloudSync={onCloudSync}
                     onDisconnectCloud={onDisconnectCloud}
                     onResetCloudSync={onResetCloudSync}
                     onResetLocalCache={onResetLocalCache}
                     onImport={onImport}
+                    onExportJson={onExportJson}
+                    onSaveBrowserBackupNow={onSaveBrowserBackupNow}
+                    onRestoreBrowserBackup={onRestoreBrowserBackup}
                     isSyncing={isSyncing}
                     isResettingCloud={isResettingCloud}
                     isResettingCache={isResettingCache}
                     lastCloudSyncAt={lastCloudSyncAt}
+                    lastLocalBackupAt={lastLocalBackupAt}
                   />
                 }
               />
@@ -2110,6 +2424,7 @@ function UpcomingPage({
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'move' | 'priority' | 'delete'>(null);
   const [rescheduleDate, setRescheduleDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(null);
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
     [selectedTaskIds, visibleTaskIds]
@@ -2144,6 +2459,13 @@ function UpcomingPage({
 
   function closeDialog() {
     setActiveDialog(null);
+  }
+
+  function readDraggedTaskId(event: DragEvent<HTMLElement>) {
+    const directValue = activeDraggedTaskId?.trim();
+    if (directValue) return directValue;
+    const transferValue = event.dataTransfer.getData('text/task-id').trim();
+    return transferValue || null;
   }
 
   useEffect(() => {
@@ -2232,7 +2554,7 @@ function UpcomingPage({
       <HeroCard
         eyebrow="Timeline"
         title="Upcoming"
-        description="Look ahead at upcoming deadlines and future work across the workspace."
+        description="Look ahead at upcoming deadlines and future work across the workspace. Drag tasks into a date lane when you want to reschedule them quickly."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -2314,22 +2636,51 @@ function UpcomingPage({
 
       {groups.length ? (
         groups.map(group => (
-          <TaskGroup
+          <div
             key={group.dateKey}
-            title={format(new Date(group.dateKey), 'EEEE, MMM d')}
-            payload={payload}
-            todayStartMs={todayStartMs}
-            tasks={group.tasks}
-            emptyMessage="No tasks."
-            onToggleTask={onToggleTask}
-            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-            onPromoteSubtask={onPromoteSubtask}
-            onOpenTask={taskId => navigate(`/task/${taskId}`)}
-            selectionMode={selectionMode}
-            selectedTaskIds={selectedTaskIds}
-            onToggleSelection={toggleSelection}
-            onStartSelection={openSelection}
-          />
+            onDragOver={event => {
+              const draggedTaskId = readDraggedTaskId(event);
+              if (!draggedTaskId) return;
+              event.preventDefault();
+              setActiveDropDateKey(group.dateKey);
+            }}
+            onDragLeave={event => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              setActiveDropDateKey(current => (current === group.dateKey ? null : current));
+            }}
+            onDrop={event => {
+              const draggedTaskId = readDraggedTaskId(event);
+              setActiveDropDateKey(null);
+              if (!draggedTaskId) return;
+              event.preventDefault();
+              onRescheduleTasks([draggedTaskId], startOfDay(new Date(group.dateKey)).getTime());
+            }}
+            className={`rounded-[24px] transition ${
+              activeDropDateKey === group.dateKey ? 'bg-[#FFF7F2] ring-1 ring-[#EE6A3C]' : ''
+            }`}
+          >
+            <TaskGroup
+              title={format(new Date(group.dateKey), 'EEEE, MMM d')}
+              subtitle={activeDropDateKey === group.dateKey ? 'Drop here to move the task onto this date.' : undefined}
+              payload={payload}
+              todayStartMs={todayStartMs}
+              tasks={group.tasks}
+              emptyMessage="No tasks."
+              onToggleTask={onToggleTask}
+              onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+              onPromoteSubtask={onPromoteSubtask}
+              onOpenTask={taskId => navigate(`/task/${taskId}`)}
+              selectionMode={selectionMode}
+              selectedTaskIds={selectedTaskIds}
+              onToggleSelection={toggleSelection}
+              onStartSelection={openSelection}
+              headerActions={(
+                <span className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#6D5C50]">
+                  Drag tasks here to reschedule
+                </span>
+              )}
+            />
+          </div>
         ))
       ) : (
         <EmptyState
@@ -3098,6 +3449,9 @@ function ProjectPage({
   onDeleteSection,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onRescheduleTasks,
+  onMoveTasksToSection,
+  onSetTasksPriority,
   onPromoteSubtask,
   onOpenQuickAdd,
 }: {
@@ -3109,6 +3463,9 @@ function ProjectPage({
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
+  onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onPromoteSubtask: (taskId: string) => void;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
 }) {
@@ -3116,6 +3473,7 @@ function ProjectPage({
   const todayStartMs = useTodayStartMs();
   const { projectId } = useParams();
   const [sectionName, setSectionName] = useState('');
+  const [activeBoardDropSectionId, setActiveBoardDropSectionId] = useState<string | '__loose__' | null>(null);
   const sectionInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -3145,6 +3503,30 @@ function ProjectPage({
   const completedTasks = getCompletedProjectTasks(payload, projectId);
   const sections = getProjectSections(payload, projectId);
   const unsectionedTasks = tasks.filter(task => !task.sectionId);
+  const projectView = currentProject.viewPreference ?? 'LIST';
+  const boardColumns = [
+    {
+      id: '__loose__',
+      title: 'Loose tasks',
+      subtitle: 'Open tasks without a section.',
+      tasks: unsectionedTasks,
+      sectionId: null as string | null,
+    },
+    ...sections.map(section => ({
+      id: section.id,
+      title: section.name,
+      subtitle: `${tasks.filter(task => task.sectionId === section.id).length} task${tasks.filter(task => task.sectionId === section.id).length === 1 ? '' : 's'}`,
+      tasks: tasks.filter(task => task.sectionId === section.id),
+      sectionId: section.id,
+    })),
+  ];
+
+  function readDraggedTaskId(event: DragEvent<HTMLElement>) {
+    const directValue = activeDraggedTaskId?.trim();
+    if (directValue) return directValue;
+    const transferValue = event.dataTransfer.getData('text/task-id').trim();
+    return transferValue || null;
+  }
 
   function renameProject() {
     const nextName = window.prompt('Rename project', currentProject.name)?.trim();
@@ -3171,6 +3553,61 @@ function ProjectPage({
     setSectionName('');
   }
 
+  function setProjectView(viewPreference: Project['viewPreference']) {
+    onUpdateProject(currentProject.id, current => ({ ...current, viewPreference }));
+  }
+
+  function renderProjectRowActions(task: Task) {
+    if (task.status !== 'OPEN') return null;
+    return (
+      <>
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onRescheduleTasks([task.id], todayStartMs);
+          }}
+          className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] transition hover:bg-white"
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onRescheduleTasks([task.id], addDays(todayStartMs, 1).getTime());
+          }}
+          className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] transition hover:bg-white"
+        >
+          Tomorrow
+        </button>
+        <button
+          type="button"
+          onClick={event => {
+            event.stopPropagation();
+            onRescheduleTasks([task.id], addDays(todayStartMs, 7).getTime());
+          }}
+          className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] transition hover:bg-white"
+        >
+          Next week
+        </button>
+        <select
+          value={task.priority}
+          onClick={event => event.stopPropagation()}
+          onChange={event => {
+            event.stopPropagation();
+            onSetTasksPriority([task.id], event.target.value as Priority);
+          }}
+          className="rounded-full border border-[#E1D5CA] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] outline-none transition hover:bg-[#FBF7F3]"
+        >
+          {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+            <option key={priority} value={priority}>{priority}</option>
+          ))}
+        </select>
+      </>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <section className="px-1 pb-2 pt-1">
@@ -3182,6 +3619,12 @@ function ProjectPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setProjectView(projectView === 'BOARD' ? 'LIST' : 'BOARD')}
+              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            >
+              {projectView === 'BOARD' ? 'List view' : 'Board view'}
+            </button>
             <button
               onClick={renameProject}
               className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
@@ -3206,70 +3649,138 @@ function ProjectPage({
 
       <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
         <div className="space-y-4">
-          <TaskGroup
-            title="Loose tasks"
-            subtitle="Open tasks in this project without a section."
-            payload={payload}
-            todayStartMs={todayStartMs}
-            tasks={unsectionedTasks}
-            emptyMessage="No unsectioned tasks here."
-            onToggleTask={onToggleTask}
-            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-            onPromoteSubtask={onPromoteSubtask}
-            onOpenTask={taskId => navigate(`/task/${taskId}`)}
-          />
-
-          {sections.map(section => {
-            const sectionTasks = tasks.filter(task => task.sectionId === section.id);
-            return (
-              <div key={section.id} className="space-y-3 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#1E2D2F]">{section.name}</h3>
-                    <p className="text-sm text-[#6D5C50]">{sectionTasks.length} task{sectionTasks.length === 1 ? '' : 's'}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+          {projectView === 'BOARD' ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {boardColumns.map(column => (
+                <section
+                  key={column.id}
+                  onDragOver={event => {
+                    const draggedTaskId = readDraggedTaskId(event);
+                    if (!draggedTaskId) return;
+                    event.preventDefault();
+                    setActiveBoardDropSectionId(column.id);
+                  }}
+                  onDragLeave={event => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+                    setActiveBoardDropSectionId(current => (current === column.id ? null : current));
+                  }}
+                  onDrop={event => {
+                    const draggedTaskId = readDraggedTaskId(event);
+                    setActiveBoardDropSectionId(null);
+                    if (!draggedTaskId) return;
+                    event.preventDefault();
+                    onMoveTasksToSection([draggedTaskId], column.sectionId);
+                  }}
+                  className={`space-y-3 rounded-[28px] border p-5 shadow-sm transition ${
+                    activeBoardDropSectionId === column.id
+                      ? 'border-[#EE6A3C] bg-[#FFF7F2]'
+                      : 'border-[#E1D5CA] bg-white'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-[#1E2D2F]">{column.title}</h3>
+                      <p className="text-sm text-[#6D5C50]">{column.subtitle}</p>
+                    </div>
                     <button
-                      onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: section.id })}
+                      onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: column.sectionId })}
                       className="rounded-full bg-[#EE6A3C] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#d75e33]"
                     >
                       Add task
                     </button>
-                    <button
-                      onClick={() => {
-                        const nextName = window.prompt('Rename section', section.name)?.trim();
-                        if (!nextName) return;
-                        onUpdateSection(section.id, current => ({ ...current, name: nextName }));
-                      }}
-                      className="rounded-full border border-[#E1D5CA] px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                    >
-                      Rename
-                    </button>
-                    <button
-                      onClick={() => {
-                        const confirmed = window.confirm(`Delete section "${section.name}"? Tasks will move out of the section.`);
-                        if (!confirmed) return;
-                        onDeleteSection(section.id);
-                      }}
-                      className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-2 text-sm font-medium text-[#B64B28] transition hover:bg-[#FDE9E1]"
-                    >
-                      Delete
-                    </button>
                   </div>
-                </div>
-                <TaskListBlock
-                  payload={payload}
-                  todayStartMs={todayStartMs}
-                  tasks={sectionTasks}
-                  emptyMessage="No tasks in this section yet."
-                  onToggleTask={onToggleTask}
-                  onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                  onPromoteSubtask={onPromoteSubtask}
-                  onOpenTask={taskId => navigate(`/task/${taskId}`)}
-                />
-              </div>
-            );
-          })}
+                  <TaskListBlock
+                    payload={payload}
+                    todayStartMs={todayStartMs}
+                    tasks={column.tasks}
+                    emptyMessage={column.sectionId ? 'No tasks in this section yet.' : 'No unsectioned tasks here.'}
+                    onToggleTask={onToggleTask}
+                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onPromoteSubtask={onPromoteSubtask}
+                    onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                    rowActions={renderProjectRowActions}
+                  />
+                </section>
+              ))}
+            </div>
+          ) : (
+            <>
+              <TaskGroup
+                title="Loose tasks"
+                subtitle="Open tasks in this project without a section."
+                payload={payload}
+                todayStartMs={todayStartMs}
+                tasks={unsectionedTasks}
+                emptyMessage="No unsectioned tasks here."
+                onToggleTask={onToggleTask}
+                onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                onPromoteSubtask={onPromoteSubtask}
+                onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                rowActions={renderProjectRowActions}
+                headerActions={(
+                  <button
+                    onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id })}
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  >
+                    Add task
+                  </button>
+                )}
+              />
+
+              {sections.map(section => {
+                const sectionTasks = tasks.filter(task => task.sectionId === section.id);
+                return (
+                  <div key={section.id} className="space-y-3 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-[#1E2D2F]">{section.name}</h3>
+                        <p className="text-sm text-[#6D5C50]">{sectionTasks.length} task{sectionTasks.length === 1 ? '' : 's'}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: section.id })}
+                          className="rounded-full bg-[#EE6A3C] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#d75e33]"
+                        >
+                          Add task
+                        </button>
+                        <button
+                          onClick={() => {
+                            const nextName = window.prompt('Rename section', section.name)?.trim();
+                            if (!nextName) return;
+                            onUpdateSection(section.id, current => ({ ...current, name: nextName }));
+                          }}
+                          className="rounded-full border border-[#E1D5CA] px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => {
+                            const confirmed = window.confirm(`Delete section "${section.name}"? Tasks will move out of the section.`);
+                            if (!confirmed) return;
+                            onDeleteSection(section.id);
+                          }}
+                          className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-2 text-sm font-medium text-[#B64B28] transition hover:bg-[#FDE9E1]"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <TaskListBlock
+                      payload={payload}
+                      todayStartMs={todayStartMs}
+                      tasks={sectionTasks}
+                      emptyMessage="No tasks in this section yet."
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                      rowActions={renderProjectRowActions}
+                    />
+                  </div>
+                );
+              })}
+            </>
+          )}
 
           {completedTasks.length ? (
             <TaskGroup
@@ -3348,6 +3859,9 @@ function TaskDetailPage({
   onToggleTask,
   onReparentTaskAsSubtask,
   onPromoteSubtask,
+  activityEntries,
+  onUndoActivity,
+  canUndoActivity,
 }: {
   payload: SyncPayload;
   onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
@@ -3362,6 +3876,9 @@ function TaskDetailPage({
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onPromoteSubtask: (taskId: string) => void;
+  activityEntries: ActivityEntry[];
+  onUndoActivity: (activityId: string) => void;
+  canUndoActivity: (activityId: string) => boolean;
 }) {
   const { taskId } = useParams();
   const task = taskId ? getTaskById(payload, taskId) : undefined;
@@ -3384,6 +3901,9 @@ function TaskDetailPage({
       onToggleTask={onToggleTask}
       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
       onPromoteSubtask={onPromoteSubtask}
+      activityEntries={activityEntries}
+      onUndoActivity={onUndoActivity}
+      canUndoActivity={canUndoActivity}
     />
   );
 }
@@ -3400,6 +3920,9 @@ function TaskEditor({
   onToggleTask,
   onReparentTaskAsSubtask,
   onPromoteSubtask,
+  activityEntries,
+  onUndoActivity,
+  canUndoActivity,
 }: {
   payload: SyncPayload;
   task: Task;
@@ -3416,16 +3939,24 @@ function TaskEditor({
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onPromoteSubtask: (taskId: string) => void;
+  activityEntries: ActivityEntry[];
+  onUndoActivity: (activityId: string) => void;
+  canUndoActivity: (activityId: string) => boolean;
 }) {
   const navigate = useNavigate();
   const projects = getActiveProjects(payload, true);
   const todayStartMs = useTodayStartMs();
   const subtasks = useMemo(() => getSubtasks(payload, task.id), [payload, task.id]);
   const taskReminders = useMemo(() => getTaskReminderDrafts(payload, task.id), [payload, task.id]);
+  const taskReminderRecords = useMemo(
+    () => payload.reminders.filter(reminder => reminder.taskId === task.id && !reminder.deletedAt),
+    [payload.reminders, task.id]
+  );
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const prioritySelectRef = useRef<HTMLSelectElement | null>(null);
   const dueInputRef = useRef<HTMLInputElement | null>(null);
   const deadlineInputRef = useRef<HTMLInputElement | null>(null);
+  const [parserLine, setParserLine] = useState(task.title);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
   const [projectId, setProjectId] = useState<string>(task.projectId ?? '');
@@ -3453,6 +3984,24 @@ function TaskEditor({
   const parsedDeadlineAt = useMemo(
     () => (deadlineEnabled ? parseInputValue(deadlineAt, deadlineAllDay) : null),
     [deadlineAllDay, deadlineAt, deadlineEnabled]
+  );
+  const parserPreviewDraft = useMemo(
+    () => buildDraftFromParsed(
+      payload,
+      parseQuickAdd(parserLine),
+      description,
+      {
+        defaultProjectId: task.projectId,
+        defaultSectionId: task.sectionId,
+        defaultDueToday: false,
+      },
+      todayStartMs
+    ),
+    [description, parserLine, payload, task.projectId, task.sectionId, todayStartMs]
+  );
+  const taskTimeline = useMemo(
+    () => buildTaskTimeline(task, taskReminderRecords, activityEntries),
+    [activityEntries, task, taskReminderRecords]
   );
   const editorDraftPreview = useMemo<TaskDraft>(
     () => ({
@@ -3735,6 +4284,48 @@ function TaskEditor({
     }
   }
 
+  function applyParserLine() {
+    if (!parserLine.trim()) return;
+    const parsedDraft = buildDraftFromParsed(
+      payload,
+      parseQuickAdd(parserLine),
+      description,
+      {
+        defaultProjectId: projectId || null,
+        defaultSectionId: sectionId || null,
+        defaultDueToday: false,
+      },
+      todayStartMs
+    );
+
+    setTitle(parsedDraft.title);
+    setProjectId(parsedDraft.projectId ?? '');
+    setSectionId(parsedDraft.sectionId ?? '');
+    setPriority(parsedDraft.priority);
+    setAllDay(parsedDraft.allDay);
+    setDueAt(toInputValue(parsedDraft.dueAt, parsedDraft.allDay));
+    setRecurringRule(parsedDraft.recurringRule);
+    setReminderEditors(buildReminderEditors(parsedDraft.reminders));
+    setDeadlineEnabled(Boolean(parsedDraft.deadlineAt));
+    setDeadlineAllDay(parsedDraft.deadlineAllDay);
+    setDeadlineAt(toInputValue(parsedDraft.deadlineAt, parsedDraft.deadlineAllDay));
+    setDeadlineRecurringRule(parsedDraft.deadlineRecurringRule);
+    onShowBanner('info', 'Applied parser changes into the task editor.');
+  }
+
+  function setDueDateQuick(daysFromToday: number) {
+    const nextDate = addDays(todayStartMs, daysFromToday).getTime();
+    setAllDay(true);
+    setDueAt(toInputValue(nextDate, true));
+  }
+
+  function setDeadlineQuick(daysFromToday: number) {
+    const nextDate = addDays(todayStartMs, daysFromToday).getTime();
+    setDeadlineEnabled(true);
+    setDeadlineAllDay(true);
+    setDeadlineAt(toInputValue(nextDate, true));
+  }
+
   return (
     <div className="space-y-6">
       <HeroCard
@@ -3790,6 +4381,34 @@ function TaskEditor({
               ) : null}
             </div>
           </div>
+          <Field label="Task line">
+            <textarea
+              value={parserLine}
+              onChange={event => setParserLine(event.target.value)}
+              rows={2}
+              placeholder="Try: pay rent p1 tomorrow #bills/home"
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {renderQuickAddMetadata(payload, parserPreviewDraft).map(item => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={applyParserLine}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Apply parser line
+              </button>
+            </div>
+          </Field>
           <Field label="Title">
             <input
               ref={titleInputRef}
@@ -3879,6 +4498,38 @@ function TaskEditor({
               onChange={event => setDueAt(event.target.value)}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setDueDateQuick(0)}
+                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => setDueDateQuick(1)}
+                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+              >
+                Tomorrow
+              </button>
+              <button
+                type="button"
+                onClick={() => setDueDateQuick(7)}
+                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+              >
+                Next week
+              </button>
+              {dueAt ? (
+                <button
+                  type="button"
+                  onClick={() => setDueAt('')}
+                  className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-1.5 text-xs font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
+                >
+                  Clear due date
+                </button>
+              ) : null}
+            </div>
           </Field>
 
           <RecurrenceField
@@ -3917,6 +4568,29 @@ function TaskEditor({
                   onChange={event => setDeadlineAt(event.target.value)}
                   className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                 />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeadlineQuick(0)}
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeadlineQuick(1)}
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                  >
+                    Tomorrow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeadlineQuick(7)}
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                  >
+                    Next week
+                  </button>
+                </div>
               </Field>
               <RecurrenceField
                 label="Deadline recurrence"
@@ -3949,6 +4623,47 @@ function TaskEditor({
           </button>
         </section>
       </form>
+
+      <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Activity</p>
+            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">Recent changes for this task</h3>
+            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+              Local web activity appears here alongside the task's saved schedule state.
+            </p>
+          </div>
+          <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
+            {taskTimeline.length} event{taskTimeline.length === 1 ? '' : 's'}
+          </span>
+        </div>
+        <div className="mt-5 space-y-3">
+          {taskTimeline.map(entry => (
+            <div key={entry.id} className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[#1E2D2F]">{entry.title}</p>
+                  {entry.detail ? (
+                    <p className="mt-1 text-sm text-[#6D5C50]">{entry.detail}</p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-[#8A8076]">{formatDateTime(entry.at)}</span>
+                  {entry.activityId && canUndoActivity(entry.activityId) ? (
+                    <button
+                      type="button"
+                      onClick={() => onUndoActivity(entry.activityId!)}
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    >
+                      Undo
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -4054,15 +4769,27 @@ function SettingsPage({
   isOnline,
   showCompletedToday,
   onToggleShowCompletedToday,
+  weekStartsOn,
+  onWeekStartsOnChange,
+  use24HourTime,
+  onToggleUse24HourTime,
+  autoSyncEnabled,
+  onToggleAutoSyncEnabled,
+  autoBackupEnabled,
+  onToggleAutoBackupEnabled,
   onCloudSync,
   onDisconnectCloud,
   onResetCloudSync,
   onResetLocalCache,
   onImport,
+  onExportJson,
+  onSaveBrowserBackupNow,
+  onRestoreBrowserBackup,
   isSyncing,
   isResettingCloud,
   isResettingCache,
   lastCloudSyncAt,
+  lastLocalBackupAt,
 }: {
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
@@ -4071,15 +4798,27 @@ function SettingsPage({
   isOnline: boolean;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
+  weekStartsOn: WeekStartsOn;
+  onWeekStartsOnChange: (value: WeekStartsOn) => void;
+  use24HourTime: boolean;
+  onToggleUse24HourTime: () => void;
+  autoSyncEnabled: boolean;
+  onToggleAutoSyncEnabled: () => void;
+  autoBackupEnabled: boolean;
+  onToggleAutoBackupEnabled: () => void;
   onCloudSync: () => void;
   onDisconnectCloud: () => void;
   onResetCloudSync: () => void;
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
+  onExportJson: () => void;
+  onSaveBrowserBackupNow: () => void;
+  onRestoreBrowserBackup: () => void;
   isSyncing: boolean;
   isResettingCloud: boolean;
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
+  lastLocalBackupAt: number | null;
 }) {
   const cloudStatus = getCloudStatus({
     cloudConfigured,
@@ -4106,6 +4845,7 @@ function SettingsPage({
             <InfoRow label="Status" value={cloudStatus.label} />
             <InfoRow label="Account" value={cloudSession?.email ?? 'No Google account connected in this tab'} />
             <InfoRow label="Last sync" value={lastCloudSyncAt ? formatDateTime(lastCloudSyncAt) : 'No recent sync'} />
+            <InfoRow label="Auto sync" value={autoSyncEnabled ? 'Enabled' : 'Manual only'} />
             <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
               {cloudStatus.detail}
             </p>
@@ -4138,16 +4878,53 @@ function SettingsPage({
                 {isResettingCloud ? 'Resetting cloud sync...' : 'Reset cloud sync'}
               </button>
             </div>
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">Run cloud sync automatically</p>
+                <p className="mt-1 text-sm text-[#6D5C50]">When enabled, the web app syncs on changes, reconnect, focus, and load.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={autoSyncEnabled}
+                onChange={onToggleAutoSyncEnabled}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
           </div>
         </div>
 
         <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Workspace recovery</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Backups and recovery</p>
           <div className="mt-4 space-y-3">
+            <InfoRow label="Last browser backup" value={lastLocalBackupAt ? formatDateTime(lastLocalBackupAt) : 'No browser backup saved yet'} />
             <p className="text-sm leading-6 text-[#6D5C50]">
-              Reset the local web cache if IndexedDB gets stuck or import a JSON backup into the current workspace.
+              Keep a local browser backup snapshot, restore it, or download a JSON export you can keep outside the browser.
             </p>
             <div className="flex flex-wrap gap-3">
+              <button
+                onClick={onSaveBrowserBackupNow}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Save browser backup
+              </button>
+              <button
+                onClick={onRestoreBrowserBackup}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Restore browser backup
+              </button>
+              <button
+                onClick={onExportJson}
+                className="inline-flex items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                <Download size={16} />
+                Export JSON
+              </button>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white">
+                <Import size={16} />
+                Import JSON
+                <input type="file" accept=".json" className="hidden" onChange={onImport} />
+              </label>
               <button
                 onClick={onResetLocalCache}
                 disabled={isResettingCache}
@@ -4155,30 +4932,85 @@ function SettingsPage({
               >
                 {isResettingCache ? 'Resetting web cache...' : 'Reset web cache'}
               </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white">
-                <Import size={16} />
-                Import JSON
-                <input type="file" accept=".json" className="hidden" onChange={onImport} />
-              </label>
             </div>
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">Maintain browser backups automatically</p>
+                <p className="mt-1 text-sm text-[#6D5C50]">Save a fresh local browser snapshot whenever the workspace changes.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={autoBackupEnabled}
+                onChange={onToggleAutoBackupEnabled}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
           </div>
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Display</p>
-        <label className="mt-4 flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
-          <div>
-            <p className="text-sm font-semibold text-[#1E2D2F]">Show completed tasks in Today</p>
-            <p className="mt-1 text-sm text-[#6D5C50]">This toggle is local to the web app and does not affect Android.</p>
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Display</p>
+          <label className="mt-4 flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <div>
+              <p className="text-sm font-semibold text-[#1E2D2F]">Show completed tasks in Today</p>
+              <p className="mt-1 text-sm text-[#6D5C50]">This toggle is local to the web app and does not affect Android.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={showCompletedToday}
+              onChange={onToggleShowCompletedToday}
+              className="h-5 w-5 accent-[#EE6A3C]"
+            />
+          </label>
+          <label className="mt-4 flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <div>
+              <p className="text-sm font-semibold text-[#1E2D2F]">Use 24-hour time</p>
+              <p className="mt-1 text-sm text-[#6D5C50]">Applies to task times, reminders, sync stamps, and activity history in the web app.</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={use24HourTime}
+              onChange={onToggleUse24HourTime}
+              className="h-5 w-5 accent-[#EE6A3C]"
+            />
+          </label>
+        </div>
+
+        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Week layout</p>
+          <div className="mt-4 space-y-3">
+            <InfoRow label="Current start day" value={weekStartsOn === 1 ? 'Monday' : 'Sunday'} />
+            <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
+              This setting affects week-based filters like Search → This week and keeps the web app aligned with how you think about your week.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onWeekStartsOnChange(0)}
+                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
+                  weekStartsOn === 0
+                    ? 'bg-[#EE6A3C] text-white'
+                    : 'border border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                }`}
+              >
+                Sunday
+              </button>
+              <button
+                type="button"
+                onClick={() => onWeekStartsOnChange(1)}
+                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
+                  weekStartsOn === 1
+                    ? 'bg-[#EE6A3C] text-white'
+                    : 'border border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                }`}
+              >
+                Monday
+              </button>
+            </div>
           </div>
-          <input
-            type="checkbox"
-            checked={showCompletedToday}
-            onChange={onToggleShowCompletedToday}
-            className="h-5 w-5 accent-[#EE6A3C]"
-          />
-        </label>
+        </div>
       </section>
     </div>
   );
@@ -4691,6 +5523,7 @@ function TaskGroup({
   onToggleSelection,
   onStartSelection,
   headerActions,
+  rowActions,
 }: {
   title: string;
   subtitle?: string;
@@ -4709,6 +5542,7 @@ function TaskGroup({
   onToggleSelection?: (taskId: string) => void;
   onStartSelection?: () => void;
   headerActions?: ReactNode;
+  rowActions?: (task: Task) => ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const isCollapsed = collapsible && collapsed;
@@ -4748,6 +5582,7 @@ function TaskGroup({
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={onToggleSelection}
           onStartSelection={onStartSelection}
+          rowActions={rowActions}
         />
       ) : null}
     </section>
@@ -4768,6 +5603,7 @@ function TaskListBlock({
   selectedTaskIds,
   onToggleSelection,
   onStartSelection,
+  rowActions,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -4782,6 +5618,7 @@ function TaskListBlock({
   selectedTaskIds?: Set<string>;
   onToggleSelection?: (taskId: string) => void;
   onStartSelection?: () => void;
+  rowActions?: (task: Task) => ReactNode;
 }) {
   const flattenedTasks = useMemo(() => flattenTasksWithSubtasks(tasks), [tasks]);
 
@@ -4808,6 +5645,7 @@ function TaskListBlock({
           selected={selectedTaskIds?.has(item.task.id) ?? false}
           onToggleSelection={onToggleSelection}
           onStartSelection={onStartSelection}
+          rowActions={rowActions}
         />
       ))}
     </div>
@@ -4829,6 +5667,7 @@ function TaskRow({
   selected = false,
   onToggleSelection,
   onStartSelection,
+  rowActions,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -4844,6 +5683,7 @@ function TaskRow({
   selected?: boolean;
   onToggleSelection?: (taskId: string) => void;
   onStartSelection?: () => void;
+  rowActions?: (task: Task) => ReactNode;
 }) {
   const completed = task.status === 'COMPLETED';
   const canDrag = !selectionMode && task.status === 'OPEN';
@@ -5049,8 +5889,13 @@ function TaskRow({
           <span className="md:hidden">{locationLabel}</span>
         </div>
       </div>
-      <div className="mt-0.5 hidden min-w-[180px] shrink-0 text-right text-xs text-[#8a8076] md:block">
-        {locationLabel}
+      <div className="mt-0.5 hidden min-w-[180px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
+        {rowActions ? (
+          <div className="flex flex-wrap justify-end gap-1.5">
+            {rowActions(task)}
+          </div>
+        ) : null}
+        <div>{locationLabel}</div>
       </div>
     </div>
   );
@@ -6049,6 +6894,16 @@ function getRouteTitle(pathname: string, payload: SyncPayload): string {
 
 function formatTaskDate(timestamp: number, allDay: boolean): string {
   if (isToday(timestamp)) {
+    return allDay ? 'Today' : `Today · ${formatClock(timestamp)}`;
+  }
+  if (isTomorrow(timestamp)) {
+    return allDay ? 'Tomorrow' : `Tomorrow · ${formatClock(timestamp)}`;
+  }
+  if (isYesterday(timestamp)) {
+    return allDay ? 'Yesterday' : `Yesterday · ${formatClock(timestamp)}`;
+  }
+  return allDay ? format(timestamp, 'MMM d') : `${format(timestamp, 'MMM d')} · ${formatClock(timestamp)}`;
+  if (isToday(timestamp)) {
     return allDay ? 'Today' : `Today · ${format(timestamp, 'p')}`;
   }
   if (isTomorrow(timestamp)) {
@@ -6061,6 +6916,7 @@ function formatTaskDate(timestamp: number, allDay: boolean): string {
 }
 
 function formatDateTime(timestamp: number): string {
+  return formatDateTimeValue(timestamp);
   return format(timestamp, 'MMM d, h:mm a');
 }
 
@@ -6087,12 +6943,37 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
   return raw === 'true' || raw === '1' || raw === JSON.stringify(true);
 }
 
+function readStoredWeekStartsOn(key: string, fallback: WeekStartsOn): WeekStartsOn {
+  if (typeof window === 'undefined') return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (raw === '1') return 1;
+  if (raw === '0') return 0;
+  return fallback;
+}
+
 function readStoredNumber(key: string): number | null {
   if (typeof window === 'undefined') return null;
   const raw = window.localStorage.getItem(key);
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function readStoredActivityEntries(): ActivityEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem('emberlist.activityEntries');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ActivityEntry[];
+    return Array.isArray(parsed) ? parsed.filter(entry => typeof entry?.id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredActivityEntries(entries: ActivityEntry[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem('emberlist.activityEntries', JSON.stringify(entries));
 }
 
 function readStoredCloudSession(): CloudSession | null {
