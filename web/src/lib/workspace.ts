@@ -637,6 +637,7 @@ export function repairRecurringTasks(payload: SyncPayload): {
     chains.forEach(group => {
         const latestTask = group.slice().sort(compareRecurringChainTasks).at(-1) ?? null;
         if (!latestTask || latestTask.status !== 'COMPLETED') return;
+        if (findRecurringOccurrence(chainCleanup.payload, latestTask, latestTask.completedAt ?? now, additions, true)) return;
 
         const successor = buildRecurringSuccessor(chainCleanup.payload, latestTask, latestTask.completedAt ?? now);
         if (!successor) return;
@@ -967,6 +968,17 @@ function findRecurringSuccessor(
     now: number,
     additionalTasks: Task[] = [],
 ): Task | null {
+    const match = findRecurringOccurrence(payload, task, now, additionalTasks, false);
+    return match && !match.deletedAt ? match : null;
+}
+
+function findRecurringOccurrence(
+    payload: SyncPayload,
+    task: Task,
+    now: number,
+    additionalTasks: Task[] = [],
+    includeDeleted: boolean = false,
+): Task | null {
     const nextDue = getNextRecurringDate({
         rule: task.recurringRule ?? null,
         currentAt: task.dueAt ?? null,
@@ -991,7 +1003,7 @@ function findRecurringSuccessor(
     }
 
     const matches = (candidate: Task) =>
-        !candidate.deletedAt &&
+        (includeDeleted || !candidate.deletedAt) &&
         candidate.id !== task.id &&
         isSameRecurringChain(candidate, task) &&
         candidate.dueAt === nextDue &&

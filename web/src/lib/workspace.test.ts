@@ -803,4 +803,46 @@ describe('workspace bulk task helpers', () => {
     expect(bogusOpen?.deletedAt).toBe(new Date('2026-02-12T08:00:00').getTime());
     expect(openOccurrences).toEqual([new Date('2026-02-12T00:00:00').getTime()]);
   });
+
+  it('does not recreate a deleted recurring occurrence during repair', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-02-12T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-delete-chain-complete',
+        title: 'Laundry',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-11T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-02-11T08:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-delete-chain-open',
+        title: 'Laundry',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-12T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'OPEN',
+        deletedAt: new Date('2026-02-12T07:00:00').getTime(),
+        updatedAt: new Date('2026-02-12T07:00:00').getTime(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const liveOccurrences = repaired.payload.tasks
+      .filter(task => task.title === 'Laundry' && !task.deletedAt)
+      .map(task => ({ status: task.status, dueAt: task.dueAt }));
+
+    expect(repaired.repairedCount).toBe(0);
+    expect(repaired.removedDuplicateCount).toBe(0);
+    expect(liveOccurrences).toEqual([
+      {
+        status: 'COMPLETED',
+        dueAt: new Date('2026-02-11T00:00:00').getTime(),
+      },
+    ]);
+  });
 });
