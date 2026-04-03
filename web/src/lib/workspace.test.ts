@@ -6,6 +6,9 @@ import {
   createTaskDraft,
   deleteTasks,
   flattenTasksWithSubtasks,
+  getActiveProjects,
+  getInboxTasks,
+  getProjectSections,
   getSubtasks,
   getTaskReminderDrafts,
   getTodayViewData,
@@ -140,6 +143,67 @@ function createPayload(): SyncPayload {
 }
 
 describe('workspace bulk task helpers', () => {
+  it('filters inbox tasks to top-level open inbox tasks only', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-project', title: 'Project task', projectId: 'project-home' }),
+      createTask({ id: 'task-subtask', title: 'Subtask', parentTaskId: 'task-open' }),
+      createTask({ id: 'task-completed', title: 'Completed inbox', status: 'COMPLETED', completedAt: 5 }),
+      createTask({ id: 'task-deleted', title: 'Deleted inbox', deletedAt: 5 }),
+    );
+
+    expect(getInboxTasks(payload).map(task => task.id)).toEqual([
+      'task-open',
+    ]);
+  });
+
+  it('includes overdue tasks in the today view and excludes tomorrow', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-tomorrow',
+        title: 'Tomorrow',
+        dueAt: new Date('2026-04-01T00:00:00').getTime(),
+        allDay: true,
+      }),
+    );
+    const todayStart = new Date('2026-03-31T00:00:00').getTime();
+    const todayEnd = new Date('2026-03-31T23:59:59').getTime();
+
+    const todayData = getTodayViewData(payload, todayStart, todayEnd);
+
+    expect(todayData.overdue.map(task => task.id)).toEqual(['task-overdue']);
+    expect(todayData.today.map(task => task.id)).toEqual(['task-today']);
+  });
+
+  it('excludes tombstoned projects and sections from active queries', () => {
+    const payload = createPayload();
+    payload.projects.push({
+      id: 'project-deleted',
+      name: 'Deleted',
+      color: '#000000',
+      favorite: false,
+      order: 2,
+      archived: false,
+      viewPreference: 'LIST',
+      createdAt: 1,
+      updatedAt: 2,
+      deletedAt: 2,
+    });
+    payload.sections.push({
+      id: 'section-deleted',
+      projectId: 'project-home',
+      name: 'Deleted section',
+      order: 1,
+      createdAt: 1,
+      updatedAt: 2,
+      deletedAt: 2,
+    });
+
+    expect(getActiveProjects(payload).map(project => project.id)).toEqual(['project-home', 'project-work']);
+    expect(getProjectSections(payload, 'project-home').map(section => section.id)).toEqual(['section-weekend']);
+  });
+
   it('reschedules only the selected tasks to a new all-day date', () => {
     vi.spyOn(Date, 'now').mockReturnValue(5000);
     const payload = createPayload();
@@ -329,6 +393,28 @@ describe('workspace bulk task helpers', () => {
       projectId: 'project-home',
       sectionId: 'section-weekend',
       status: 'OPEN',
+    });
+  });
+
+  it('creates a fixed-time default reminder for timed tasks when none is provided', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9050);
+    const payload = createPayload();
+    const draft = createTaskDraft(null);
+    draft.title = 'Tax forms';
+    draft.dueAt = new Date('2026-04-03T21:50:00').getTime();
+    draft.allDay = false;
+
+    const updated = createWorkspaceTask(payload, draft);
+    const createdTask = updated.tasks.find(task => task.title === 'Tax forms');
+    const reminder = updated.reminders.find(entry => entry.taskId === createdTask?.id);
+
+    expect(createdTask).toMatchObject({
+      dueAt: new Date('2026-04-03T21:50:00').getTime(),
+      allDay: false,
+    });
+    expect(reminder).toMatchObject({
+      timeAt: new Date('2026-04-03T21:50:00').getTime(),
+      offsetMinutes: null,
     });
   });
 

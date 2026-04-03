@@ -35,8 +35,9 @@ import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './l
 import { appendActivityEntry, buildTaskTimeline, type ActivityEntry } from './lib/activity';
 import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
+import { buildDraftFromParsed, createMergedBulkDraft, mergeBulkDraftWithDefaults, type QuickAddContext } from './lib/quickAddDrafts';
 import { getQuickAddEscapeAction, shouldCloseQuickAddAfterCreate, type QuickAddSubmitMode } from './lib/quickAddFlow';
-import { parseQuickAdd, type QuickAddResult, type ReminderSpec as ParsedReminderSpec } from './lib/quickParser';
+import { parseQuickAdd } from './lib/quickParser';
 import {
   buildReminderEditors,
   createReminderEditor,
@@ -132,11 +133,6 @@ type Banner = {
   autoDismissMs?: number;
 };
 type CloudStatusTone = 'ready' | 'idle' | 'warning' | 'muted';
-type QuickAddContext = {
-  defaultProjectId: string | null;
-  defaultSectionId: string | null;
-  defaultDueToday: boolean;
-};
 type FocusedTaskActionMode = 'reschedule' | 'move' | 'priority' | 'delete';
 
 let activeDraggedTaskId: string | null = null;
@@ -5223,16 +5219,11 @@ function QuickAddDialog({
     setIsSaving(true);
     try {
       if (mode === 'single') {
-        const mergedDraft = {
-          ...createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs),
-          projectId: effectiveDraft.projectId,
-          projectName: effectiveDraft.projectName,
-          sectionId: effectiveDraft.sectionId,
-          sectionName: effectiveDraft.sectionName,
-          priority: effectiveDraft.priority,
-          recurringRule: effectiveDraft.recurringRule,
-          reminders: effectiveDraft.reminders,
-        };
+        const mergedDraft = mergeBulkDraftWithDefaults(
+          createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs),
+          effectiveDraft,
+          '',
+        );
         if (mergedDraft.reminders.some(reminder => reminder.kind === 'OFFSET') && mergedDraft.dueAt === null) {
           onShowBanner('error', 'Relative reminders need a due date before they can be applied to the combined task.');
           return;
@@ -5247,16 +5238,7 @@ function QuickAddDialog({
       for (const line of bulkLines) {
         const parsedLine = parseQuickAdd(line);
         const baseDraft = buildDraftFromParsed(payload, parsedLine, description, context, todayStartMs);
-        const draft = {
-          ...baseDraft,
-          projectId: effectiveDraft.projectId,
-          projectName: effectiveDraft.projectName,
-          sectionId: effectiveDraft.sectionId,
-          sectionName: effectiveDraft.sectionName,
-          priority: effectiveDraft.priority,
-          recurringRule: effectiveDraft.recurringRule,
-          reminders: effectiveDraft.reminders,
-        };
+        const draft = mergeBulkDraftWithDefaults(baseDraft, effectiveDraft, line);
         if (draft.reminders.some(reminder => reminder.kind === 'OFFSET') && draft.dueAt === null) {
           onShowBanner('error', 'Each task needs a due date before a relative reminder can be applied.');
           return;
@@ -6654,61 +6636,6 @@ function getQuickAddContext(pathname: string, payload: SyncPayload): QuickAddCon
   return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: false };
 }
 
-function buildDraftFromParsed(
-  payload: SyncPayload,
-  parsed: QuickAddResult,
-  description: string,
-  context: QuickAddContext,
-  todayStartMs: number
-): TaskDraft {
-  const projectMatch = parsed.projectName
-    ? getActiveProjects(payload, true).find(project => project.name.localeCompare(parsed.projectName!, undefined, { sensitivity: 'base' }) === 0) ?? null
-    : null;
-  const contextProjectId = !parsed.projectName ? context.defaultProjectId : null;
-  const projectId = projectMatch?.id ?? contextProjectId ?? null;
-  const sectionMatch = projectId
-    ? (
-      parsed.sectionName
-        ? getProjectSections(payload, projectId).find(section => section.name.localeCompare(parsed.sectionName!, undefined, { sensitivity: 'base' }) === 0) ?? null
-        : getProjectSections(payload, projectId).find(section => section.id === context.defaultSectionId) ?? null
-    )
-    : null;
-  const dueAt = parsed.dueAt ?? (context.defaultDueToday ? todayStartMs : null);
-  const allDay = parsed.dueAt === null && context.defaultDueToday ? true : parsed.allDay;
-
-  return {
-    title: parsed.title.trim(),
-    description: description.trim(),
-    projectId,
-    projectName: projectMatch ? null : parsed.projectName,
-    sectionId: sectionMatch?.id ?? null,
-    sectionName: sectionMatch ? null : parsed.sectionName,
-    priority: parsed.priority,
-    dueAt,
-    allDay,
-    deadlineAt: parsed.deadlineAt,
-    deadlineAllDay: parsed.deadlineAllDay,
-    recurringRule: parsed.recurrenceRule,
-    deadlineRecurringRule: parsed.deadlineRecurringRule,
-    parentTaskId: null,
-    reminders: parsed.reminders.map(mapParsedReminder),
-  };
-}
-
-function createMergedBulkDraft(
-  payload: SyncPayload,
-  lines: string[],
-  description: string,
-  context: QuickAddContext,
-  todayStartMs: number
-): TaskDraft {
-  const baseDraft = buildDraftFromParsed(payload, parseQuickAdd(''), description, context, todayStartMs);
-  return {
-    ...baseDraft,
-    title: lines.join(' ').trim() || 'Untitled task',
-  };
-}
-
 function renderQuickAddMetadata(payload: SyncPayload, draft: TaskDraft): string[] {
   const items: string[] = [];
   const projectLabel = draft.projectId
@@ -6773,12 +6700,6 @@ function describeQuickAddContext(payload: SyncPayload, context: QuickAddContext)
     labels.push(sectionName ? `Project ${projectName} / ${sectionName}` : `Project ${projectName}`);
   }
   return labels.join(' · ');
-}
-
-function mapParsedReminder(reminder: ParsedReminderSpec): TaskReminderDraft {
-  return reminder.kind === 'ABSOLUTE'
-    ? { kind: 'ABSOLUTE', timeAt: reminder.timeAt }
-    : { kind: 'OFFSET', offsetMinutes: reminder.minutes };
 }
 
 function renderReminderLabel(reminders: TaskReminderDraft[]): string {

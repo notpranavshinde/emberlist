@@ -97,10 +97,38 @@ function parsePriority(input: string): Priority | null {
 function parseProjectSection(input: string): [string | null, string | null] {
   const hashIndex = input.lastIndexOf('#');
   if (hashIndex === -1) return [null, null];
-  const token = input.slice(hashIndex + 1).trim();
+  const token = trimProjectSectionToken(input.slice(hashIndex + 1).trim());
   if (!token) return [null, null];
   const [projectName = '', sectionName = ''] = token.split('/', 2);
   return [projectName.trim() || null, sectionName.trim() || null];
+}
+
+function trimProjectSectionToken(token: string): string {
+  const metadataMarkers = [
+    /\s+deadline\b/i,
+    /\s+by\b/i,
+    /\s+remind\b/i,
+    /\s+every(?:day)?\b/i,
+    /\s+today\b/i,
+    /\s+tomorrow\b/i,
+    /\s+next\b/i,
+    /\s+this\b/i,
+    /\s+in\s+\d+\s+days\b/i,
+    /\s+(?:mon|monday|tue|tuesday|wed|wednesday|thu|thursday|fri|friday|sat|saturday|sun|sunday)\b/i,
+    /\s+(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|sept|september|oct|october|nov|november|dec|december)\b/i,
+    /\s+\d{4}-\d{1,2}-\d{1,2}\b/i,
+    /\s+\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/i,
+    /\s+\d{1,2}(?::\d{2})?\s?(?:am|pm)\b/i,
+    /\s+p[1-4]\b/i,
+  ];
+
+  const cutIndex = metadataMarkers.reduce<number>((earliest, pattern) => {
+    const match = pattern.exec(token);
+    if (!match || match.index < 0) return earliest;
+    return earliest === -1 ? match.index : Math.min(earliest, match.index);
+  }, -1);
+
+  return (cutIndex === -1 ? token : token.slice(0, cutIndex)).trim();
 }
 
 function parseDue(input: string, now: Date): number | null {
