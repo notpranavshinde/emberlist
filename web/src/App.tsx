@@ -1038,6 +1038,18 @@ function WorkspaceShell({
         return;
       }
 
+      if (!hasModifier && !hasFocusedTaskRow() && (lowerKey === 'j' || key === 'ArrowDown')) {
+        event.preventDefault();
+        focusEdgeTaskRow('start');
+        return;
+      }
+
+      if (!hasModifier && !hasFocusedTaskRow() && (lowerKey === 'k' || key === 'ArrowUp')) {
+        event.preventDefault();
+        focusEdgeTaskRow('end');
+        return;
+      }
+
       if (((event.metaKey || event.ctrlKey) && lowerKey === 'z') || (!hasModifier && lowerKey === 'z')) {
         if (banner?.onAction && banner.actionLabel) {
           event.preventDefault();
@@ -4980,6 +4992,19 @@ function isTypingTarget(target: EventTarget | null): boolean {
 function hasOpenOverlayDialog(): boolean {
   if (typeof document === 'undefined') return false;
   return document.querySelector('[data-overlay-dialog="true"]') !== null;
+}
+
+function hasFocusedTaskRow(): boolean {
+  if (typeof document === 'undefined') return false;
+  const activeElement = document.activeElement;
+  return activeElement instanceof HTMLElement && activeElement.closest('[data-task-row="true"]') !== null;
+}
+
+function focusEdgeTaskRow(edge: 'start' | 'end') {
+  if (typeof document === 'undefined') return;
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
+  const target = edge === 'start' ? rows[0] : rows[rows.length - 1];
+  target?.focus();
 }
 
 function getAdjacentTaskRowId(taskId: string, direction: -1 | 1): string | null {
