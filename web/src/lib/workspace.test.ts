@@ -9,6 +9,7 @@ import {
   getSubtasks,
   getTaskReminderDrafts,
   getTodayViewData,
+  getUpcomingOpenTasks,
   moveTasksToProject,
   promoteSubtask,
   reparentTaskAsSubtask,
@@ -215,6 +216,33 @@ describe('workspace bulk task helpers', () => {
 
     expect(todayData.overdue.map(task => task.id)).not.toContain('task-overdue');
     expect(todayData.today.map(task => task.id)).toContain('task-overdue');
+  });
+
+  it('returns only overdue and future-dated open tasks for Upcoming selection', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-future',
+        title: 'Future task',
+        dueAt: new Date('2026-04-03T00:00:00').getTime(),
+        allDay: true,
+      }),
+      createTask({
+        id: 'task-completed-future',
+        title: 'Completed future task',
+        dueAt: new Date('2026-04-03T00:00:00').getTime(),
+        allDay: true,
+        status: 'COMPLETED',
+        completedAt: new Date('2026-03-31T12:00:00').getTime(),
+      }),
+    );
+
+    const upcoming = getUpcomingOpenTasks(payload, new Date('2026-03-31T00:00:00').getTime());
+
+    expect(upcoming.map(task => task.id)).toEqual([
+      'task-overdue',
+      'task-future',
+    ]);
   });
 
   it('flattens visible task hierarchies and leaves orphan subtasks at the root', () => {

@@ -73,6 +73,7 @@ import {
   getTodayViewData,
   getUpcomingCompletedTasks,
   getUpcomingGroups,
+  getUpcomingOpenTasks,
   moveTasksToProject,
   promoteSubtask,
   reparentTaskAsSubtask,
@@ -1366,6 +1367,10 @@ function WorkspaceShell({
                     payload={payload}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onRescheduleTasks={onRescheduleTasks}
+                    onMoveTasksToProject={onMoveTasksToProject}
+                    onSetTasksPriority={onSetTasksPriority}
+                    onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
                   />
                 }
@@ -2067,11 +2072,19 @@ function UpcomingPage({
   payload,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onRescheduleTasks,
+  onMoveTasksToProject,
+  onSetTasksPriority,
+  onDeleteTasks,
   onPromoteSubtask,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
@@ -2080,16 +2093,197 @@ function UpcomingPage({
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
   );
-  const groups = getUpcomingGroups(payload);
-  const completedTasks = getUpcomingCompletedTasks(payload);
+  const projects = useMemo(() => getActiveProjects(payload), [payload]);
+  const groups = useMemo(() => getUpcomingGroups(payload), [payload]);
+  const completedTasks = useMemo(() => getUpcomingCompletedTasks(payload), [payload]);
+  const visibleTasks = useMemo(() => getUpcomingOpenTasks(payload, todayStartMs), [payload, todayStartMs]);
+  const visibleTaskIds = useMemo(() => new Set(visibleTasks.map(task => task.id)), [visibleTasks]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
+  const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'move' | 'priority' | 'delete'>(null);
+  const [rescheduleDate, setRescheduleDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
+  const selectedIds = useMemo(
+    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
+    [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedCount = selectedIds.length;
+
+  function clearSelection() {
+    setSelectionMode(false);
+    setSelectedTaskIds(new Set());
+  }
+
+  function toggleSelection(taskId: string) {
+    setSelectedTaskIds(current => {
+      const next = new Set(current);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function openSelection() {
+    setSelectionMode(true);
+  }
+
+  function openDateDialog() {
+    setRescheduleDate(format(new Date(), 'yyyy-MM-dd'));
+    setActiveDialog('reschedule-selected');
+  }
+
+  function closeDialog() {
+    setActiveDialog(null);
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setSelectionMode(true);
+        setSelectedTaskIds(new Set(visibleTasks.map(task => task.id)));
+        return;
+      }
+
+      if (selectionMode && !activeDialog) {
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+          event.preventDefault();
+          openDateDialog();
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          setActiveDialog('move');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+          event.preventDefault();
+          setActiveDialog('priority');
+          return;
+        }
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+          event.preventDefault();
+          setActiveDialog('delete');
+          return;
+        }
+      }
+
+      if (event.key === 'Escape') {
+        if (activeDialog) {
+          event.preventDefault();
+          closeDialog();
+          return;
+        }
+        if (selectionMode) {
+          event.preventDefault();
+          clearSelection();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDialog, selectionMode, visibleTasks]);
+
+  function submitReschedule() {
+    if (!rescheduleDate || !selectedIds.length) return;
+    const dueAt = parseInputValue(rescheduleDate, true);
+    if (dueAt === null) return;
+    onRescheduleTasks(selectedIds, dueAt);
+    closeDialog();
+    clearSelection();
+  }
+
+  function submitMove(projectId: string | null) {
+    if (!selectedIds.length) return;
+    onMoveTasksToProject(selectedIds, projectId);
+    closeDialog();
+    clearSelection();
+  }
+
+  function submitPriority(priority: Priority) {
+    if (!selectedIds.length) return;
+    onSetTasksPriority(selectedIds, priority);
+    closeDialog();
+    clearSelection();
+  }
+
+  function submitDelete() {
+    if (!selectedIds.length) return;
+    onDeleteTasks(selectedIds);
+    closeDialog();
+    clearSelection();
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
         eyebrow="Timeline"
         title="Upcoming"
         description="Look ahead at upcoming deadlines and future work across the workspace."
+        actions={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => (selectionMode ? clearSelection() : openSelection())}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                }`}
+            >
+              {selectionMode ? 'Cancel selection' : 'Select tasks'}
+            </button>
+            {selectionMode ? (
+              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+                {selectedCount} selected
+              </span>
+            ) : null}
+          </div>
+        )}
       />
+
+      {selectionMode ? (
+        <section className="rounded-[24px] border border-[#E1D5CA] bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={openDateDialog}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('move')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('priority')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Priority
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('delete')}
+              className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Delete
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {todayData.overdue.length ? (
         <TaskGroup
@@ -2103,6 +2297,10 @@ function UpcomingPage({
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={toggleSelection}
+          onStartSelection={openSelection}
         />
       ) : null}
 
@@ -2119,6 +2317,10 @@ function UpcomingPage({
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onPromoteSubtask={onPromoteSubtask}
             onOpenTask={taskId => navigate(`/task/${taskId}`)}
+            selectionMode={selectionMode}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelection={toggleSelection}
+            onStartSelection={openSelection}
           />
         ))
       ) : (
@@ -2142,6 +2344,116 @@ function UpcomingPage({
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
+        />
+      ) : null}
+
+      {activeDialog === 'reschedule-selected' ? (
+        <ChoiceDialog
+          title="Reschedule tasks"
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          onClose={closeDialog}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDialog}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReschedule}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+              >
+                Save date
+              </button>
+            </div>
+          )}
+        >
+          <Field label="New date">
+            <input
+              type="date"
+              value={rescheduleDate}
+              onChange={event => setRescheduleDate(event.target.value)}
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+          </Field>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'move' ? (
+        <ChoiceDialog
+          title="Move tasks"
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or back to Inbox.`}
+          onClose={closeDialog}
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => submitMove(null)}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            >
+              Inbox
+            </button>
+            {projects.map(project => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => submitMove(project.id)}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {project.name}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'priority' ? (
+        <ChoiceDialog
+          title="Change priority"
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          onClose={closeDialog}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+              <button
+                key={priority}
+                type="button"
+                onClick={() => submitPriority(priority)}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'delete' ? (
+        <ChoiceDialog
+          title="Delete tasks"
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          onClose={closeDialog}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeDialog}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitDelete}
+                className="rounded-full bg-[#B64B28] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#9e4122]"
+              >
+                Delete tasks
+              </button>
+            </div>
+          )}
         />
       ) : null}
     </div>

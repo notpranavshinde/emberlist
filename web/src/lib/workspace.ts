@@ -195,6 +195,13 @@ export function getUpcomingGroups(payload: SyncPayload): Array<{ dateKey: string
         .map(([dateKey, tasks]) => ({ dateKey, tasks }));
 }
 
+export function getUpcomingOpenTasks(payload: SyncPayload, todayStart: number): Task[] {
+    const tomorrowStart = addDays(startOfDay(todayStart), 1).getTime();
+    return getOpenTasks(payload)
+        .filter(task => task.dueAt !== null && (task.dueAt < todayStart || task.dueAt >= tomorrowStart))
+        .sort(compareTasks);
+}
+
 export function getUpcomingCompletedTasks(payload: SyncPayload): Task[] {
     const tomorrowStart = startOfTomorrow().getTime();
     return getCompletedTasks(payload)

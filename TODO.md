@@ -104,11 +104,11 @@
 - [ ] Add task-level activity timeline inside web task detail.
 - [ ] Add parser-style inline task editing on web task detail for faster project and section assignment.
 - [ ] Add richer undo behavior for archive, unarchive, and update flows in web task detail.
-- [ ] Add multi-select selection mode on Upcoming.
-- [ ] Add bulk reschedule on Upcoming.
-- [ ] Add bulk move-to-project on Upcoming.
-- [ ] Add bulk priority change on Upcoming.
-- [ ] Add bulk delete on Upcoming.
+- [x] Add multi-select selection mode on Upcoming.
+- [x] Add bulk reschedule on Upcoming.
+- [x] Add bulk move-to-project on Upcoming.
+- [x] Add bulk priority change on Upcoming.
+- [x] Add bulk delete on Upcoming.
 - [ ] Add gesture-driven scheduling interactions on Upcoming.
 - [x] Add drag-to-subtask behavior on Upcoming.
 - [ ] Make Upcoming more action-oriented, closer to Android's management flow.
