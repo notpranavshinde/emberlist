@@ -538,14 +538,94 @@ export function updateTasks(payload: SyncPayload, taskIds: string[], updater: (t
 }
 
 export function toggleTaskCompletion(payload: SyncPayload, taskId: string): SyncPayload {
-    return updateTask(payload, taskId, task => {
-        const isCompleted = task.status === 'COMPLETED';
-        return {
-            ...task,
-            status: (isCompleted ? 'OPEN' : 'COMPLETED') as TaskStatus,
-            completedAt: isCompleted ? null : Date.now(),
-        };
+    const task = payload.tasks.find(candidate => candidate.id === taskId && !candidate.deletedAt) ?? null;
+    if (!task) return payload;
+
+    const now = Date.now();
+    const isCompleted = task.status === 'COMPLETED';
+
+    if (isCompleted) {
+        const successor = findRecurringSuccessor(payload, task, task.completedAt ?? now);
+        return finalizePayload({
+            ...payload,
+            tasks: payload.tasks.map(candidate => {
+                if (candidate.id === taskId) {
+                    return {
+                        ...candidate,
+                        status: 'OPEN' as TaskStatus,
+                        completedAt: null,
+                        updatedAt: now,
+                    };
+                }
+                if (successor && candidate.id === successor.id) {
+                    return {
+                        ...candidate,
+                        deletedAt: now,
+                        updatedAt: now,
+                    };
+                }
+                return candidate;
+            }),
+            reminders: payload.reminders.map(reminder =>
+                successor && reminder.taskId === successor.id && !reminder.deletedAt
+                    ? {
+                        ...reminder,
+                        deletedAt: now,
+                        updatedAt: now,
+                    }
+                    : reminder
+            ),
+        });
+    }
+
+    const completedTask: Task = {
+        ...task,
+        status: 'COMPLETED',
+        completedAt: now,
+        updatedAt: now,
+    };
+    const successor = buildRecurringSuccessor(payload, task, now);
+
+    return finalizePayload({
+        ...payload,
+        tasks: [
+            ...payload.tasks.map(candidate => candidate.id === taskId ? completedTask : candidate),
+            ...(successor ? [successor.task] : []),
+        ],
+        reminders: successor
+            ? [...payload.reminders, ...successor.reminders]
+            : payload.reminders,
     });
+}
+
+export function repairRecurringTasks(payload: SyncPayload): { payload: SyncPayload; repairedCount: number } {
+    const now = Date.now();
+    const additions: Task[] = [];
+    const reminderAdditions: Reminder[] = [];
+
+    payload.tasks.forEach(task => {
+        if (task.deletedAt || task.status !== 'COMPLETED') return;
+        if (!task.recurringRule && !task.deadlineRecurringRule) return;
+        if (findRecurringSuccessor(payload, task, task.completedAt ?? now, additions)) return;
+
+        const successor = buildRecurringSuccessor(payload, task, task.completedAt ?? now);
+        if (!successor) return;
+        additions.push(successor.task);
+        reminderAdditions.push(...successor.reminders);
+    });
+
+    if (!additions.length && !reminderAdditions.length) {
+        return { payload, repairedCount: 0 };
+    }
+
+    return {
+        payload: finalizePayload({
+            ...payload,
+            tasks: [...payload.tasks, ...additions],
+            reminders: [...payload.reminders, ...reminderAdditions],
+        }),
+        repairedCount: additions.length,
+    };
 }
 
 export function archiveTask(payload: SyncPayload, taskId: string): SyncPayload {
@@ -759,6 +839,318 @@ function finalizePayload(payload: SyncPayload): SyncPayload {
         exportedAt: Date.now(),
         payloadId: crypto.randomUUID(),
         source: 'web',
+    };
+}
+
+function buildRecurringSuccessor(
+    payload: SyncPayload,
+    task: Task,
+    now: number,
+): { task: Task; reminders: Reminder[] } | null {
+    const nextDue = getNextRecurringDate({
+        rule: task.recurringRule ?? null,
+        currentAt: task.dueAt ?? null,
+        now,
+        allDay: task.allDay,
+    });
+    const nextDeadlineFromRule = getNextRecurringDate({
+        rule: task.deadlineRecurringRule ?? null,
+        currentAt: task.deadlineAt ?? null,
+        now,
+        allDay: task.deadlineAllDay ?? false,
+    });
+    const taskDeadlineAt = task.deadlineAt ?? null;
+    const deadlineOffset = taskDeadlineAt !== null && task.dueAt !== null
+        ? taskDeadlineAt - task.dueAt
+        : null;
+    const nextDeadline = nextDeadlineFromRule
+        ?? (nextDue !== null && deadlineOffset !== null ? nextDue + deadlineOffset : null);
+
+    if (nextDue === null && nextDeadline === null) {
+        return null;
+    }
+
+    const nextTask: Task = {
+        ...task,
+        id: crypto.randomUUID(),
+        dueAt: nextDue,
+        allDay: nextDue !== null ? task.allDay : false,
+        deadlineAt: nextDeadline,
+        deadlineAllDay: nextDeadline !== null ? (task.deadlineAllDay ?? false) : false,
+        status: 'OPEN',
+        completedAt: null,
+        createdAt: now,
+        updatedAt: now,
+        deletedAt: null,
+    };
+
+    return {
+        task: nextTask,
+        reminders: cloneRecurringReminders(payload, task, nextTask, now),
+    };
+}
+
+function cloneRecurringReminders(
+    payload: SyncPayload,
+    sourceTask: Task,
+    nextTask: Task,
+    now: number,
+): Reminder[] {
+    return payload.reminders.flatMap(reminder => {
+        if (reminder.taskId !== sourceTask.id || reminder.deletedAt || !reminder.enabled) {
+            return [];
+        }
+
+        const nextReminder: Reminder = {
+            ...reminder,
+            id: crypto.randomUUID(),
+            taskId: nextTask.id,
+            createdAt: now,
+            updatedAt: now,
+            deletedAt: null,
+        };
+
+        if (reminder.offsetMinutes !== null) {
+            nextReminder.timeAt = null;
+            nextReminder.offsetMinutes = reminder.offsetMinutes;
+            return [nextReminder];
+        }
+
+        const sourceBaseAt = sourceTask.dueAt ?? sourceTask.deadlineAt ?? null;
+        const nextBaseAt = nextTask.dueAt ?? nextTask.deadlineAt ?? null;
+        if (reminder.timeAt !== null && sourceBaseAt !== null && nextBaseAt !== null) {
+            nextReminder.timeAt = nextBaseAt + (reminder.timeAt - sourceBaseAt);
+            nextReminder.offsetMinutes = null;
+            return [nextReminder];
+        }
+
+        return [];
+    });
+}
+
+function findRecurringSuccessor(
+    payload: SyncPayload,
+    task: Task,
+    now: number,
+    additionalTasks: Task[] = [],
+): Task | null {
+    const nextDue = getNextRecurringDate({
+        rule: task.recurringRule ?? null,
+        currentAt: task.dueAt ?? null,
+        now,
+        allDay: task.allDay,
+    });
+    const nextDeadlineFromRule = getNextRecurringDate({
+        rule: task.deadlineRecurringRule ?? null,
+        currentAt: task.deadlineAt ?? null,
+        now,
+        allDay: task.deadlineAllDay ?? false,
+    });
+    const taskDeadlineAt = task.deadlineAt ?? null;
+    const deadlineOffset = taskDeadlineAt !== null && task.dueAt !== null
+        ? taskDeadlineAt - task.dueAt
+        : null;
+    const nextDeadline = nextDeadlineFromRule
+        ?? (nextDue !== null && deadlineOffset !== null ? nextDue + deadlineOffset : null);
+
+    if (nextDue === null && nextDeadline === null) {
+        return null;
+    }
+
+    const matches = (candidate: Task) =>
+        !candidate.deletedAt &&
+        candidate.status === 'OPEN' &&
+        candidate.id !== task.id &&
+        candidate.title === task.title &&
+        candidate.projectId === task.projectId &&
+        candidate.sectionId === task.sectionId &&
+        candidate.parentTaskId === task.parentTaskId &&
+        (candidate.recurringRule ?? null) === (task.recurringRule ?? null) &&
+        (candidate.deadlineRecurringRule ?? null) === (task.deadlineRecurringRule ?? null) &&
+        candidate.dueAt === nextDue &&
+        (candidate.deadlineAt ?? null) === nextDeadline;
+
+    return payload.tasks.find(matches) ?? additionalTasks.find(matches) ?? null;
+}
+
+function getNextRecurringDate(params: {
+    rule: string | null;
+    currentAt: number | null;
+    now: number;
+    allDay: boolean;
+}): number | null {
+    const { rule, currentAt, now, allDay } = params;
+    if (!rule || currentAt === null) return null;
+    const baseAt = now > currentAt
+        ? alignDateToNow(currentAt, now, allDay)
+        : currentAt;
+    return nextAt(baseAt, rule, !allDay);
+}
+
+function alignDateToNow(taskAt: number, now: number, allDay: boolean): number {
+    const taskDate = new Date(taskAt);
+    const nowDate = new Date(now);
+    return new Date(
+        nowDate.getFullYear(),
+        nowDate.getMonth(),
+        nowDate.getDate(),
+        allDay ? 0 : taskDate.getHours(),
+        allDay ? 0 : taskDate.getMinutes(),
+        0,
+        0,
+    ).getTime();
+}
+
+function nextAt(currentAt: number, rule: string, keepTime: boolean): number | null {
+    const parts = parseRecurrenceRule(rule);
+    if (!parts) return null;
+
+    const current = new Date(currentAt);
+    const currentDate = {
+        year: current.getFullYear(),
+        month: current.getMonth() + 1,
+        day: current.getDate(),
+    };
+    const currentTime = {
+        hour: current.getHours(),
+        minute: current.getMinutes(),
+    };
+
+    let nextDate: { year: number; month: number; day: number } | null = null;
+
+    switch (parts.freq) {
+        case 'DAILY':
+            nextDate = addDaysToDate(currentDate, parts.interval);
+            break;
+        case 'WEEKLY':
+            if (parts.byDay.length) {
+                const currentWeekday = getIsoWeekday(currentDate);
+                const laterDay = parts.byDay.find(day => day > currentWeekday);
+                if (laterDay !== undefined) {
+                    nextDate = nextWeekdayFrom(currentDate, laterDay);
+                } else {
+                    const firstDay = parts.byDay[0];
+                    nextDate = nextWeekdayFrom(addDaysToDate(currentDate, (parts.interval - 1) * 7), firstDay);
+                }
+            } else {
+                nextDate = addDaysToDate(currentDate, parts.interval * 7);
+            }
+            break;
+        case 'MONTHLY':
+            nextDate = parts.byMonthDay !== null
+                ? findMonthWithDay(currentDate, parts.interval, parts.byMonthDay)
+                : addMonthsToDate(currentDate, parts.interval);
+            break;
+        case 'YEARLY':
+            nextDate = {
+                year: currentDate.year + parts.interval,
+                month: currentDate.month,
+                day: currentDate.day,
+            };
+            break;
+        default:
+            return null;
+    }
+
+    if (!nextDate) return null;
+    return new Date(
+        nextDate.year,
+        nextDate.month - 1,
+        nextDate.day,
+        keepTime ? currentTime.hour : 0,
+        keepTime ? currentTime.minute : 0,
+        0,
+        0,
+    ).getTime();
+}
+
+function parseRecurrenceRule(rule: string): {
+    freq: string;
+    interval: number;
+    byDay: number[];
+    byMonthDay: number | null;
+} | null {
+    const parts = new Map(
+        rule.split(';').map(part => {
+            const [key, value = ''] = part.split('=');
+            return [key.toUpperCase(), value];
+        }),
+    );
+    const freq = parts.get('FREQ');
+    if (!freq) return null;
+
+    const byDay = (parts.get('BYDAY') ?? '')
+        .split(',')
+        .map(tokenToIsoWeekday)
+        .filter((value): value is number => value !== null)
+        .sort((left, right) => left - right);
+
+    return {
+        freq,
+        interval: Number.parseInt(parts.get('INTERVAL') ?? '1', 10) || 1,
+        byDay,
+        byMonthDay: Number.parseInt(parts.get('BYMONTHDAY') ?? '', 10) || null,
+    };
+}
+
+function tokenToIsoWeekday(token: string): number | null {
+    switch (token.toUpperCase()) {
+        case 'MO': return 1;
+        case 'TU': return 2;
+        case 'WE': return 3;
+        case 'TH': return 4;
+        case 'FR': return 5;
+        case 'SA': return 6;
+        case 'SU': return 7;
+        default: return null;
+    }
+}
+
+function getIsoWeekday(date: { year: number; month: number; day: number }): number {
+    const weekday = new Date(date.year, date.month - 1, date.day).getDay();
+    return weekday === 0 ? 7 : weekday;
+}
+
+function addDaysToDate(date: { year: number; month: number; day: number }, days: number): { year: number; month: number; day: number } {
+    const next = new Date(date.year, date.month - 1, date.day + days);
+    return {
+        year: next.getFullYear(),
+        month: next.getMonth() + 1,
+        day: next.getDate(),
+    };
+}
+
+function addMonthsToDate(date: { year: number; month: number; day: number }, months: number): { year: number; month: number; day: number } {
+    const targetMonthIndex = date.month - 1 + months;
+    const monthStart = new Date(date.year, targetMonthIndex, 1);
+    const maxDay = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+    const next = new Date(monthStart.getFullYear(), monthStart.getMonth(), Math.min(date.day, maxDay));
+    return {
+        year: next.getFullYear(),
+        month: next.getMonth() + 1,
+        day: next.getDate(),
+    };
+}
+
+function nextWeekdayFrom(date: { year: number; month: number; day: number }, targetDay: number): { year: number; month: number; day: number } {
+    const currentDay = getIsoWeekday(date);
+    const delta = targetDay > currentDay ? targetDay - currentDay : 7 - currentDay + targetDay;
+    return addDaysToDate(date, delta);
+}
+
+function findMonthWithDay(
+    base: { year: number; month: number; day: number },
+    interval: number,
+    targetDay: number,
+): { year: number; month: number; day: number } {
+    let candidate = addMonthsToDate({ ...base, day: 1 }, interval);
+    while (new Date(candidate.year, candidate.month, 0).getDate() < targetDay) {
+        candidate = addMonthsToDate({ ...candidate, day: 1 }, 1);
+    }
+    return {
+        year: candidate.year,
+        month: candidate.month,
+        day: targetDay,
     };
 }
 

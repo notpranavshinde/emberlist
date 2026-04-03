@@ -86,6 +86,7 @@ import {
   moveTasksToSection,
   moveTasksToProject,
   promoteSubtask,
+  repairRecurringTasks,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   searchTasks,
@@ -302,8 +303,14 @@ function App() {
       setBootError(null);
       try {
         const data = await db.getPayload();
-        payloadRef.current = data;
-        setPayload(data);
+        const repaired = repairRecurringTasks(data);
+        if (repaired.repairedCount > 0) {
+          await persistPayload(repaired.payload, true);
+          showBanner('info', `Recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'} that were missing their next occurrence.`);
+        } else {
+          payloadRef.current = data;
+          setPayload(data);
+        }
         setBootState('ready');
       } catch (error) {
         console.error('Failed to load local workspace', error);
@@ -412,14 +419,22 @@ function App() {
 
     try {
       const mergedPayload = await syncService.sync({ interactiveAuth });
-      await persistPayload(mergedPayload, false);
+      const repaired = repairRecurringTasks(mergedPayload);
+      await persistPayload(repaired.payload, repaired.repairedCount > 0);
       setLastCloudSyncAt(Date.now());
       setCloudSession(syncService.getSession());
-      setHasPendingLocalChanges(false);
+      setHasPendingLocalChanges(repaired.repairedCount > 0);
       backoffAttemptRef.current = 0;
       backoffUntilRef.current = null;
       if (!automatic) {
-        showBanner('success', 'Cloud sync completed.');
+        showBanner(
+          'success',
+          repaired.repairedCount > 0
+            ? `Cloud sync completed and recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'}.`
+            : 'Cloud sync completed.'
+        );
+      } else if (repaired.repairedCount > 0) {
+        showBanner('info', `Recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'} after sync.`);
       }
     } catch (error) {
       console.error('Cloud sync failed', error);
@@ -540,9 +555,15 @@ function App() {
       const remotePayload = ensureSyncPayload(JSON.parse(await file.text()), 'Imported JSON file');
       const localPayload = payloadRef.current ?? (await db.getPayload());
       const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
-      await persistPayload(mergedPayload, true);
+      const repaired = repairRecurringTasks(mergedPayload);
+      await persistPayload(repaired.payload, true);
       setBootState('ready');
-      showBanner('success', 'Imported JSON was merged into your local workspace.');
+      showBanner(
+        'success',
+        repaired.repairedCount > 0
+          ? `Imported JSON was merged and recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'}.`
+          : 'Imported JSON was merged into your local workspace.'
+      );
     } catch (error) {
       console.error('Failed to import JSON', error);
       showBanner('error', error instanceof Error ? error.message : 'Failed to import JSON.');
@@ -933,8 +954,14 @@ function App() {
       const backupPayload = ensureSyncPayload(JSON.parse(raw), 'Browser backup snapshot');
       const current = payloadRef.current ?? (await db.getPayload());
       const mergedPayload = syncEngine.mergePayloads(current, backupPayload);
-      await persistPayload(mergedPayload, true);
-      showBanner('success', 'Restored the stored browser backup snapshot.');
+      const repaired = repairRecurringTasks(mergedPayload);
+      await persistPayload(repaired.payload, true);
+      showBanner(
+        'success',
+        repaired.repairedCount > 0
+          ? `Restored the stored browser backup snapshot and recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'}.`
+          : 'Restored the stored browser backup snapshot.'
+      );
     } catch (error) {
       console.error('Failed to restore browser backup snapshot', error);
       showBanner('error', error instanceof Error ? error.message : 'Failed to restore the browser backup snapshot.');

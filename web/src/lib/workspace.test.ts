@@ -13,10 +13,12 @@ import {
   moveTasksToSection,
   moveTasksToProject,
   promoteSubtask,
+  repairRecurringTasks,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   searchTasks,
   setPriorityForTasks,
+  toggleTaskCompletion,
   updateTaskFromDraft,
 } from './workspace';
 import type { Reminder, SyncPayload, Task } from '../types/sync';
@@ -435,5 +437,153 @@ describe('workspace bulk task helpers', () => {
       { kind: 'ABSOLUTE', timeAt: new Date('2026-04-03T10:00:00').getTime() },
       { kind: 'OFFSET', offsetMinutes: 30 },
     ]);
+  });
+
+  it('completes a recurring task and creates the next daily occurrence', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-03T09:30:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-daily',
+        title: 'Daily workout',
+        dueAt: new Date('2026-04-03T09:00:00').getTime(),
+        allDay: false,
+        recurringRule: 'FREQ=DAILY',
+        projectId: 'project-home',
+      }),
+    );
+    payload.reminders.push(
+      createReminder({
+        id: 'reminder-daily',
+        taskId: 'task-daily',
+        timeAt: new Date('2026-04-03T08:30:00').getTime(),
+      }),
+    );
+
+    const updated = toggleTaskCompletion(payload, 'task-daily');
+    const completed = updated.tasks.find(task => task.id === 'task-daily');
+    const successors = updated.tasks.filter(task => task.title === 'Daily workout' && task.id !== 'task-daily');
+
+    expect(completed).toMatchObject({
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-03T09:30:00').getTime(),
+    });
+    expect(successors).toHaveLength(1);
+    expect(successors[0]).toMatchObject({
+      status: 'OPEN',
+      recurringRule: 'FREQ=DAILY',
+      dueAt: new Date('2026-04-04T09:00:00').getTime(),
+    });
+    expect(updated.reminders.filter(reminder => reminder.taskId === successors[0].id)).toMatchObject([
+      {
+        timeAt: new Date('2026-04-04T08:30:00').getTime(),
+      },
+    ]);
+  });
+
+  it('uses the completion day as the recurrence base for overdue recurring tasks', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-05T11:15:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-overdue-recurring',
+        title: 'Water plants',
+        dueAt: new Date('2026-04-03T10:00:00').getTime(),
+        allDay: false,
+        recurringRule: 'FREQ=DAILY',
+      }),
+    );
+
+    const updated = toggleTaskCompletion(payload, 'task-overdue-recurring');
+    const successor = updated.tasks.find(task => task.title === 'Water plants' && task.id !== 'task-overdue-recurring');
+
+    expect(successor?.dueAt).toBe(new Date('2026-04-06T10:00:00').getTime());
+  });
+
+  it('repairs completed recurring tasks that are missing their next occurrence', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-06T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-missing-successor',
+        title: 'Take vitamins',
+        dueAt: new Date('2026-04-05T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-05T07:00:00').getTime(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const successor = repaired.payload.tasks.find(task => task.title === 'Take vitamins' && task.id !== 'task-missing-successor');
+
+    expect(repaired.repairedCount).toBe(1);
+    expect(successor).toMatchObject({
+      status: 'OPEN',
+      dueAt: new Date('2026-04-06T00:00:00').getTime(),
+      recurringRule: 'FREQ=DAILY',
+    });
+  });
+
+  it('reopening a completed recurring task removes its generated successor', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-06T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-daily-completed',
+        title: 'Journal',
+        dueAt: new Date('2026-04-05T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-05T21:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-daily-next',
+        title: 'Journal',
+        dueAt: new Date('2026-04-06T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+      }),
+    );
+
+    const reopened = toggleTaskCompletion(payload, 'task-daily-completed');
+    const reopenedTask = reopened.tasks.find(task => task.id === 'task-daily-completed');
+    const successor = reopened.tasks.find(task => task.id === 'task-daily-next');
+
+    expect(reopenedTask).toMatchObject({
+      status: 'OPEN',
+      completedAt: null,
+    });
+    expect(successor?.deletedAt).toBe(new Date('2026-04-06T08:00:00').getTime());
+  });
+
+  it('does not duplicate an already-generated recurring successor during repair', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-06T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-weekly-complete',
+        title: 'Math homework',
+        projectId: 'project-work',
+        dueAt: new Date('2026-04-02T00:00:00').getTime(),
+        recurringRule: 'FREQ=WEEKLY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-03T10:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-weekly-next',
+        title: 'Math homework',
+        projectId: 'project-work',
+        dueAt: new Date('2026-04-10T00:00:00').getTime(),
+        recurringRule: 'FREQ=WEEKLY',
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+
+    expect(repaired.repairedCount).toBe(0);
+    expect(repaired.payload.tasks.filter(task => task.title === 'Math homework')).toHaveLength(2);
   });
 });
