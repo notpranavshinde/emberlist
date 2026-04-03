@@ -641,6 +641,7 @@ describe('workspace bulk task helpers', () => {
     const successor = repaired.payload.tasks.find(task => task.title === 'Take vitamins' && task.id !== 'task-missing-successor');
 
     expect(repaired.repairedCount).toBe(1);
+    expect(repaired.removedDuplicateCount).toBe(0);
     expect(successor).toMatchObject({
       status: 'OPEN',
       dueAt: new Date('2026-04-06T00:00:00').getTime(),
@@ -706,6 +707,100 @@ describe('workspace bulk task helpers', () => {
     const repaired = repairRecurringTasks(payload);
 
     expect(repaired.repairedCount).toBe(0);
+    expect(repaired.removedDuplicateCount).toBe(0);
     expect(repaired.payload.tasks.filter(task => task.title === 'Math homework')).toHaveLength(2);
+  });
+
+  it('treats later completed recurring instances as valid continuation during repair', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-02-12T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-chain-1',
+        title: 'Clean room',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-09T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-02-09T08:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-chain-2',
+        title: 'Clean room',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-10T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-02-10T08:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-chain-3',
+        title: 'Clean room',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-11T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-02-11T08:00:00').getTime(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const openOccurrences = repaired.payload.tasks
+      .filter(task => task.title === 'Clean room' && task.status === 'OPEN' && !task.deletedAt)
+      .map(task => task.dueAt);
+
+    expect(repaired.repairedCount).toBe(1);
+    expect(repaired.removedDuplicateCount).toBe(0);
+    expect(openOccurrences).toEqual([new Date('2026-02-12T00:00:00').getTime()]);
+  });
+
+  it('removes bogus open recurring duplicates that shadow completed occurrences', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-02-12T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-shadow-complete-1',
+        title: 'Flash cards',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-10T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-02-10T08:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-shadow-complete-2',
+        title: 'Flash cards',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-11T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-02-11T08:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-shadow-open-1',
+        title: 'Flash cards',
+        projectId: 'project-home',
+        dueAt: new Date('2026-02-11T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'OPEN',
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const bogusOpen = repaired.payload.tasks.find(task => task.id === 'task-shadow-open-1');
+    const openOccurrences = repaired.payload.tasks
+      .filter(task => task.title === 'Flash cards' && task.status === 'OPEN' && !task.deletedAt)
+      .map(task => task.dueAt);
+
+    expect(repaired.repairedCount).toBe(1);
+    expect(repaired.removedDuplicateCount).toBe(1);
+    expect(bogusOpen?.deletedAt).toBe(new Date('2026-02-12T08:00:00').getTime());
+    expect(openOccurrences).toEqual([new Date('2026-02-12T00:00:00').getTime()]);
   });
 });

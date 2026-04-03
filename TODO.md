@@ -77,6 +77,8 @@
 - [x] Match Android task-detail parser fallback for spaced project names when only a single-token project exists.
 - [x] Match Android parent-completion behavior so completing a task also completes its direct subtasks on web.
 - [x] Match Android bulk subtask creation behavior for per-line project overrides, reminder carry-through, and sibling ordering.
+- [x] Match Android recurring completion behavior so web repair only restores the latest missing recurring successor instead of recreating stale historical occurrences.
+- [x] Add recurring-chain cleanup on web to remove obsolete open instances created by prior broken recurrence repair passes.
 
 ## Web Feature Parity Backlog
 

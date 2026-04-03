@@ -322,9 +322,10 @@ function App() {
       try {
         const data = await db.getPayload();
         const repaired = repairRecurringTasks(data);
-        if (repaired.repairedCount > 0) {
+        const recurringMaintenance = describeRecurringMaintenance(repaired);
+        if (recurringMaintenance) {
           await persistPayload(repaired.payload, true);
-          showBanner('info', `Recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'} that were missing their next occurrence.`);
+          showBanner('info', `${recurringMaintenance}.`);
         } else {
           payloadRef.current = data;
           setPayload(data);
@@ -376,6 +377,31 @@ function App() {
     if (automatic && !autoBackupEnabledRef.current) return;
     window.localStorage.setItem('emberlist.browserBackup', JSON.stringify(nextPayload));
     setLastLocalBackupAt(Date.now());
+  }
+
+  function getRecurringMaintenanceChangeCount(result: {
+    repairedCount: number;
+    removedDuplicateCount: number;
+  }) {
+    return result.repairedCount + result.removedDuplicateCount;
+  }
+
+  function describeRecurringMaintenance(result: {
+    repairedCount: number;
+    removedDuplicateCount: number;
+  }) {
+    const parts: string[] = [];
+    if (result.repairedCount > 0) {
+      parts.push(`recovered ${result.repairedCount} recurring task${result.repairedCount === 1 ? '' : 's'}`);
+    }
+    if (result.removedDuplicateCount > 0) {
+      parts.push(`removed ${result.removedDuplicateCount} duplicate recurring task${result.removedDuplicateCount === 1 ? '' : 's'}`);
+    }
+    if (!parts.length) {
+      return null;
+    }
+    const [first, ...rest] = parts;
+    return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(' and ');
   }
 
   async function handleUndoActivity(activityId: string) {
@@ -438,21 +464,22 @@ function App() {
     try {
       const mergedPayload = await syncService.sync({ interactiveAuth });
       const repaired = repairRecurringTasks(mergedPayload);
-      await persistPayload(repaired.payload, repaired.repairedCount > 0);
+      const recurringMaintenance = describeRecurringMaintenance(repaired);
+      await persistPayload(repaired.payload, getRecurringMaintenanceChangeCount(repaired) > 0);
       setLastCloudSyncAt(Date.now());
       setCloudSession(syncService.getSession());
-      setHasPendingLocalChanges(repaired.repairedCount > 0);
+      setHasPendingLocalChanges(getRecurringMaintenanceChangeCount(repaired) > 0);
       backoffAttemptRef.current = 0;
       backoffUntilRef.current = null;
       if (!automatic) {
         showBanner(
           'success',
-          repaired.repairedCount > 0
-            ? `Cloud sync completed and recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'}.`
+          recurringMaintenance
+            ? `Cloud sync completed. ${recurringMaintenance}.`
             : 'Cloud sync completed.'
         );
-      } else if (repaired.repairedCount > 0) {
-        showBanner('info', `Recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'} after sync.`);
+      } else if (recurringMaintenance) {
+        showBanner('info', `${recurringMaintenance} after sync.`);
       }
     } catch (error) {
       console.error('Cloud sync failed', error);
@@ -586,11 +613,12 @@ function App() {
       const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
       const repaired = repairRecurringTasks(mergedPayload);
       await persistPayload(repaired.payload, true);
+      const recurringMaintenance = describeRecurringMaintenance(repaired);
       setBootState('ready');
       showBanner(
         'success',
-        repaired.repairedCount > 0
-          ? `Imported JSON was merged and recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'}.`
+        recurringMaintenance
+          ? `Imported JSON was merged. ${recurringMaintenance}.`
           : 'Imported JSON was merged into your local workspace.'
       );
     } catch (error) {
@@ -985,10 +1013,11 @@ function App() {
       const mergedPayload = syncEngine.mergePayloads(current, backupPayload);
       const repaired = repairRecurringTasks(mergedPayload);
       await persistPayload(repaired.payload, true);
+      const recurringMaintenance = describeRecurringMaintenance(repaired);
       showBanner(
         'success',
-        repaired.repairedCount > 0
-          ? `Restored the stored browser backup snapshot and recovered ${repaired.repairedCount} recurring task${repaired.repairedCount === 1 ? '' : 's'}.`
+        recurringMaintenance
+          ? `Restored the stored browser backup snapshot. ${recurringMaintenance}.`
           : 'Restored the stored browser backup snapshot.'
       );
     } catch (error) {

@@ -613,33 +613,51 @@ export function toggleTaskCompletion(payload: SyncPayload, taskId: string): Sync
     });
 }
 
-export function repairRecurringTasks(payload: SyncPayload): { payload: SyncPayload; repairedCount: number } {
+export function repairRecurringTasks(payload: SyncPayload): {
+    payload: SyncPayload;
+    repairedCount: number;
+    removedDuplicateCount: number;
+} {
     const now = Date.now();
+    const duplicateCleanup = removeRecurringOccurrenceDuplicates(payload, now);
+    const chainCleanup = removeObsoleteRecurringChainTasks(duplicateCleanup.payload, now);
     const additions: Task[] = [];
     const reminderAdditions: Reminder[] = [];
+    const chains = new Map<string, Task[]>();
 
-    payload.tasks.forEach(task => {
-        if (task.deletedAt || task.status !== 'COMPLETED') return;
+    chainCleanup.payload.tasks.forEach(task => {
+        if (task.deletedAt) return;
         if (!task.recurringRule && !task.deadlineRecurringRule) return;
-        if (findRecurringSuccessor(payload, task, task.completedAt ?? now, additions)) return;
+        const key = buildRecurringChainKey(task);
+        const group = chains.get(key) ?? [];
+        group.push(task);
+        chains.set(key, group);
+    });
 
-        const successor = buildRecurringSuccessor(payload, task, task.completedAt ?? now);
+    chains.forEach(group => {
+        const latestTask = group.slice().sort(compareRecurringChainTasks).at(-1) ?? null;
+        if (!latestTask || latestTask.status !== 'COMPLETED') return;
+
+        const successor = buildRecurringSuccessor(chainCleanup.payload, latestTask, latestTask.completedAt ?? now);
         if (!successor) return;
         additions.push(successor.task);
         reminderAdditions.push(...successor.reminders);
     });
 
-    if (!additions.length && !reminderAdditions.length) {
-        return { payload, repairedCount: 0 };
+    const removedDuplicateCount = duplicateCleanup.removedCount + chainCleanup.removedCount;
+
+    if (!additions.length && !reminderAdditions.length && removedDuplicateCount === 0) {
+        return { payload, repairedCount: 0, removedDuplicateCount: 0 };
     }
 
     return {
         payload: finalizePayload({
-            ...payload,
-            tasks: [...payload.tasks, ...additions],
-            reminders: [...payload.reminders, ...reminderAdditions],
+            ...chainCleanup.payload,
+            tasks: [...chainCleanup.payload.tasks, ...additions],
+            reminders: [...chainCleanup.payload.reminders, ...reminderAdditions],
         }),
         repairedCount: additions.length,
+        removedDuplicateCount,
     };
 }
 
@@ -974,18 +992,194 @@ function findRecurringSuccessor(
 
     const matches = (candidate: Task) =>
         !candidate.deletedAt &&
-        candidate.status === 'OPEN' &&
         candidate.id !== task.id &&
-        candidate.title === task.title &&
-        candidate.projectId === task.projectId &&
-        candidate.sectionId === task.sectionId &&
-        candidate.parentTaskId === task.parentTaskId &&
-        (candidate.recurringRule ?? null) === (task.recurringRule ?? null) &&
-        (candidate.deadlineRecurringRule ?? null) === (task.deadlineRecurringRule ?? null) &&
+        isSameRecurringChain(candidate, task) &&
         candidate.dueAt === nextDue &&
         (candidate.deadlineAt ?? null) === nextDeadline;
 
     return payload.tasks.find(matches) ?? additionalTasks.find(matches) ?? null;
+}
+
+function removeRecurringOccurrenceDuplicates(
+    payload: SyncPayload,
+    now: number,
+): { payload: SyncPayload; removedCount: number } {
+    const groups = new Map<string, Task[]>();
+
+    payload.tasks.forEach(task => {
+        if (task.deletedAt) return;
+        if (!task.recurringRule && !task.deadlineRecurringRule) return;
+        const key = buildRecurringOccurrenceKey(task);
+        const group = groups.get(key) ?? [];
+        group.push(task);
+        groups.set(key, group);
+    });
+
+    const removedIds = new Set<string>();
+
+    groups.forEach(group => {
+        if (group.length < 2) return;
+        const canonical = group.slice().sort(compareRecurringOccurrenceCandidates)[0];
+        group.forEach(task => {
+            if (task.id !== canonical.id) {
+                removedIds.add(task.id);
+            }
+        });
+    });
+
+    if (!removedIds.size) {
+        return { payload, removedCount: 0 };
+    }
+
+    return {
+        payload: {
+            ...payload,
+            tasks: payload.tasks.map(task =>
+                removedIds.has(task.id)
+                    ? {
+                        ...task,
+                        deletedAt: now,
+                        updatedAt: now,
+                    }
+                    : task
+            ),
+            reminders: payload.reminders.filter(reminder => !removedIds.has(reminder.taskId)),
+        },
+        removedCount: removedIds.size,
+    };
+}
+
+function removeObsoleteRecurringChainTasks(
+    payload: SyncPayload,
+    now: number,
+): { payload: SyncPayload; removedCount: number } {
+    const groups = new Map<string, Task[]>();
+
+    payload.tasks.forEach(task => {
+        if (task.deletedAt) return;
+        if (!task.recurringRule && !task.deadlineRecurringRule) return;
+        const key = buildRecurringChainKey(task);
+        const group = groups.get(key) ?? [];
+        group.push(task);
+        groups.set(key, group);
+    });
+
+    const removedIds = new Set<string>();
+
+    groups.forEach(group => {
+        const ordered = group.slice().sort(compareRecurringChainTasks);
+        const latestTask = ordered.at(-1) ?? null;
+        if (!latestTask) return;
+
+        ordered.forEach(task => {
+            if (task.status === 'OPEN' && task.id !== latestTask.id) {
+                removedIds.add(task.id);
+            }
+        });
+    });
+
+    if (!removedIds.size) {
+        return { payload, removedCount: 0 };
+    }
+
+    return {
+        payload: {
+            ...payload,
+            tasks: payload.tasks.map(task =>
+                removedIds.has(task.id)
+                    ? {
+                        ...task,
+                        deletedAt: now,
+                        updatedAt: now,
+                    }
+                    : task
+            ),
+            reminders: payload.reminders.filter(reminder => !removedIds.has(reminder.taskId)),
+        },
+        removedCount: removedIds.size,
+    };
+}
+
+function compareRecurringOccurrenceCandidates(left: Task, right: Task): number {
+    const statusRank = (task: Task) => {
+        if (task.status === 'COMPLETED') return 0;
+        if (task.status === 'ARCHIVED') return 1;
+        return 2;
+    };
+
+    const leftRank = statusRank(left);
+    const rightRank = statusRank(right);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    if (left.updatedAt !== right.updatedAt) return right.updatedAt - left.updatedAt;
+    if (left.createdAt !== right.createdAt) return right.createdAt - left.createdAt;
+    return left.id.localeCompare(right.id);
+}
+
+function buildRecurringOccurrenceKey(task: Task): string {
+    return JSON.stringify({
+        ...parseRecurringChainIdentity(task),
+        dueAt: task.dueAt,
+        deadlineAt: task.deadlineAt ?? null,
+    });
+}
+
+function buildRecurringChainKey(task: Task): string {
+    return JSON.stringify(parseRecurringChainIdentity(task));
+}
+
+function parseRecurringChainIdentity(task: Task) {
+    return {
+        title: task.title,
+        description: task.description,
+        projectId: task.projectId,
+        sectionId: task.sectionId,
+        parentTaskId: task.parentTaskId,
+        priority: task.priority,
+        allDay: task.allDay,
+        deadlineAllDay: task.deadlineAllDay ?? false,
+        recurringRule: task.recurringRule ?? null,
+        deadlineRecurringRule: task.deadlineRecurringRule ?? null,
+        locationId: task.locationId,
+        locationTriggerType: task.locationTriggerType,
+    };
+}
+
+function compareRecurringChainTasks(left: Task, right: Task): number {
+    const leftAt = getRecurringOccurrenceAt(left);
+    const rightAt = getRecurringOccurrenceAt(right);
+    if (leftAt !== rightAt) return leftAt - rightAt;
+
+    const statusRank = (task: Task) => {
+        if (task.status === 'COMPLETED') return 0;
+        if (task.status === 'ARCHIVED') return 1;
+        return 2;
+    };
+
+    const leftRank = statusRank(left);
+    const rightRank = statusRank(right);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    if (left.updatedAt !== right.updatedAt) return left.updatedAt - right.updatedAt;
+    if (left.createdAt !== right.createdAt) return left.createdAt - right.createdAt;
+    return left.id.localeCompare(right.id);
+}
+
+function getRecurringOccurrenceAt(task: Task): number {
+    return task.dueAt ?? task.deadlineAt ?? Number.MIN_SAFE_INTEGER;
+}
+
+function isSameRecurringChain(left: Task, right: Task): boolean {
+    return left.title === right.title &&
+        left.description === right.description &&
+        left.projectId === right.projectId &&
+        left.sectionId === right.sectionId &&
+        left.parentTaskId === right.parentTaskId &&
+        left.priority === right.priority &&
+        left.allDay === right.allDay &&
+        (left.deadlineAllDay ?? false) === (right.deadlineAllDay ?? false) &&
+        (left.recurringRule ?? null) === (right.recurringRule ?? null) &&
+        (left.deadlineRecurringRule ?? null) === (right.deadlineRecurringRule ?? null) &&
+        left.locationId === right.locationId &&
+        left.locationTriggerType === right.locationTriggerType;
 }
 
 function getNextRecurringDate(params: {
