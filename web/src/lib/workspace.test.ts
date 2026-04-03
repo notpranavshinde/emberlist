@@ -711,6 +711,126 @@ describe('workspace bulk task helpers', () => {
     expect(repaired.payload.tasks.filter(task => task.title === 'Math homework')).toHaveLength(2);
   });
 
+  it.each([
+    {
+      label: 'priority changes',
+      mutateSuccessor: () => ({
+        priority: 'P1' as const,
+      }),
+    },
+    {
+      label: 'project and section moves',
+      mutateSuccessor: () => ({
+        projectId: 'project-work',
+        sectionId: null,
+      }),
+    },
+    {
+      label: 'title and description edits',
+      mutateSuccessor: () => ({
+        title: 'Updated wifi bill',
+        description: 'Paid from savings',
+      }),
+    },
+    {
+      label: 'location metadata changes',
+      mutateSuccessor: () => ({
+        locationId: 'location-home',
+        locationTriggerType: 'ARRIVE' as const,
+      }),
+    },
+  ])('does not recreate recurring successors during repair when $label', ({ mutateSuccessor }) => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-09T08:00:00').getTime());
+    const payload = createPayload();
+    payload.locations.push({
+      id: 'location-home',
+      label: 'Home',
+      address: '123 Ember St',
+      lat: 1,
+      lng: 2,
+      radiusMeters: 100,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    });
+    payload.tasks.push(
+      createTask({
+        id: 'task-recurring-completed-prior',
+        title: 'wifi bill',
+        projectId: 'project-home',
+        sectionId: 'section-weekend',
+        dueAt: new Date('2026-04-08T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-08T07:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-recurring-next-open',
+        title: 'wifi bill',
+        projectId: 'project-home',
+        sectionId: 'section-weekend',
+        dueAt: new Date('2026-04-09T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        ...mutateSuccessor(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const liveTasks = repaired.payload.tasks.filter(task => !task.deletedAt);
+    const matchingDueTasks = liveTasks.filter(task => task.dueAt === new Date('2026-04-09T00:00:00').getTime());
+
+    expect(repaired.repairedCount).toBe(0);
+    expect(repaired.removedDuplicateCount).toBe(0);
+    expect(matchingDueTasks).toHaveLength(1);
+  });
+
+  it('removes same-occurrence recurring duplicates caused by edited priorities', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-09T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-priority-completed',
+        title: 'pay rent',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-08T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-08T06:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-priority-open-old',
+        title: 'pay rent',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-09T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        priority: 'P4',
+      }),
+      createTask({
+        id: 'task-priority-open-new',
+        title: 'pay rent',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-09T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        priority: 'P1',
+        updatedAt: new Date('2026-04-09T07:00:00').getTime(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const sameOccurrence = repaired.payload.tasks
+      .filter(task => task.title === 'pay rent' && task.dueAt === new Date('2026-04-09T00:00:00').getTime());
+
+    expect(repaired.repairedCount).toBe(0);
+    expect(repaired.removedDuplicateCount).toBe(1);
+    expect(sameOccurrence.filter(task => !task.deletedAt)).toHaveLength(1);
+    expect(sameOccurrence.find(task => task.id === 'task-priority-open-new')?.deletedAt).toBeNull();
+  });
+
   it('treats later completed recurring instances as valid continuation during repair', () => {
     vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-02-12T08:00:00').getTime());
     const payload = createPayload();

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Location, Project, Reminder, Section, SyncPayload, Task } from '../types/sync';
 import { createEmptySyncPayload } from './syncPayload';
 import { SyncEngine } from './syncEngine';
+import { repairRecurringTasks } from './workspace';
 
 const NOW = 1_710_000_000_000;
 
@@ -218,5 +219,75 @@ describe('SyncEngine', () => {
     const remote = createPayload({ locations: [createLocation({ updatedAt: 20, label: 'Remote' })] });
 
     expect(engine.mergePayloads(local, remote).locations[0].label).toBe('Remote');
+  });
+
+  it('does not duplicate a recurring task after sync when the open successor changes priority', () => {
+    const completedLocal = createTask({
+      id: 'task-recurring-completed',
+      title: 'wifi bill',
+      projectId: 'project-1',
+      dueAt: new Date('2026-04-08T00:00:00').getTime(),
+      allDay: true,
+      recurringRule: 'FREQ=DAILY',
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-08T07:00:00').getTime(),
+      updatedAt: 10,
+    });
+    const openRemote = createTask({
+      id: 'task-recurring-open',
+      title: 'wifi bill',
+      projectId: 'project-1',
+      dueAt: new Date('2026-04-09T00:00:00').getTime(),
+      allDay: true,
+      recurringRule: 'FREQ=DAILY',
+      priority: 'P1',
+      updatedAt: 20,
+    });
+
+    const merged = engine.mergePayloads(
+      createPayload({ projects: [createProject()], tasks: [completedLocal] }),
+      createPayload({ projects: [createProject()], tasks: [openRemote] }),
+    );
+    const repaired = repairRecurringTasks(merged);
+
+    const liveTasks = repaired.payload.tasks.filter(task => !task.deletedAt && task.title === 'wifi bill');
+    expect(repaired.repairedCount).toBe(0);
+    expect(liveTasks).toHaveLength(2);
+    expect(liveTasks.filter(task => task.dueAt === new Date('2026-04-09T00:00:00').getTime())).toHaveLength(1);
+  });
+
+  it('does not recover a deleted recurring successor after sync merge', () => {
+    const completedLocal = createTask({
+      id: 'task-recurring-completed',
+      title: 'laundry',
+      projectId: 'project-1',
+      dueAt: new Date('2026-04-08T00:00:00').getTime(),
+      allDay: true,
+      recurringRule: 'FREQ=DAILY',
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-08T07:00:00').getTime(),
+      updatedAt: 10,
+    });
+    const deletedRemote = createTask({
+      id: 'task-recurring-open',
+      title: 'laundry',
+      projectId: 'project-1',
+      dueAt: new Date('2026-04-09T00:00:00').getTime(),
+      allDay: true,
+      recurringRule: 'FREQ=DAILY',
+      deletedAt: 20,
+      updatedAt: 20,
+    });
+
+    const merged = engine.mergePayloads(
+      createPayload({ projects: [createProject()], tasks: [completedLocal] }),
+      createPayload({ projects: [createProject()], tasks: [deletedRemote] }),
+    );
+    const repaired = repairRecurringTasks(merged);
+
+    const liveTasks = repaired.payload.tasks.filter(task => !task.deletedAt && task.title === 'laundry');
+    expect(repaired.repairedCount).toBe(0);
+    expect(liveTasks).toHaveLength(1);
+    expect(liveTasks[0].status).toBe('COMPLETED');
   });
 });
