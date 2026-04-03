@@ -125,6 +125,7 @@ type QuickAddContext = {
   defaultSectionId: string | null;
   defaultDueToday: boolean;
 };
+type FocusedTaskActionMode = 'reschedule' | 'move' | 'priority' | 'delete';
 
 let activeDraggedTaskId: string | null = null;
 
@@ -459,16 +460,18 @@ function App() {
     }
   }
 
-  async function handleCreateProject(name: string) {
+  async function handleCreateProject(name: string): Promise<string | null> {
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed) return null;
+    const projectId = crypto.randomUUID();
     await applyUndoablePayloadUpdate(
-      current => createProject(current, trimmed),
+      current => createProject(current, trimmed, projectId),
       {
         message: `Project "${trimmed}" created.`,
         undoMessage: `Removed project "${trimmed}".`,
       }
     );
+    return projectId;
   }
 
   async function handleUpdateProject(projectId: string, updater: (project: Project) => Project) {
@@ -794,7 +797,7 @@ function App() {
         onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
         onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
         onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
-        onCreateProject={name => void handleCreateProject(name)}
+        onCreateProject={handleCreateProject}
         onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
         onDeleteProject={projectId => void handleDeleteProject(projectId)}
         onCreateSection={(projectId, name) => void handleCreateSection(projectId, name)}
@@ -853,7 +856,7 @@ type WorkspaceShellProps = {
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onPromoteSubtask: (taskId: string) => void;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
-  onCreateProject: (name: string) => void;
+  onCreateProject: (name: string) => Promise<string | null>;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
   onDeleteProject: (projectId: string) => void;
   onCreateSection: (projectId: string, name: string) => void;
@@ -930,6 +933,10 @@ function WorkspaceShell({
   const [isBannerActionRunning, setIsBannerActionRunning] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
+  const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+  const [focusedTaskActionMode, setFocusedTaskActionMode] = useState<FocusedTaskActionMode | null>(null);
+  const [focusedTaskActionTaskIds, setFocusedTaskActionTaskIds] = useState<string[]>([]);
+  const [focusedTaskActionDate, setFocusedTaskActionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -981,6 +988,62 @@ function WorkspaceShell({
 
   bannerActionRef.current = handleBannerAction;
 
+  const focusedTaskActionTasks = useMemo(
+    () => focusedTaskActionTaskIds
+      .map(taskId => getTaskById(payload, taskId))
+      .filter((task): task is Task => task !== undefined),
+    [focusedTaskActionTaskIds, payload]
+  );
+  const focusedTaskActionCount = focusedTaskActionTasks.length;
+  const focusedTaskActionLabel = focusedTaskActionCount === 1
+    ? `"${focusedTaskActionTasks[0]?.title ?? 'task'}"`
+    : `${focusedTaskActionCount} tasks`;
+
+  function closeFocusedTaskActionDialog(taskIdToFocus: string | null = focusedTaskActionTaskIds[0] ?? null) {
+    setFocusedTaskActionMode(null);
+    setFocusedTaskActionTaskIds([]);
+    if (taskIdToFocus) {
+      window.setTimeout(() => focusTaskRow(taskIdToFocus), 40);
+    }
+  }
+
+  function openFocusedTaskAction(mode: FocusedTaskActionMode) {
+    const focusedTaskId = getFocusedTaskRowId();
+    if (!focusedTaskId) return;
+    setFocusedTaskActionDate(format(new Date(), 'yyyy-MM-dd'));
+    setFocusedTaskActionTaskIds([focusedTaskId]);
+    setFocusedTaskActionMode(mode);
+  }
+
+  function submitFocusedTaskReschedule() {
+    if (!focusedTaskActionDate || !focusedTaskActionTaskIds.length) return;
+    const dueAt = parseInputValue(focusedTaskActionDate, true);
+    if (dueAt === null) return;
+    const taskIdToFocus = focusedTaskActionTaskIds[0] ?? null;
+    onRescheduleTasks(focusedTaskActionTaskIds, dueAt);
+    closeFocusedTaskActionDialog(taskIdToFocus);
+  }
+
+  function submitFocusedTaskMove(projectId: string | null) {
+    if (!focusedTaskActionTaskIds.length) return;
+    const taskIdToFocus = focusedTaskActionTaskIds[0] ?? null;
+    onMoveTasksToProject(focusedTaskActionTaskIds, projectId);
+    closeFocusedTaskActionDialog(taskIdToFocus);
+  }
+
+  function submitFocusedTaskPriority(priority: Priority) {
+    if (!focusedTaskActionTaskIds.length) return;
+    const taskIdToFocus = focusedTaskActionTaskIds[0] ?? null;
+    onSetTasksPriority(focusedTaskActionTaskIds, priority);
+    closeFocusedTaskActionDialog(taskIdToFocus);
+  }
+
+  function submitFocusedTaskDelete() {
+    if (!focusedTaskActionTaskIds.length) return;
+    onDeleteTasks(focusedTaskActionTaskIds);
+    closeFocusedTaskActionDialog(null);
+  }
+
   useEffect(() => {
     const clearGoPrefix = () => {
       if (goSequenceTimeoutRef.current !== null) {
@@ -999,6 +1062,11 @@ function WorkspaceShell({
       if (pendingGoPrefixRef.current) {
         const destination = resolveGoShortcut(lowerKey);
         clearGoPrefix();
+        if (destination === '__project_switcher__') {
+          event.preventDefault();
+          setIsProjectSwitcherOpen(true);
+          return;
+        }
         if (destination) {
           event.preventDefault();
           navigate(destination);
@@ -1007,6 +1075,12 @@ function WorkspaceShell({
       }
 
       if (hasOpenOverlayDialog() && key !== 'Escape') {
+        return;
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.shiftKey && lowerKey === 's') {
+        event.preventDefault();
+        navigate('/settings');
         return;
       }
 
@@ -1064,7 +1138,7 @@ function WorkspaceShell({
         return;
       }
 
-      if (!hasModifier && lowerKey === 'm') {
+      if ((!hasModifier && event.shiftKey && lowerKey === 's') || (!hasModifier && lowerKey === 'm')) {
         event.preventDefault();
         setIsSidebarCollapsed(value => !value);
         return;
@@ -1087,6 +1161,28 @@ function WorkspaceShell({
           goSequenceTimeoutRef.current = null;
         }, 1200);
         return;
+      }
+
+      if (!hasModifier && hasFocusedTaskRow() && !isTaskSelectionModeActive()) {
+        if (lowerKey === 't') {
+          event.preventDefault();
+          openFocusedTaskAction('reschedule');
+          return;
+        }
+        if (lowerKey === 'v') {
+          event.preventDefault();
+          openFocusedTaskAction('move');
+          return;
+        }
+        if (lowerKey === 'p') {
+          event.preventDefault();
+          openFocusedTaskAction('priority');
+          return;
+        }
+        if (key === 'Delete' || key === 'Backspace') {
+          event.preventDefault();
+          openFocusedTaskAction('delete');
+        }
       }
     };
 
@@ -1398,6 +1494,125 @@ function WorkspaceShell({
       {isShortcutDialogOpen ? (
         <KeyboardShortcutsDialog onClose={() => setIsShortcutDialogOpen(false)} />
       ) : null}
+
+      {isProjectSwitcherOpen ? (
+        <ProjectSwitcherDialog
+          payload={payload}
+          onClose={() => setIsProjectSwitcherOpen(false)}
+          onOpenProject={projectId => navigate(`/project/${projectId}`)}
+          onCreateProject={onCreateProject}
+        />
+      ) : null}
+
+      {focusedTaskActionMode === 'reschedule' ? (
+        <ChoiceDialog
+          title="Reschedule task"
+          description={`Choose a new date for ${focusedTaskActionLabel}.`}
+          onClose={() => closeFocusedTaskActionDialog()}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => closeFocusedTaskActionDialog()}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitFocusedTaskReschedule}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+              >
+                Save date
+              </button>
+            </div>
+          )}
+        >
+          <Field label="New date">
+            <input
+              type="date"
+              value={focusedTaskActionDate}
+              onChange={event => setFocusedTaskActionDate(event.target.value)}
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+          </Field>
+        </ChoiceDialog>
+      ) : null}
+
+      {focusedTaskActionMode === 'move' ? (
+        <ChoiceDialog
+          title="Move task"
+          description={`Move ${focusedTaskActionLabel} into a project or back to Inbox.`}
+          onClose={() => closeFocusedTaskActionDialog()}
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => submitFocusedTaskMove(null)}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            >
+              Inbox
+            </button>
+            {projects.map(project => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => submitFocusedTaskMove(project.id)}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {project.name}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {focusedTaskActionMode === 'priority' ? (
+        <ChoiceDialog
+          title="Change priority"
+          description={`Update the priority for ${focusedTaskActionLabel}.`}
+          onClose={() => closeFocusedTaskActionDialog()}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+              <button
+                key={priority}
+                type="button"
+                onClick={() => submitFocusedTaskPriority(priority)}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {focusedTaskActionMode === 'delete' ? (
+        <ChoiceDialog
+          title="Delete task"
+          description={`Delete ${focusedTaskActionLabel}? This syncs as a tombstone.`}
+          onClose={() => closeFocusedTaskActionDialog()}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => closeFocusedTaskActionDialog()}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitFocusedTaskDelete}
+                className="rounded-full bg-[#B64B28] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#9e4122]"
+              >
+                Delete task
+              </button>
+            </div>
+          )}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1499,7 +1714,7 @@ function TodayPage({
           setActiveDialog('move');
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'y') {
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
           event.preventDefault();
           setActiveDialog('priority');
           return;
@@ -1559,7 +1774,7 @@ function TodayPage({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
         eyebrow="Focus"
         title="Today"
@@ -2092,7 +2307,7 @@ function BrowsePage({
   onCreateProject,
 }: {
   payload: SyncPayload;
-  onCreateProject: (name: string) => void;
+  onCreateProject: (name: string) => Promise<string | null>;
 }) {
   const projects = getActiveProjects(payload);
   const inboxCount = getInboxTasks(payload).length;
@@ -2101,14 +2316,14 @@ function BrowsePage({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onCreateProject(projectName);
+    void onCreateProject(projectName);
     setProjectName('');
   }
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== 'a') return;
       event.preventDefault();
       projectInputRef.current?.focus();
@@ -2283,7 +2498,7 @@ function ProjectPage({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== 's') return;
       event.preventDefault();
       sectionInputRef.current?.focus();
@@ -2766,19 +2981,18 @@ function TaskEditor({
         return;
       }
 
-      if (typing) return;
-
       if (event.key === 'Escape') {
         event.preventDefault();
         attemptGoBack();
         return;
       }
+      if (typing) return;
       if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'e') {
         event.preventDefault();
         onToggleTask(task.id);
         return;
       }
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'y') {
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'p') {
         event.preventDefault();
         prioritySelectRef.current?.focus();
         return;
@@ -3433,13 +3647,24 @@ function QuickAddDialog({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const lowerKey = event.key.toLowerCase();
-      if ((event.metaKey || event.ctrlKey) && lowerKey === 'enter') {
+      const typing = isTypingTarget(event.target);
+      if ((event.metaKey || event.ctrlKey) && lowerKey === 'enter' && !event.altKey) {
+        if (!typing) return;
         event.preventDefault();
         if (showBulkChoices) {
-          void createBulkTasksRef.current(event.shiftKey ? 'many' : 'single');
           return;
         }
-        void submitDraftRef.current(event.shiftKey ? 'continue' : 'close');
+        void submitDraftRef.current('continue');
+        return;
+      }
+
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === 'Enter' && !event.shiftKey) {
+        if (!typing) return;
+        event.preventDefault();
+        if (showBulkChoices) {
+          return;
+        }
+        void submitDraftRef.current('close');
         return;
       }
 
@@ -4304,6 +4529,134 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+function ProjectSwitcherDialog({
+  payload,
+  onClose,
+  onOpenProject,
+  onCreateProject,
+}: {
+  payload: SyncPayload;
+  onClose: () => void;
+  onOpenProject: (projectId: string) => void;
+  onCreateProject: (name: string) => Promise<string | null>;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const projects = useMemo(() => getActiveProjects(payload), [payload]);
+  const filteredProjects = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return projects;
+    return projects.filter(project => project.name.toLowerCase().includes(normalizedQuery));
+  }, [projects, query]);
+  const canCreate = query.trim().length > 0 && !projects.some(project => project.name.localeCompare(query.trim(), undefined, { sensitivity: 'base' }) === 0);
+  const boundedActiveIndex = filteredProjects.length ? Math.min(activeIndex, filteredProjects.length - 1) : 0;
+  const highlightedProject = filteredProjects[boundedActiveIndex] ?? null;
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const lowerKey = event.key.toLowerCase();
+      if ((event.metaKey || event.ctrlKey || event.altKey) && event.key !== 'Enter') return;
+
+      if (event.key === 'ArrowDown' || lowerKey === 'j') {
+        if (!filteredProjects.length) return;
+        event.preventDefault();
+        setActiveIndex(current => Math.min(current + 1, filteredProjects.length - 1));
+        return;
+      }
+
+      if (event.key === 'ArrowUp' || lowerKey === 'k') {
+        if (!filteredProjects.length) return;
+        event.preventDefault();
+        setActiveIndex(current => Math.max(current - 1, 0));
+        return;
+      }
+
+      if (event.key !== 'Enter' || isSubmitting) return;
+      event.preventDefault();
+
+      const exactMatch = projects.find(project => project.name.localeCompare(query.trim(), undefined, { sensitivity: 'base' }) === 0);
+      if (exactMatch) {
+        onOpenProject(exactMatch.id);
+        onClose();
+        return;
+      }
+
+      if (highlightedProject) {
+        onOpenProject(highlightedProject.id);
+        onClose();
+        return;
+      }
+
+      if (!canCreate) return;
+      setIsSubmitting(true);
+      void onCreateProject(query.trim())
+        .then(projectId => {
+          if (projectId) {
+            onOpenProject(projectId);
+          }
+          onClose();
+        })
+        .finally(() => setIsSubmitting(false));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canCreate, filteredProjects, highlightedProject, isSubmitting, onClose, onCreateProject, onOpenProject, projects, query]);
+
+  return (
+    <ChoiceDialog
+      title="Open project"
+      description="Type to filter projects, use arrow keys or J/K to move, then press Enter to open. If nothing matches, pressing Enter creates a new project."
+      onClose={onClose}
+    >
+      <div className="space-y-4">
+        <Field label="Project name">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={event => {
+              setQuery(event.target.value);
+              setActiveIndex(0);
+            }}
+            placeholder="Search or create a project"
+            className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+          />
+        </Field>
+        <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+          {filteredProjects.map((project, index) => (
+            <button
+              key={project.id}
+              type="button"
+              onClick={() => {
+                onOpenProject(project.id);
+                onClose();
+              }}
+              className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition ${index === boundedActiveIndex
+                ? 'border-[#EE6A3C] bg-[#FFF3EE] text-[#1E2D2F]'
+                : 'border-[#E7DDD4] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                }`}
+            >
+              <span className="font-semibold">{project.name}</span>
+              <span className="text-xs text-[#6D5C50]">{getProjectTasks(payload, project.id).length} active</span>
+            </button>
+          ))}
+          {!filteredProjects.length ? (
+            <div className="rounded-[18px] border border-dashed border-[#E1D5CA] bg-[#FBF7F3] px-4 py-5 text-sm text-[#6D5C50]">
+              {canCreate ? `Press Enter to create "${query.trim()}".` : 'No matching projects.'}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </ChoiceDialog>
+  );
+}
+
 function HeroCard({
   eyebrow,
   title,
@@ -5000,11 +5353,30 @@ function hasFocusedTaskRow(): boolean {
   return activeElement instanceof HTMLElement && activeElement.closest('[data-task-row="true"]') !== null;
 }
 
+function getFocusedTaskRowId(): string | null {
+  if (typeof document === 'undefined') return null;
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) return null;
+  const row = activeElement.closest<HTMLElement>('[data-task-row="true"]');
+  return row?.dataset.taskId ?? null;
+}
+
+function isTaskSelectionModeActive(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.querySelector('[data-task-selection-mode="true"]') !== null;
+}
+
 function focusEdgeTaskRow(edge: 'start' | 'end') {
   if (typeof document === 'undefined') return;
   const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
   const target = edge === 'start' ? rows[0] : rows[rows.length - 1];
   target?.focus();
+}
+
+function focusTaskRow(taskId: string) {
+  if (typeof document === 'undefined') return;
+  const row = document.querySelector<HTMLElement>(`[data-task-row="true"][data-task-id="${taskId}"]`);
+  row?.focus();
 }
 
 function getAdjacentTaskRowId(taskId: string, direction: -1 | 1): string | null {

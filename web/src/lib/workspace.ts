@@ -589,10 +589,10 @@ export function deleteTasks(payload: SyncPayload, taskIds: string[]): SyncPayloa
     });
 }
 
-export function createProject(payload: SyncPayload, name: string): SyncPayload {
+export function createProject(payload: SyncPayload, name: string, projectId: string = crypto.randomUUID()): SyncPayload {
     const now = Date.now();
     const project: Project = {
-        id: crypto.randomUUID(),
+        id: projectId,
         name: name.trim(),
         color: '#EE6A3C',
         favorite: false,

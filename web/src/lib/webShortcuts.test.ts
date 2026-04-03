@@ -7,6 +7,7 @@ describe('webShortcuts', () => {
     expect(resolveGoShortcut('t')).toBe('/today');
     expect(resolveGoShortcut('u')).toBe('/upcoming');
     expect(resolveGoShortcut('b')).toBe('/browse');
+    expect(resolveGoShortcut('p')).toBe('__project_switcher__');
     expect(resolveGoShortcut('s')).toBe('/settings');
     expect(resolveGoShortcut('h')).toBe('/today');
     expect(resolveGoShortcut('x')).toBeNull();
@@ -17,11 +18,12 @@ describe('webShortcuts', () => {
       'General',
       'Quick Add',
       'Navigate',
-      'Today Selection',
+      'Task Actions',
       'Task Detail',
       'Project and Browse',
     ]);
-    expect(shortcutSections.some(section => section.items.some(item => item.keys === 'Q'))).toBe(true);
+    expect(shortcutSections.some(section => section.items.some(item => item.keys === 'Shift+S'))).toBe(true);
+    expect(shortcutSections.some(section => section.items.some(item => item.keys === 'G then P'))).toBe(true);
     expect(shortcutSections.some(section => section.items.some(item => item.keys === 'Ctrl+]'))).toBe(true);
   });
 });

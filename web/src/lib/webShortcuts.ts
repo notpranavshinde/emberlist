@@ -22,15 +22,16 @@ export const shortcutSections: ShortcutSection[] = [
       { keys: 'Esc', description: 'Dismiss dialogs and prompts' },
       { keys: 'Z / Ctrl+Z', description: 'Undo the latest undoable change' },
       { keys: '?', description: 'Show keyboard shortcuts' },
-      { keys: 'M', description: 'Open or close the sidebar' },
+      { keys: 'Shift+S', description: 'Open or close the sidebar' },
     ],
   },
   {
     title: 'Quick Add',
     items: [
       { keys: 'Q', description: 'Open Quick Add' },
-      { keys: 'Ctrl+Enter', description: 'Create the task and close Quick Add' },
-      { keys: 'Ctrl+Shift+Enter', description: 'Create the task and keep Quick Add open' },
+      { keys: 'Enter', description: 'Create the task and close Quick Add' },
+      { keys: 'Ctrl+Enter', description: 'Create the task and keep Quick Add open' },
+      { keys: 'Shift+Enter', description: 'Insert a new line in the parser or notes' },
       { keys: 'Tab / Shift+Tab', description: 'Move across fields and actions' },
     ],
   },
@@ -43,18 +44,20 @@ export const shortcutSections: ShortcutSection[] = [
       { keys: 'G then T', description: 'Go to Today' },
       { keys: 'G then U', description: 'Go to Upcoming' },
       { keys: 'G then B', description: 'Go to Browse' },
+      { keys: 'G then P', description: 'Open the project switcher' },
       { keys: 'G then S', description: 'Go to Settings' },
+      { keys: 'Ctrl+Shift+S', description: 'Open Settings' },
     ],
   },
   {
-    title: 'Today Selection',
+    title: 'Task Actions',
     items: [
       { keys: 'X', description: 'Select the focused task' },
       { keys: 'Ctrl+A', description: 'Select all visible Today tasks' },
-      { keys: 'T', description: 'Reschedule selected Today tasks' },
-      { keys: 'V', description: 'Move selected Today tasks' },
-      { keys: 'Y', description: 'Change priority for selected Today tasks' },
-      { keys: 'Delete / Backspace', description: 'Delete selected Today tasks' },
+      { keys: 'T', description: 'Reschedule the focused task or selected Today tasks' },
+      { keys: 'V', description: 'Move the focused task or selected Today tasks' },
+      { keys: 'P', description: 'Change priority for the focused task or selected Today tasks' },
+      { keys: 'Delete / Backspace', description: 'Delete the focused task or selected Today tasks' },
     ],
   },
   {
@@ -62,7 +65,7 @@ export const shortcutSections: ShortcutSection[] = [
     items: [
       { keys: 'Ctrl+S', description: 'Save the current task' },
       { keys: 'E', description: 'Complete or reopen the current task' },
-      { keys: 'Y', description: 'Focus priority' },
+      { keys: 'P', description: 'Focus priority' },
       { keys: 'T / Shift+T', description: 'Focus or clear the due date' },
       { keys: 'D / Shift+D', description: 'Focus or clear the deadline' },
       { keys: 'Esc', description: 'Go back from task detail' },
@@ -87,6 +90,8 @@ export function resolveGoShortcut(key: string): string | null {
       return '/upcoming';
     case 'b':
       return '/browse';
+    case 'p':
+      return '__project_switcher__';
     case 's':
       return '/settings';
     case 'h':
