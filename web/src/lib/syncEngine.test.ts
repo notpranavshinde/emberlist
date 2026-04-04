@@ -290,4 +290,40 @@ describe('SyncEngine', () => {
     expect(liveTasks).toHaveLength(1);
     expect(liveTasks[0].status).toBe('COMPLETED');
   });
+
+  it('does not revert a recurring due-date edit after sync merge and repair', () => {
+    const completedLocal = createTask({
+      id: 'task-recurring-completed',
+      title: 'cancel Google one Subscription',
+      projectId: 'project-1',
+      dueAt: new Date('2026-04-08T00:00:00').getTime(),
+      allDay: true,
+      recurringRule: 'FREQ=DAILY',
+      status: 'COMPLETED',
+      completedAt: new Date('2026-04-08T07:00:00').getTime(),
+      updatedAt: 10,
+    });
+    const dueEditedRemote = createTask({
+      id: 'task-recurring-open',
+      title: 'cancel Google one Subscription',
+      projectId: 'project-1',
+      dueAt: new Date('2026-04-14T00:00:00').getTime(),
+      allDay: true,
+      recurringRule: 'FREQ=DAILY',
+      updatedAt: 20,
+    });
+
+    const merged = engine.mergePayloads(
+      createPayload({ projects: [createProject()], tasks: [completedLocal] }),
+      createPayload({ projects: [createProject()], tasks: [dueEditedRemote] }),
+    );
+    const repaired = repairRecurringTasks(merged);
+
+    const liveTasks = repaired.payload.tasks.filter(task => !task.deletedAt && task.title === 'cancel Google one Subscription');
+    expect(repaired.repairedCount).toBe(0);
+    expect(liveTasks).toHaveLength(2);
+    expect(liveTasks.filter(task => task.status === 'OPEN').map(task => task.dueAt)).toEqual([
+      new Date('2026-04-14T00:00:00').getTime(),
+    ]);
+  });
 });

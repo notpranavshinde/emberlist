@@ -626,7 +626,7 @@ export function repairRecurringTasks(payload: SyncPayload): {
     duplicateCleanup.payload.tasks.forEach(task => {
         if (task.deletedAt || task.status !== 'COMPLETED') return;
         if (!task.recurringRule && !task.deadlineRecurringRule) return;
-        if (findRecurringOccurrence(duplicateCleanup.payload, task, task.completedAt ?? now, additions, true)) return;
+        if (hasLaterRecurringContinuation(duplicateCleanup.payload, task, additions, true)) return;
 
         const successor = buildRecurringSuccessor(duplicateCleanup.payload, task, task.completedAt ?? now);
         if (!successor) return;
@@ -993,6 +993,7 @@ function findRecurringOccurrence(
         .filter(candidate =>
             (includeDeleted || !candidate.deletedAt) &&
             candidate.id !== task.id &&
+            normalizeRecurringIdentityText(candidate.title) === normalizeRecurringIdentityText(task.title) &&
             candidate.dueAt === nextDue &&
             (candidate.deadlineAt ?? null) === nextDeadline
         )
@@ -1011,6 +1012,25 @@ function findRecurringOccurrence(
         });
 
     return candidates[0]?.candidate ?? null;
+}
+
+function hasLaterRecurringContinuation(
+    payload: SyncPayload,
+    task: Task,
+    additionalTasks: Task[] = [],
+    includeDeleted: boolean = false,
+): boolean {
+    const currentAt = getRecurringOccurrenceAt(task);
+    if (currentAt === null) return false;
+
+    return [...payload.tasks, ...additionalTasks].some(candidate =>
+        candidate.id !== task.id &&
+        (includeDeleted || !candidate.deletedAt) &&
+        normalizeRecurringIdentityText(candidate.title) === normalizeRecurringIdentityText(task.title) &&
+        getRecurringOccurrenceAt(candidate) !== null &&
+        getRecurringOccurrenceAt(candidate)! > currentAt &&
+        scoreRecurringRepairCandidate(candidate, task) >= 8
+    );
 }
 
 function removeRecurringOccurrenceDuplicates(
@@ -1114,6 +1134,10 @@ function scoreRecurringRepairCandidate(candidate: Task, task: Task): number {
 
 function normalizeRecurringIdentityText(value: string): string {
     return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function getRecurringOccurrenceAt(task: Task): number | null {
+    return task.dueAt ?? task.deadlineAt ?? null;
 }
 
 function getNextRecurringDate(params: {

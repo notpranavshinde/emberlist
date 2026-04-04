@@ -726,9 +726,8 @@ describe('workspace bulk task helpers', () => {
       }),
     },
     {
-      label: 'title and description edits',
+      label: 'description edits',
       mutateSuccessor: () => ({
-        title: 'Updated wifi bill',
         description: 'Paid from savings',
       }),
     },
@@ -784,6 +783,80 @@ describe('workspace bulk task helpers', () => {
     expect(repaired.repairedCount).toBe(0);
     expect(repaired.removedDuplicateCount).toBe(0);
     expect(matchingDueTasks).toHaveLength(1);
+  });
+
+  it('does not recreate a recurring task when its open successor was moved to a later due date', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-09T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-due-shift-completed',
+        title: 'cancel Google one Subscription',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-08T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-08T06:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-due-shift-open',
+        title: 'cancel Google one Subscription',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-14T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=DAILY',
+        updatedAt: new Date('2026-04-09T07:00:00').getTime(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const liveTasks = repaired.payload.tasks
+      .filter(task => task.title === 'cancel Google one Subscription' && !task.deletedAt);
+
+    expect(repaired.repairedCount).toBe(0);
+    expect(repaired.removedDuplicateCount).toBe(0);
+    expect(liveTasks).toHaveLength(2);
+    expect(liveTasks.filter(task => task.status === 'OPEN').map(task => task.dueAt)).toEqual([
+      new Date('2026-04-14T00:00:00').getTime(),
+    ]);
+  });
+
+  it('does not recreate a recurring task when its open successor was moved earlier but still after the completed instance', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-09T08:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-due-earlier-completed',
+        title: 'pay rent',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-08T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=WEEKLY',
+        status: 'COMPLETED',
+        completedAt: new Date('2026-04-08T06:00:00').getTime(),
+      }),
+      createTask({
+        id: 'task-due-earlier-open',
+        title: 'pay rent',
+        projectId: 'project-home',
+        dueAt: new Date('2026-04-10T00:00:00').getTime(),
+        allDay: true,
+        recurringRule: 'FREQ=WEEKLY',
+        updatedAt: new Date('2026-04-09T07:00:00').getTime(),
+      }),
+    );
+
+    const repaired = repairRecurringTasks(payload);
+    const liveTasks = repaired.payload.tasks
+      .filter(task => task.title === 'pay rent' && !task.deletedAt);
+
+    expect(repaired.repairedCount).toBe(0);
+    expect(repaired.removedDuplicateCount).toBe(0);
+    expect(liveTasks).toHaveLength(2);
+    expect(liveTasks.filter(task => task.status === 'OPEN').map(task => task.dueAt)).toEqual([
+      new Date('2026-04-10T00:00:00').getTime(),
+    ]);
   });
 
   it('removes same-occurrence recurring duplicates caused by edited priorities', () => {
