@@ -989,29 +989,27 @@ function findRecurringOccurrence(
         return null;
     }
 
-    const candidates = [...payload.tasks, ...additionalTasks]
+    const occurrenceCandidates = [...payload.tasks, ...additionalTasks]
         .filter(candidate =>
             (includeDeleted || !candidate.deletedAt) &&
             candidate.id !== task.id &&
-            normalizeRecurringIdentityText(candidate.title) === normalizeRecurringIdentityText(task.title) &&
             candidate.dueAt === nextDue &&
-            (candidate.deadlineAt ?? null) === nextDeadline
+            (candidate.deadlineAt ?? null) === nextDeadline &&
+            (candidate.recurringRule ?? null) === (task.recurringRule ?? null) &&
+            (candidate.deadlineRecurringRule ?? null) === (task.deadlineRecurringRule ?? null)
         )
-        .map(candidate => ({
-            candidate,
-            score: scoreRecurringRepairCandidate(candidate, task),
-        }))
-        .filter(entry => entry.score >= 5)
-        .sort((left, right) => {
-            if (left.score !== right.score) return right.score - left.score;
-            if ((left.candidate.deletedAt ?? Number.MAX_SAFE_INTEGER) !== (right.candidate.deletedAt ?? Number.MAX_SAFE_INTEGER)) {
-                return (left.candidate.deletedAt ?? Number.MAX_SAFE_INTEGER) - (right.candidate.deletedAt ?? Number.MAX_SAFE_INTEGER);
-            }
-            if (left.candidate.updatedAt !== right.candidate.updatedAt) return right.candidate.updatedAt - left.candidate.updatedAt;
-            return left.candidate.id.localeCompare(right.candidate.id);
-        });
+        .sort((left, right) => compareRecurringRepairCandidatesForTask(left, right, task));
 
-    return candidates[0]?.candidate ?? null;
+    const exactTitleMatch = occurrenceCandidates.find(candidate =>
+        normalizeRecurringIdentityText(candidate.title) === normalizeRecurringIdentityText(task.title) &&
+        scoreRecurringRepairCandidate(candidate, task) >= 5
+    );
+    if (exactTitleMatch) {
+        return exactTitleMatch;
+    }
+
+    const fallbackMatches = occurrenceCandidates.filter(candidate => matchesRecurringRepairFallbackContext(candidate, task));
+    return fallbackMatches.length === 1 ? fallbackMatches[0] : null;
 }
 
 function hasLaterRecurringContinuation(
@@ -1023,14 +1021,33 @@ function hasLaterRecurringContinuation(
     const currentAt = getRecurringOccurrenceAt(task);
     if (currentAt === null) return false;
 
-    return [...payload.tasks, ...additionalTasks].some(candidate =>
-        candidate.id !== task.id &&
-        (includeDeleted || !candidate.deletedAt) &&
+    const laterCandidates = [...payload.tasks, ...additionalTasks]
+        .filter(candidate =>
+            candidate.id !== task.id &&
+            (includeDeleted || !candidate.deletedAt) &&
+            (candidate.recurringRule ?? null) === (task.recurringRule ?? null) &&
+            (candidate.deadlineRecurringRule ?? null) === (task.deadlineRecurringRule ?? null) &&
+            getRecurringOccurrenceAt(candidate) !== null &&
+            getRecurringOccurrenceAt(candidate)! > currentAt
+        )
+        .sort((left, right) => compareRecurringRepairCandidatesForTask(left, right, task));
+
+    if (laterCandidates.some(candidate =>
         normalizeRecurringIdentityText(candidate.title) === normalizeRecurringIdentityText(task.title) &&
-        getRecurringOccurrenceAt(candidate) !== null &&
-        getRecurringOccurrenceAt(candidate)! > currentAt &&
         scoreRecurringRepairCandidate(candidate, task) >= 8
-    );
+    )) {
+        return true;
+    }
+
+    const fallbackCountsByOccurrence = new Map<number, number>();
+    laterCandidates
+        .filter(candidate => matchesRecurringRepairFallbackContext(candidate, task))
+        .forEach(candidate => {
+            const occurrenceAt = getRecurringOccurrenceAt(candidate)!;
+            fallbackCountsByOccurrence.set(occurrenceAt, (fallbackCountsByOccurrence.get(occurrenceAt) ?? 0) + 1);
+        });
+
+    return Array.from(fallbackCountsByOccurrence.values()).some(count => count === 1);
 }
 
 function removeRecurringOccurrenceDuplicates(
@@ -1130,6 +1147,25 @@ function scoreRecurringRepairCandidate(candidate: Task, task: Task): number {
     if (candidate.locationId === task.locationId) score += 1;
     if (candidate.locationTriggerType === task.locationTriggerType) score += 1;
     return score;
+}
+
+function matchesRecurringRepairFallbackContext(candidate: Task, task: Task): boolean {
+    return candidate.projectId === task.projectId
+        && candidate.sectionId === task.sectionId
+        && candidate.parentTaskId === task.parentTaskId
+        && candidate.allDay === task.allDay
+        && (candidate.deadlineAllDay ?? false) === (task.deadlineAllDay ?? false);
+}
+
+function compareRecurringRepairCandidatesForTask(left: Task, right: Task, task: Task): number {
+    const leftScore = scoreRecurringRepairCandidate(left, task);
+    const rightScore = scoreRecurringRepairCandidate(right, task);
+    if (leftScore !== rightScore) return rightScore - leftScore;
+    if ((left.deletedAt ?? Number.MAX_SAFE_INTEGER) !== (right.deletedAt ?? Number.MAX_SAFE_INTEGER)) {
+        return (left.deletedAt ?? Number.MAX_SAFE_INTEGER) - (right.deletedAt ?? Number.MAX_SAFE_INTEGER);
+    }
+    if (left.updatedAt !== right.updatedAt) return right.updatedAt - left.updatedAt;
+    return left.id.localeCompare(right.id);
 }
 
 function normalizeRecurringIdentityText(value: string): string {

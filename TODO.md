@@ -51,7 +51,7 @@
 - [x] Android creates task offline -> later syncs to Drive -> Web receives it.
 - [x] Web edits task -> Android merges and updates correctly.
 - [x] Delete on one device does not resurrect on another.
-- [ ] Simulate concurrent edits and verify deterministic winner selection.
+- [x] Simulate concurrent edits and verify deterministic winner selection.
 
 ## Done In This Slice
 - Fully implemented the Web Client (`/web`) with React + Vite.
@@ -79,6 +79,7 @@
 - [x] Match Android bulk subtask creation behavior for per-line project overrides, reminder carry-through, and sibling ordering.
 - [x] Match Android recurring completion behavior so web repair only restores the latest missing recurring successor instead of recreating stale historical occurrences.
 - [x] Add recurring-chain cleanup on web to remove obsolete open instances created by prior broken recurrence repair passes.
+- [x] Add a hostile web sync regression matrix for merge conflicts, reminder normalization, service orchestration, recurring rename continuity, and reload-time repair safety.
 
 ## Web Feature Parity Backlog
 
