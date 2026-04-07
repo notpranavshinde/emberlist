@@ -150,6 +150,10 @@ type FocusedTaskActionMode = 'reschedule' | 'move' | 'priority' | 'delete';
 
 let activeDraggedTaskId: string | null = null;
 
+function normalizeInternalHref(href: string) {
+  return href.startsWith('#') ? href.slice(1) : href;
+}
+
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);
   const [bootState, setBootState] = useState<BootState>('loading');
@@ -646,11 +650,6 @@ function App() {
       return;
     }
 
-    const confirmed = window.confirm(
-      'Delete all Emberlist cloud sync files in Google Drive app data? Your local web data will stay intact.'
-    );
-    if (!confirmed) return;
-
     setIsResettingCloud(true);
     try {
       await syncService.resetRemoteSyncFile();
@@ -1010,9 +1009,6 @@ function App() {
       return;
     }
 
-    const confirmed = window.confirm('Restore the last browser backup snapshot into this workspace?');
-    if (!confirmed) return;
-
     try {
       const backupPayload = normalizeImportedPayload(JSON.parse(raw), 'Browser backup snapshot');
       const current = payloadRef.current ?? (await db.getPayload());
@@ -1352,6 +1348,8 @@ function WorkspaceShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+  const [isResetCloudDialogOpen, setIsResetCloudDialogOpen] = useState(false);
+  const [isRestoreBrowserBackupDialogOpen, setIsRestoreBrowserBackupDialogOpen] = useState(false);
   const [focusedTaskActionMode, setFocusedTaskActionMode] = useState<FocusedTaskActionMode | null>(null);
   const [focusedTaskActionTaskIds, setFocusedTaskActionTaskIds] = useState<string[]>([]);
   const [focusedTaskActionDate, setFocusedTaskActionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
@@ -1459,6 +1457,14 @@ function WorkspaceShell({
     if (!focusedTaskActionTaskIds.length) return;
     onDeleteTasks(focusedTaskActionTaskIds);
     closeFocusedTaskActionDialog(null);
+  }
+
+  function requestResetCloudSync() {
+    setIsResetCloudDialogOpen(true);
+  }
+
+  function requestRestoreBrowserBackup() {
+    setIsRestoreBrowserBackupDialogOpen(true);
   }
 
   useEffect(() => {
@@ -1905,12 +1911,12 @@ function WorkspaceShell({
                     onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
                     onCloudSync={onCloudSync}
                     onDisconnectCloud={onDisconnectCloud}
-                    onResetCloudSync={onResetCloudSync}
+                    onResetCloudSync={requestResetCloudSync}
                     onResetLocalCache={onResetLocalCache}
                     onImport={onImport}
                     onExportJson={onExportJson}
                     onSaveBrowserBackupNow={onSaveBrowserBackupNow}
-                    onRestoreBrowserBackup={onRestoreBrowserBackup}
+                    onRestoreBrowserBackup={requestRestoreBrowserBackup}
                     isSyncing={isSyncing}
                     isResettingCloud={isResettingCloud}
                     isResettingCache={isResettingCache}
@@ -1956,6 +1962,34 @@ function WorkspaceShell({
           onClose={() => setIsProjectSwitcherOpen(false)}
           onOpenProject={projectId => navigate(`/project/${projectId}`)}
           onCreateProject={onCreateProject}
+        />
+      ) : null}
+
+      {isResetCloudDialogOpen ? (
+        <ConfirmDialog
+          title="Reset cloud sync"
+          description="Delete all Emberlist cloud sync files in Google Drive app data? Your local web data will stay intact."
+          confirmLabel={isResettingCloud ? 'Resetting...' : 'Reset cloud sync'}
+          tone="destructive"
+          disabled={isResettingCloud}
+          onClose={() => setIsResetCloudDialogOpen(false)}
+          onConfirm={() => {
+            setIsResetCloudDialogOpen(false);
+            void onResetCloudSync();
+          }}
+        />
+      ) : null}
+
+      {isRestoreBrowserBackupDialogOpen ? (
+        <ConfirmDialog
+          title="Restore browser backup"
+          description="Restore the last browser backup snapshot into this workspace?"
+          confirmLabel="Restore backup"
+          onClose={() => setIsRestoreBrowserBackupDialogOpen(false)}
+          onConfirm={() => {
+            setIsRestoreBrowserBackupDialogOpen(false);
+            void onRestoreBrowserBackup();
+          }}
         />
       ) : null}
 
@@ -3597,6 +3631,11 @@ function ProjectPage({
   const { projectId } = useParams();
   const [sectionName, setSectionName] = useState('');
   const [activeBoardDropSectionId, setActiveBoardDropSectionId] = useState<string | '__loose__' | null>(null);
+  const [isProjectRenameDialogOpen, setIsProjectRenameDialogOpen] = useState(false);
+  const [projectRenameValue, setProjectRenameValue] = useState('');
+  const [sectionRenameState, setSectionRenameState] = useState<{ id: string; value: string } | null>(null);
+  const [sectionDeleteState, setSectionDeleteState] = useState<{ id: string; name: string } | null>(null);
+  const [isProjectDeleteDialogOpen, setIsProjectDeleteDialogOpen] = useState(false);
   const sectionInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -3651,23 +3690,29 @@ function ProjectPage({
     return transferValue || null;
   }
 
-  function renameProject() {
-    const nextName = window.prompt('Rename project', currentProject.name)?.trim();
-    if (!nextName) return;
-    onUpdateProject(currentProject.id, current => ({ ...current, name: nextName }));
+  function submitProjectRename(nextName: string) {
+    const trimmedName = nextName.trim();
+    if (!trimmedName) return;
+    onUpdateProject(currentProject.id, current => ({ ...current, name: trimmedName }));
+    setIsProjectRenameDialogOpen(false);
   }
 
   function toggleArchiveProject() {
     onUpdateProject(currentProject.id, current => ({ ...current, archived: !current.archived }));
   }
 
-  function removeProject() {
-    const confirmed = window.confirm(
-      `Delete "${currentProject.name}" and tombstone its tasks and sections? This will sync to Android.`
-    );
-    if (!confirmed) return;
+  function confirmDeleteProject() {
     onDeleteProject(currentProject.id);
+    setIsProjectDeleteDialogOpen(false);
     navigate('/browse');
+  }
+
+  function submitSectionRename() {
+    const currentSectionRename = sectionRenameState;
+    const nextName = currentSectionRename?.value.trim();
+    if (!currentSectionRename || !nextName) return;
+    onUpdateSection(currentSectionRename.id, current => ({ ...current, name: nextName }));
+    setSectionRenameState(null);
   }
 
   function submitSection(event: FormEvent<HTMLFormElement>) {
@@ -3749,7 +3794,10 @@ function ProjectPage({
               {projectView === 'BOARD' ? 'List view' : 'Board view'}
             </button>
             <button
-              onClick={renameProject}
+              onClick={() => {
+                setProjectRenameValue(currentProject.name);
+                setIsProjectRenameDialogOpen(true);
+              }}
               className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
             >
               Rename
@@ -3761,7 +3809,7 @@ function ProjectPage({
               {currentProject.archived ? 'Unarchive' : 'Archive'}
             </button>
             <button
-              onClick={removeProject}
+              onClick={() => setIsProjectDeleteDialogOpen(true)}
               className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
             >
               Delete
@@ -3867,21 +3915,13 @@ function ProjectPage({
                           Add task
                         </button>
                         <button
-                          onClick={() => {
-                            const nextName = window.prompt('Rename section', section.name)?.trim();
-                            if (!nextName) return;
-                            onUpdateSection(section.id, current => ({ ...current, name: nextName }));
-                          }}
+                          onClick={() => setSectionRenameState({ id: section.id, value: section.name })}
                           className="rounded-full border border-[#E1D5CA] px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
                         >
                           Rename
                         </button>
                         <button
-                          onClick={() => {
-                            const confirmed = window.confirm(`Delete section "${section.name}"? Tasks will move out of the section.`);
-                            if (!confirmed) return;
-                            onDeleteSection(section.id);
-                          }}
+                          onClick={() => setSectionDeleteState({ id: section.id, name: section.name })}
                           className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-2 text-sm font-medium text-[#B64B28] transition hover:bg-[#FDE9E1]"
                         >
                           Delete
@@ -3968,6 +4008,57 @@ function ProjectPage({
           </div>
         </section>
       </section>
+
+      {isProjectRenameDialogOpen ? (
+        <TextInputDialog
+          title="Rename project"
+          description="Choose the new name for this project."
+          label="Project name"
+          value={projectRenameValue}
+          submitLabel="Save project"
+          onChange={setProjectRenameValue}
+          onClose={() => setIsProjectRenameDialogOpen(false)}
+          onSubmit={submitProjectRename}
+        />
+      ) : null}
+
+      {isProjectDeleteDialogOpen ? (
+        <ConfirmDialog
+          title="Delete project"
+          description={`Delete "${currentProject.name}" and tombstone its tasks and sections? This will sync to Android.`}
+          confirmLabel="Delete project"
+          tone="destructive"
+          onClose={() => setIsProjectDeleteDialogOpen(false)}
+          onConfirm={confirmDeleteProject}
+        />
+      ) : null}
+
+      {sectionRenameState ? (
+        <TextInputDialog
+          title="Rename section"
+          description="Update the section name for this project."
+          label="Section name"
+          value={sectionRenameState.value}
+          submitLabel="Save section"
+          onChange={value => setSectionRenameState(current => (current ? { ...current, value } : current))}
+          onClose={() => setSectionRenameState(null)}
+          onSubmit={submitSectionRename}
+        />
+      ) : null}
+
+      {sectionDeleteState ? (
+        <ConfirmDialog
+          title="Delete section"
+          description={`Delete section "${sectionDeleteState.name}"? Tasks will move out of the section.`}
+          confirmLabel="Delete section"
+          tone="destructive"
+          onClose={() => setSectionDeleteState(null)}
+          onConfirm={() => {
+            onDeleteSection(sectionDeleteState.id);
+            setSectionDeleteState(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -4098,6 +4189,8 @@ function TaskEditor({
   const [newSubtask, setNewSubtask] = useState('');
   const [showBulkSubtaskChoices, setShowBulkSubtaskChoices] = useState(false);
   const [isCreatingSubtasks, setIsCreatingSubtasks] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
   const sectionOptions = projectId ? getProjectSections(payload, projectId) : [];
   const bulkSubtaskLines = useMemo(() => extractBulkQuickAddLines(newSubtask), [newSubtask]);
   const reminderDrafts = useMemo(() => serializeReminderEditors(reminderEditors), [reminderEditors]);
@@ -4198,11 +4291,9 @@ function TaskEditor({
       if (!href || href === '#' || href === window.location.hash) return;
       if (!href.startsWith('#/') && !href.startsWith('/')) return;
 
-      const shouldLeave = window.confirm('Discard your unsaved task changes?');
-      if (!shouldLeave) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingExitPath(normalizeInternalHref(href));
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -4246,17 +4337,25 @@ function TaskEditor({
   }
 
   function deleteCurrentTask() {
-    const confirmed = window.confirm(`Delete "${task.title}"? This will sync as a deletion tombstone.`);
-    if (!confirmed) return;
+    setIsDeleteDialogOpen(true);
+  }
+
+  function confirmDeleteCurrentTask() {
     onDeleteTask(task.id);
+    setIsDeleteDialogOpen(false);
     navigate(returnPath);
   }
 
-  function goBack() {
-    if (isDirty && !window.confirm('Discard your unsaved task changes?')) {
+  function requestNavigation(targetPath: string) {
+    if (isDirty) {
+      setPendingExitPath(targetPath);
       return;
     }
-    navigate(returnPath);
+    navigate(targetPath);
+  }
+
+  function goBack() {
+    requestNavigation(returnPath);
   }
 
   useEffect(() => {
@@ -4264,7 +4363,8 @@ function TaskEditor({
       const lowerKey = event.key.toLowerCase();
       const typing = isTypingTarget(event.target);
       const attemptGoBack = () => {
-        if (isDirty && !window.confirm('Discard your unsaved task changes?')) {
+        if (isDirty) {
+          setPendingExitPath(returnPath);
           return;
         }
         navigate(returnPath);
@@ -4845,6 +4945,34 @@ function TaskEditor({
           </div>
         </form>
       </section>
+
+      {isDeleteDialogOpen ? (
+        <ConfirmDialog
+          title="Delete task"
+          description={`Delete "${task.title}"? This will sync as a deletion tombstone.`}
+          confirmLabel="Delete task"
+          tone="destructive"
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={confirmDeleteCurrentTask}
+        />
+      ) : null}
+
+      {pendingExitPath ? (
+        <ConfirmDialog
+          title="Discard changes"
+          description="Discard your unsaved task changes and leave this task?"
+          confirmLabel="Discard changes"
+          tone="destructive"
+          onClose={() => setPendingExitPath(null)}
+          onConfirm={() => {
+            const nextPath = pendingExitPath;
+            setPendingExitPath(null);
+            if (nextPath) {
+              navigate(nextPath);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -6042,6 +6170,123 @@ function ChoiceDialog({
         {footer ? <div className="mt-5 shrink-0">{footer}</div> : null}
       </div>
     </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  onClose,
+  onConfirm,
+  tone = 'primary',
+  disabled = false,
+}: {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  tone?: 'primary' | 'destructive';
+  disabled?: boolean;
+}) {
+  return (
+    <ChoiceDialog
+      title={title}
+      description={description}
+      onClose={onClose}
+      footer={(
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onConfirm}
+            className={`rounded-full px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-70 ${
+              tone === 'destructive' ? 'bg-[#B64B28] hover:bg-[#9e4122]' : 'bg-[#EE6A3C] hover:bg-[#d75e33]'
+            }`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      )}
+    />
+  );
+}
+
+function TextInputDialog({
+  title,
+  description,
+  label,
+  value,
+  onChange,
+  onClose,
+  onSubmit,
+  submitLabel,
+}: {
+  title: string;
+  description: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: (value: string) => void;
+  submitLabel: string;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  return (
+    <ChoiceDialog
+      title={title}
+      description={description}
+      onClose={onClose}
+      footer={(
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form="text-input-dialog-form"
+            className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+          >
+            {submitLabel}
+          </button>
+        </div>
+      )}
+    >
+      <form
+        id="text-input-dialog-form"
+        onSubmit={event => {
+          event.preventDefault();
+          onSubmit(value);
+        }}
+      >
+        <Field label={label}>
+          <input
+            ref={inputRef}
+            value={value}
+            onChange={event => onChange(event.target.value)}
+            className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+          />
+        </Field>
+      </form>
+    </ChoiceDialog>
   );
 }
 
