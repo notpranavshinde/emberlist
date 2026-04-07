@@ -3,7 +3,6 @@ import type { CSSProperties, ChangeEvent, ComponentType, DragEvent, FormEvent, R
 import {
   Calendar,
   Check,
-  Circle,
   ChevronRight,
   Cloud,
   Download,
@@ -1360,7 +1359,6 @@ function WorkspaceShell({
   const projects = getActiveProjects(payload);
   const favoriteProjects = projects.filter(project => project.favorite);
   const regularProjects = projects.filter(project => !project.favorite);
-  const noDueCount = payload.tasks.filter(task => !task.deletedAt && task.status === 'OPEN' && task.dueAt === null).length;
   const cloudStatus = getCloudStatus({
     cloudConfigured,
     cloudSession,
@@ -1641,28 +1639,37 @@ function WorkspaceShell({
             <RailLink to="/settings" icon={Settings} label="Settings" collapsed={isSidebarCollapsed} />
           </nav>
 
-          <div className={`mt-8 ${isSidebarCollapsed ? 'hidden' : ''}`}>
-            <p className="px-3 text-xs font-semibold text-[#7e7a76]">Favorites</p>
-            <div className="mt-2 space-y-0.5">
-              <RailLink to="/search/no-due" icon={Circle} label="Tasks without due dates" count={noDueCount} compact />
-              {favoriteProjects.map(project => (
-                <RailLink
-                  key={project.id}
-                  to={`/project/${project.id}`}
-                  icon={Folder}
-                  label={project.name}
-                  count={getProjectTasks(payload, project.id).length}
-                  compact
-                  tint={project.color}
-                />
-              ))}
+          {favoriteProjects.length ? (
+            <div className={`mt-8 ${isSidebarCollapsed ? 'hidden' : ''}`}>
+              <p className="px-3 text-xs font-semibold text-[#7e7a76]">Favorites</p>
+              <div className="mt-2 space-y-0.5">
+                {favoriteProjects.map(project => (
+                  <RailLink
+                    key={project.id}
+                    to={`/project/${project.id}`}
+                    icon={Folder}
+                    label={project.name}
+                    count={getProjectTasks(payload, project.id).length}
+                    compact
+                    tint={project.color}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <div className={`mt-8 flex items-center justify-between px-3 ${isSidebarCollapsed ? 'hidden' : ''}`}>
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-[#5f5b57]">My Projects</p>
             </div>
+            <NavLink
+              to="/browse?create=1"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:border-[#EE6A3C]/40 hover:bg-[#FBF7F3] hover:text-[#1E2D2F]"
+              title="Create project"
+              aria-label="Create project"
+            >
+              <Plus size={14} />
+            </NavLink>
           </div>
           <div className={`mt-2 flex-1 space-y-0.5 overflow-y-auto ${isSidebarCollapsed ? 'hidden' : ''}`}>
             {regularProjects.map(project => (
@@ -1763,7 +1770,6 @@ function WorkspaceShell({
                   <TodayPage
                     payload={payload}
                     showCompletedToday={showCompletedToday}
-                    onToggleShowCompletedToday={onToggleShowCompletedToday}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
@@ -2065,7 +2071,6 @@ function WorkspaceShell({
 function TodayPage({
   payload,
   showCompletedToday,
-  onToggleShowCompletedToday,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -2076,7 +2081,6 @@ function TodayPage({
 }: {
   payload: SyncPayload;
   showCompletedToday: boolean;
-  onToggleShowCompletedToday: () => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
@@ -2222,19 +2226,10 @@ function TodayPage({
     <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
         eyebrow="Focus"
-        title="Today"
+        title=""
         description="Review what is due now, what slipped past due, and what you already finished today."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-3 rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-medium text-[#6D5C50]">
-              <input
-                type="checkbox"
-                checked={showCompletedToday}
-                onChange={onToggleShowCompletedToday}
-                className="h-4 w-4 accent-[#EE6A3C]"
-              />
-              Show completed today
-            </label>
             <button
               type="button"
               onClick={() => (selectionMode ? clearSelection() : openSelection())}
@@ -2293,23 +2288,23 @@ function TodayPage({
         </section>
       ) : null}
 
-      <TaskGroup
-        title="Overdue"
-        subtitle="Open tasks that should already be done."
-        payload={payload}
-        todayStartMs={todayStartMs}
-        tasks={data.overdue}
-        emptyMessage="Nothing overdue."
-        onToggleTask={onToggleTask}
-        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
-        selectionMode={selectionMode}
-        selectedTaskIds={selectedTaskIds}
-        onToggleSelection={toggleSelection}
-        onStartSelection={openSelection}
-        onPromoteSubtask={onPromoteSubtask}
-        headerActions={
-          data.overdue.length ? (
+      {data.overdue.length ? (
+        <TaskGroup
+          title="Overdue"
+          subtitle="Open tasks that should already be done."
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={data.overdue}
+          emptyMessage="Nothing overdue."
+          onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={toggleSelection}
+          onStartSelection={openSelection}
+          onPromoteSubtask={onPromoteSubtask}
+          headerActions={
             <button
               type="button"
               onClick={() => openDateDialog('reschedule-overdue')}
@@ -2317,9 +2312,9 @@ function TodayPage({
             >
               Reschedule overdue
             </button>
-          ) : null
-        }
-      />
+          }
+        />
+      ) : null}
 
       <TaskGroup
         title="Due today"
@@ -3401,6 +3396,7 @@ function BrowsePage({
   payload: SyncPayload;
   onCreateProject: (name: string) => Promise<string | null>;
 }) {
+  const location = useLocation();
   const projects = getActiveProjects(payload);
   const inboxCount = getInboxTasks(payload).length;
   const [projectName, setProjectName] = useState('');
@@ -3424,6 +3420,11 @@ function BrowsePage({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!location.search.includes('create=1')) return;
+    projectInputRef.current?.focus();
+  }, [location.search]);
 
   return (
     <div className="space-y-6">
@@ -6201,7 +6202,7 @@ function HeroCard({
   actions,
 }: {
   eyebrow: string;
-  title: string;
+  title?: string;
   description: string;
   actions?: ReactNode;
 }) {
@@ -6210,7 +6211,7 @@ function HeroCard({
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">{eyebrow}</p>
-          <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">{title}</h2>
+          {title ? <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">{title}</h2> : null}
           <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">{description}</p>
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
