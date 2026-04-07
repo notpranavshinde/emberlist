@@ -80,6 +80,7 @@
 - [x] Match Android recurring completion behavior so web repair only restores the latest missing recurring successor instead of recreating stale historical occurrences.
 - [x] Add recurring-chain cleanup on web to remove obsolete open instances created by prior broken recurrence repair passes.
 - [x] Add a hostile web sync regression matrix for merge conflicts, reminder normalization, service orchestration, recurring rename continuity, and reload-time repair safety.
+- [x] Protect local web saves from stale-tab overwrites by reconciling every save with the latest IndexedDB payload before persisting.
 
 ## Web Feature Parity Backlog
 

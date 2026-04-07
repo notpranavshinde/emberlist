@@ -18,10 +18,11 @@ export function buildSubtaskDraft(
   todayStartMs: number,
   description: string = '',
 ): TaskDraft {
+  const referenceNow = new Date(todayStartMs);
   return {
     ...buildDraftFromParsed(
       payload,
-      parseQuickAdd(input),
+      parseQuickAdd(input, referenceNow),
       description,
       createSubtaskContext(parentTask),
       todayStartMs,

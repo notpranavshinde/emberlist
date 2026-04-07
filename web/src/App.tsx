@@ -41,6 +41,7 @@ import {
 import { appendActivityEntry, buildTaskTimeline, type ActivityEntry } from './lib/activity';
 import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
 import { db } from './lib/db';
+import { reconcileLocalPersistPayload } from './lib/localSync';
 import {
   buildDraftFromParsed,
   buildTaskDetailDraftFromInput,
@@ -508,10 +509,12 @@ function App() {
   }
 
   async function persistPayload(nextPayload: SyncPayload, markDirty: boolean = false) {
-    await db.savePayload(nextPayload);
-    payloadRef.current = nextPayload;
-    setPayload(nextPayload);
-    saveBrowserBackupSnapshot(nextPayload, markDirty);
+    const storedPayload = await db.getPayload();
+    const reconciled = reconcileLocalPersistPayload(storedPayload, nextPayload);
+    await db.savePayload(reconciled.payload);
+    payloadRef.current = reconciled.payload;
+    setPayload(reconciled.payload);
+    saveBrowserBackupSnapshot(reconciled.payload, markDirty);
     if (markDirty) {
       setHasPendingLocalChanges(true);
       if (isSyncingRef.current) {
