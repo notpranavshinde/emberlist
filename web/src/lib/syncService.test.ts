@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SyncPayload } from '../types/sync';
 import { createEmptySyncPayload } from './syncPayload';
 import { db } from './db';
-import { DriveSyncService, resolveGoogleAuthPrompt } from './syncService';
+import { DriveSyncService, resolveGoogleAuthPrompt, resolveGoogleLoginHint } from './syncService';
 
 type TestableDriveSyncService = {
   performSync: (options?: { interactiveAuth?: boolean }) => Promise<SyncPayload>;
@@ -59,6 +59,14 @@ describe('resolveGoogleAuthPrompt', () => {
   it('uses silent auth when a token is already present', () => {
     expect(resolveGoogleAuthPrompt(true, true)).toBe('');
     expect(resolveGoogleAuthPrompt(false, true)).toBe('');
+  });
+});
+
+describe('resolveGoogleLoginHint', () => {
+  it('returns undefined for blank stored emails and a trimmed email otherwise', () => {
+    expect(resolveGoogleLoginHint(null)).toBeUndefined();
+    expect(resolveGoogleLoginHint('   ')).toBeUndefined();
+    expect(resolveGoogleLoginHint('  pranav@example.com  ')).toBe('pranav@example.com');
   });
 });
 
@@ -205,5 +213,33 @@ describe('DriveSyncService', () => {
 
     expect(findSyncFileIds).toHaveBeenCalledWith(true);
     expect(deleteCalls).toEqual(['file-1', 'file-2']);
+  });
+
+  it('passes the stored account email as a login hint during token requests', async () => {
+    const service = new DriveSyncService('client-id');
+    const requestAccessToken = vi.fn(async () => 'token');
+    const fetchSessionProfile = vi.fn(async () => ({ email: 'pranav@example.com', name: 'Pranav' }));
+
+    (service as unknown as {
+      tokenClient: object;
+      requestAccessToken: (prompt: '' | 'consent', loginHint?: string) => Promise<string>;
+      fetchSessionProfile: (interactiveAuth: boolean) => Promise<{ email: string; name: string }>;
+    }).tokenClient = {};
+    (service as unknown as {
+      tokenClient: object;
+      requestAccessToken: (prompt: '' | 'consent', loginHint?: string) => Promise<string>;
+      fetchSessionProfile: (interactiveAuth: boolean) => Promise<{ email: string; name: string }>;
+    }).requestAccessToken = requestAccessToken;
+    (service as unknown as {
+      tokenClient: object;
+      requestAccessToken: (prompt: '' | 'consent', loginHint?: string) => Promise<string>;
+      fetchSessionProfile: (interactiveAuth: boolean) => Promise<{ email: string; name: string }>;
+    }).fetchSessionProfile = fetchSessionProfile;
+
+    service.setPreferredLoginHint('pranav@example.com');
+    await service.login(false);
+
+    expect(requestAccessToken).toHaveBeenCalledWith('', 'pranav@example.com');
+    expect(fetchSessionProfile).toHaveBeenCalledWith(false);
   });
 });

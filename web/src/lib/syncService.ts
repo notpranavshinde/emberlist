@@ -25,12 +25,18 @@ export function resolveGoogleAuthPrompt(interactive: boolean, hasAccessToken: bo
     return interactive && !hasAccessToken ? 'consent' : '';
 }
 
+export function resolveGoogleLoginHint(preferredEmail: string | null): string | undefined {
+    const normalized = preferredEmail?.trim() ?? '';
+    return normalized.length ? normalized : undefined;
+}
+
 export class DriveSyncService {
     private static gisScriptPromise: Promise<void> | null = null;
 
     private tokenClient: TokenClient | null = null;
     private accessToken: string | null = null;
     private session: CloudSession | null = null;
+    private preferredLoginHint: string | null = null;
     private readonly syncEngine = new SyncEngine();
     private readonly clientId: string;
     private syncInFlight: Promise<SyncPayload> | null = null;
@@ -55,9 +61,10 @@ export class DriveSyncService {
     async login(interactive: boolean = true) {
         if (!this.tokenClient) await this.init();
         const prompt = resolveGoogleAuthPrompt(interactive, Boolean(this.accessToken));
+        const loginHint = resolveGoogleLoginHint(this.preferredLoginHint);
 
         try {
-            this.accessToken = await this.requestAccessToken(prompt);
+            this.accessToken = await this.requestAccessToken(prompt, loginHint);
         } catch (error) {
             if (!interactive) {
                 throw new Error('Google Drive sign-in is required in this browser.');
@@ -147,6 +154,10 @@ export class DriveSyncService {
 
     getSession(): CloudSession | null {
         return this.session;
+    }
+
+    setPreferredLoginHint(email: string | null) {
+        this.preferredLoginHint = email?.trim() || null;
     }
 
     hasActiveSession(): boolean {
@@ -333,7 +344,7 @@ export class DriveSyncService {
         }
     }
 
-    private async requestAccessToken(prompt: '' | 'consent'): Promise<string> {
+    private async requestAccessToken(prompt: '' | 'consent', loginHint?: string): Promise<string> {
         if (!this.tokenClient) {
             throw new Error('Google token client is not initialized.');
         }
@@ -365,7 +376,13 @@ export class DriveSyncService {
             };
 
             try {
-                this.tokenClient!.requestAccessToken({ prompt });
+                const config = {
+                    prompt,
+                    ...(loginHint ? { login_hint: loginHint } : {}),
+                };
+                this.tokenClient!.requestAccessToken(
+                    config as unknown as Parameters<TokenClient['requestAccessToken']>[0]
+                );
             } catch (error) {
                 window.clearTimeout(timeoutId);
                 reject(error instanceof Error ? error : new Error('Google sign-in failed.'));

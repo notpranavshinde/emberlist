@@ -238,6 +238,10 @@ function App() {
   }, [cloudSession]);
 
   useEffect(() => {
+    syncService?.setPreferredLoginHint(cloudSession?.email ?? null);
+  }, [cloudSession?.email, syncService]);
+
+  useEffect(() => {
     isSyncingRef.current = isSyncing;
   }, [isSyncing]);
 
