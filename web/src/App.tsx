@@ -3640,6 +3640,7 @@ function ProjectPage({
   const [sectionDeleteState, setSectionDeleteState] = useState<{ id: string; name: string } | null>(null);
   const [isProjectDeleteDialogOpen, setIsProjectDeleteDialogOpen] = useState(false);
   const [isAddSectionDialogOpen, setIsAddSectionDialogOpen] = useState(false);
+  const [activeListDropSectionId, setActiveListDropSectionId] = useState<string | '__loose__' | null>(null);
   const [projectTaskActionState, setProjectTaskActionState] = useState<{
     mode: 'reschedule' | 'priority';
     taskId: string;
@@ -3696,6 +3697,39 @@ function ProjectPage({
     if (directValue) return directValue;
     const transferValue = event.dataTransfer.getData('text/task-id').trim();
     return transferValue || null;
+  }
+
+  function canDropTaskIntoSection(draggedTaskId: string, targetSectionId: string | null) {
+    const draggedTask = tasks.find(task => task.id === draggedTaskId && !task.deletedAt);
+    if (!draggedTask || draggedTask.status !== 'OPEN') return false;
+    if (draggedTask.projectId !== currentProject.id) return false;
+    if ((draggedTask.sectionId ?? null) === targetSectionId) return false;
+    return true;
+  }
+
+  function getListDropHandlers(targetSectionId: string | null) {
+    const targetId = targetSectionId ?? '__loose__';
+    return {
+      onDragOver(event: DragEvent<HTMLElement>) {
+        const draggedTaskId = readDraggedTaskId(event);
+        if (!draggedTaskId || !canDropTaskIntoSection(draggedTaskId, targetSectionId)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setActiveListDropSectionId(targetId);
+      },
+      onDragLeave(event: DragEvent<HTMLElement>) {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        setActiveListDropSectionId(current => (current === targetId ? null : current));
+      },
+      onDrop(event: DragEvent<HTMLElement>) {
+        const draggedTaskId = readDraggedTaskId(event);
+        setActiveListDropSectionId(current => (current === targetId ? null : current));
+        if (!draggedTaskId || !canDropTaskIntoSection(draggedTaskId, targetSectionId)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onMoveTasksToSection([draggedTaskId], targetSectionId);
+      },
+    };
   }
 
   function submitProjectRename(nextName: string) {
@@ -3762,18 +3796,13 @@ function ProjectPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setIsAddSectionDialogOpen(true)}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              title="Add section"
-              aria-label="Add section"
-            >
-              <Plus size={16} />
-            </button>
             <OverflowMenu
               label="Project actions"
               items={[
+                {
+                  label: 'Add section',
+                  onSelect: () => setIsAddSectionDialogOpen(true),
+                },
                 {
                   label: projectView === 'BOARD' ? 'Switch to list view' : 'Switch to board view',
                   onSelect: () => setProjectView(projectView === 'BOARD' ? 'LIST' : 'BOARD'),
@@ -3871,6 +3900,11 @@ function ProjectPage({
                 onPromoteSubtask={onPromoteSubtask}
                 onOpenTask={taskId => navigate(`/task/${taskId}`)}
                 rowActions={renderProjectRowActions}
+                dropTargetState={{
+                  active: activeListDropSectionId === '__loose__',
+                  hint: 'Drop task here to move it out of a section.',
+                  ...getListDropHandlers(null),
+                }}
                 headerActions={(
                   <button
                     onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id })}
@@ -3885,12 +3919,23 @@ function ProjectPage({
 
               {sections.map(section => {
                 const sectionTasks = tasks.filter(task => task.sectionId === section.id);
+                const listDropHandlers = getListDropHandlers(section.id);
                 return (
                   <div key={section.id} className="space-y-3 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-                    <div className="flex items-center justify-between gap-3">
+                    <div
+                      {...listDropHandlers}
+                      className={`flex items-center justify-between gap-3 rounded-[18px] px-2 py-2 transition ${
+                        activeListDropSectionId === section.id ? 'bg-[#FFF1EB] ring-1 ring-inset ring-[#EE6A3C]' : ''
+                      }`}
+                    >
                       <div>
                         <h3 className="text-lg font-semibold text-[#1E2D2F]">{section.name}</h3>
                         <p className="text-sm text-[#6D5C50]">{sectionTasks.length} task{sectionTasks.length === 1 ? '' : 's'}</p>
+                        {activeListDropSectionId === section.id ? (
+                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
+                            Drop task to move it here
+                          </p>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -5685,6 +5730,7 @@ function TaskGroup({
   onStartSelection,
   headerActions,
   rowActions,
+  dropTargetState,
 }: {
   title: string;
   subtitle?: string;
@@ -5704,16 +5750,34 @@ function TaskGroup({
   onStartSelection?: () => void;
   headerActions?: ReactNode;
   rowActions?: (task: Task) => ReactNode;
+  dropTargetState?: {
+    active: boolean;
+    hint: string;
+    onDragOver: (event: DragEvent<HTMLElement>) => void;
+    onDragLeave: (event: DragEvent<HTMLElement>) => void;
+    onDrop: (event: DragEvent<HTMLElement>) => void;
+  };
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const isCollapsed = collapsible && collapsed;
 
   return (
     <section className="rounded-[18px] bg-transparent">
-      <div className="mb-2 flex items-center justify-between gap-3 px-1">
+      <div
+        className={`mb-2 rounded-[18px] px-3 py-2 transition ${dropTargetState?.active ? 'bg-[#FFF1EB] ring-1 ring-inset ring-[#EE6A3C]' : ''}`}
+        onDragOver={dropTargetState?.onDragOver}
+        onDragLeave={dropTargetState?.onDragLeave}
+        onDrop={dropTargetState?.onDrop}
+      >
+        <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-[18px] font-semibold text-[#202020]">{title}</h3>
           {subtitle ? <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p> : null}
+          {dropTargetState?.active ? (
+            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
+              {dropTargetState.hint}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-3">
           {headerActions}
@@ -5728,6 +5792,7 @@ function TaskGroup({
             </button>
           ) : null}
         </div>
+      </div>
       </div>
       {!isCollapsed ? (
         <TaskListBlock
