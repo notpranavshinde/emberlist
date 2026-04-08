@@ -72,7 +72,7 @@ fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
         modifier = Modifier.background(MaterialTheme.colorScheme.background)
     ) {
         item(key = "inbox_header") {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListHeaderVerticalPadding)) {
                 Text(text = "Inbox", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     text = "${parentItems.size} tasks",
@@ -84,6 +84,7 @@ fun InboxScreen(padding: PaddingValues, navController: NavHostController) {
         items(tasks, key = { it.task.id }) { item ->
             TaskRow(
                 item = item,
+                modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding),
                 showExpand = item.hasSubtasks,
                 expanded = item.isExpanded,
                 onToggleExpand = {

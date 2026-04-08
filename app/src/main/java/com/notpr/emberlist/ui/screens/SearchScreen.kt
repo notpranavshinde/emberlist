@@ -150,7 +150,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
             .padding(padding)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ListHorizontalPadding, vertical = ListHeaderVerticalPadding),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
         ) {
             if (searchActive) {
@@ -196,7 +196,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
             }
         }
         LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
         ) {
             items(SmartFilter.values()) { filter ->
@@ -225,7 +225,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
         }
         if (selectionMode) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Start
             ) {
                 LazyRow(
@@ -421,7 +421,7 @@ private fun SearchTaskRowSelectable(
 ) {
     val modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 6.dp)
+        .padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding)
         .pointerInput(selectionMode, selected, item.task.id) {
             detectTapGestures(
                 onTap = {

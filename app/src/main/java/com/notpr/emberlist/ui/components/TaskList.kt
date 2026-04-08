@@ -71,6 +71,7 @@ data class TaskListItem(
 @Composable
 fun TaskRow(
     item: TaskListItem,
+    modifier: Modifier = Modifier,
     onToggle: (TaskEntity) -> Unit,
     onClick: (() -> Unit)? = null,
     onReschedule: ((TaskEntity) -> Unit)? = null,
@@ -129,7 +130,8 @@ fun TaskRow(
         Modifier
     }
     Column(
-        modifier = rowModifier
+        modifier = modifier
+            .then(rowModifier)
             .pointerInput(item.task.id, onReschedule, onDelete) {
                 detectHorizontalDragGestures(
                     onHorizontalDrag = { change, dragAmount ->

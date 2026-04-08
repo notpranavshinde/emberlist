@@ -196,20 +196,21 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     item(key = "section-${section.id}") {
                         Text(
                             text = section.name,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListSectionHeaderVerticalPadding)
                         )
                     }
                     if (sectionTasks.isEmpty()) {
                         item(key = "section-${section.id}-empty") {
                             Text(
                                 text = "No tasks in this section",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                                modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding)
                             )
                         }
                     } else {
                         items(flatItems, key = { it.task.id }) { item ->
                             TaskRow(
                                 item = item,
+                                modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding),
                                 showExpand = item.hasSubtasks,
                                 expanded = item.isExpanded,
                                 onToggleExpand = {
@@ -228,7 +229,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     item(key = "section-null") {
                         Text(
                             text = "No Section",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                            modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListSectionHeaderVerticalPadding)
                         )
                     }
                     val unsectionedItems = unsectioned.map { task ->
@@ -248,6 +249,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     items(flatUnsectioned, key = { it.task.id }) { item ->
                         TaskRow(
                             item = item,
+                            modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding),
                             showExpand = item.hasSubtasks,
                             expanded = item.isExpanded,
                             onToggleExpand = {

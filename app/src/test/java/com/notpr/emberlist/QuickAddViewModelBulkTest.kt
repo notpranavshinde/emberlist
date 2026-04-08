@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.data.model.ProjectEntity
+import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddViewModel
@@ -233,5 +234,101 @@ class QuickAddViewModelBulkTest {
         val task = repository.tasks.values.single()
         assertEquals("pillows", task.title)
         assertEquals("project-to-buy", task.projectId)
+    }
+
+    @Test
+    fun saveTaskUsesExistingSpacedProjectAndSectionWithoutLeakingParserText() = runTest(dispatcher) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val viewModel = QuickAddViewModel(repository, scheduler)
+        val project = ProjectEntity(
+            id = "project-to-buy",
+            name = "to buy",
+            color = "#EE6A3C",
+            favorite = false,
+            order = 0,
+            archived = false,
+            viewPreference = null,
+            createdAt = 0L,
+            updatedAt = 0L,
+            deletedAt = null
+        )
+        val section = SectionEntity(
+            id = "section-home-decor",
+            projectId = project.id,
+            name = "home decor",
+            order = 0,
+            createdAt = 0L,
+            updatedAt = 0L,
+            deletedAt = null
+        )
+        repository.upsertProject(project)
+        repository.upsertSection(section)
+        advanceUntilIdle()
+
+        viewModel.updateInput("pillows #to buy/home decor")
+        viewModel.saveTask {}
+        advanceUntilIdle()
+
+        val task = repository.tasks.values.single()
+        assertEquals("pillows", task.title)
+        assertEquals(project.id, task.projectId)
+        assertEquals(section.id, task.sectionId)
+        assertEquals(1, repository.projects.size)
+        assertEquals(1, repository.sections.size)
+    }
+
+    @Test
+    fun saveTaskDoesNotCreateNewSpacedProjectFromOverride() = runTest(dispatcher) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val viewModel = QuickAddViewModel(repository, scheduler)
+
+        viewModel.setProjectOverride("to buy")
+        viewModel.updateInput("pillows")
+        viewModel.saveTask {}
+        advanceUntilIdle()
+
+        val task = repository.tasks.values.single()
+        assertEquals("pillows", task.title)
+        assertNull(task.projectId)
+        assertTrue(repository.projects.isEmpty())
+    }
+
+    @Test
+    fun saveTaskDoesNotCreateNewSpacedSectionFromOverride() = runTest(dispatcher) {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val repository = FakeTaskRepository()
+        val scheduler = ReminderScheduler(context, repository)
+        val viewModel = QuickAddViewModel(repository, scheduler)
+        repository.upsertProject(
+            ProjectEntity(
+                id = "project-shopping",
+                name = "shopping",
+                color = "#EE6A3C",
+                favorite = false,
+                order = 0,
+                archived = false,
+                viewPreference = null,
+                createdAt = 0L,
+                updatedAt = 0L,
+                deletedAt = null
+            )
+        )
+        advanceUntilIdle()
+
+        viewModel.setProjectOverride("shopping")
+        viewModel.setSectionOverride("home decor")
+        viewModel.updateInput("pillows")
+        viewModel.saveTask {}
+        advanceUntilIdle()
+
+        val task = repository.tasks.values.single()
+        assertEquals("pillows", task.title)
+        assertEquals("project-shopping", task.projectId)
+        assertNull(task.sectionId)
+        assertTrue(repository.sections.isEmpty())
     }
 }

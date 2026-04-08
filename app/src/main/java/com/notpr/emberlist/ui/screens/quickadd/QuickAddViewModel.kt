@@ -208,6 +208,8 @@ class QuickAddViewModel(
             val existing = repository.getProjectByName(name)
             if (existing != null) {
                 existing.id
+            } else if (name.any(Char::isWhitespace)) {
+                null
             } else {
                 val newProject = ProjectEntity(
                     id = UUID.randomUUID().toString(),
@@ -230,6 +232,8 @@ class QuickAddViewModel(
             val existing = repository.getSectionByName(projectId, sectionName)
             if (existing != null) {
                 existing.id
+            } else if (sectionName.any(Char::isWhitespace)) {
+                null
             } else {
                 val newSection = com.notpr.emberlist.data.model.SectionEntity(
                     id = UUID.randomUUID().toString(),

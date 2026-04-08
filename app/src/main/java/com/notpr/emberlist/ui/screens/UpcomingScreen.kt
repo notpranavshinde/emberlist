@@ -128,7 +128,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
         modifier = Modifier.background(MaterialTheme.colorScheme.background)
     ) {
         item(key = "upcoming_header") {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListHeaderVerticalPadding)) {
                 Text(text = "Upcoming", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     text = "${parentItems.size} tasks",
@@ -140,7 +140,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
         if (selectionMode) {
             item(key = "upcoming_bulk") {
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding),
                     horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)
                 ) {
                     item {
@@ -184,7 +184,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
             item(key = date.toString()) {
                 Text(
                     text = date.format(formatter),
-                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
+                    modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListSectionHeaderVerticalPadding)
                 )
             }
             items(list, key = { it.item.task.id + it.displayDueAt }) { item ->
@@ -211,6 +211,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
                 ) {
                     TaskRow(
                         item = item.item,
+                        modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding),
                         showExpand = item.item.hasSubtasks,
                         expanded = item.item.isExpanded,
                         onToggleExpand = {

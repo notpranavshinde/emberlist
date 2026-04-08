@@ -155,7 +155,7 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         modifier = Modifier.background(MaterialTheme.colorScheme.background)
     ) {
         item(key = "today_header") {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Column(modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListHeaderVerticalPadding)) {
                 Text(text = "Today", style = MaterialTheme.typography.headlineSmall)
                 Text(
                     text = "${parentItems.size} tasks",
@@ -167,7 +167,7 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         if (selectionMode) {
             item(key = "bulk_actions") {
                 LazyRow(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     item {
@@ -210,7 +210,10 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         if (overdue.isNotEmpty()) {
             item(key = "overdue_header") {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(
+                        horizontal = ListHorizontalPadding,
+                        vertical = ListSectionHeaderVerticalPadding
+                    ),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(text = "Overdue", style = MaterialTheme.typography.titleSmall)
@@ -275,7 +278,7 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = ListHorizontalPadding, vertical = ListSectionHeaderVerticalPadding)
                         .clickable { completedExpanded = !completedExpanded },
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -405,7 +408,7 @@ private fun TaskRowSelectable(
 ) {
     val modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 6.dp)
+        .padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding)
         .pointerInput(selectionMode, selected, item.task.id) {
             detectTapGestures(
                 onTap = {
