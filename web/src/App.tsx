@@ -1,17 +1,20 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ChangeEvent, ComponentType, DragEvent, FormEvent, ReactNode } from 'react';
+import type { CSSProperties, ChangeEvent, ComponentType, DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import {
   Calendar,
+  CalendarDays,
   Check,
   ChevronRight,
   Cloud,
   Download,
+  Flag,
   Folder,
   GripVertical,
   Home,
   Import,
   Layers3,
   ListTodo,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Search,
@@ -3636,7 +3639,12 @@ function ProjectPage({
   const [sectionRenameState, setSectionRenameState] = useState<{ id: string; value: string } | null>(null);
   const [sectionDeleteState, setSectionDeleteState] = useState<{ id: string; name: string } | null>(null);
   const [isProjectDeleteDialogOpen, setIsProjectDeleteDialogOpen] = useState(false);
-  const sectionInputRef = useRef<HTMLInputElement | null>(null);
+  const [isAddSectionDialogOpen, setIsAddSectionDialogOpen] = useState(false);
+  const [projectTaskActionState, setProjectTaskActionState] = useState<{
+    mode: 'reschedule' | 'priority';
+    taskId: string;
+  } | null>(null);
+  const [projectTaskActionDate, setProjectTaskActionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -3644,7 +3652,7 @@ function ProjectPage({
       if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== 's') return;
       event.preventDefault();
-      sectionInputRef.current?.focus();
+      setIsAddSectionDialogOpen(true);
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -3715,10 +3723,12 @@ function ProjectPage({
     setSectionRenameState(null);
   }
 
-  function submitSection(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onCreateSection(currentProject.id, sectionName);
+  function submitSectionName(nextName: string) {
+    const trimmedName = nextName.trim();
+    if (!trimmedName) return;
+    onCreateSection(currentProject.id, trimmedName);
     setSectionName('');
+    setIsAddSectionDialogOpen(false);
   }
 
   function setProjectView(viewPreference: Project['viewPreference']) {
@@ -3728,51 +3738,16 @@ function ProjectPage({
   function renderProjectRowActions(task: Task) {
     if (task.status !== 'OPEN') return null;
     return (
-      <>
-        <button
-          type="button"
-          onClick={event => {
-            event.stopPropagation();
-            onRescheduleTasks([task.id], todayStartMs);
-          }}
-          className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] transition hover:bg-white"
-        >
-          Today
-        </button>
-        <button
-          type="button"
-          onClick={event => {
-            event.stopPropagation();
-            onRescheduleTasks([task.id], addDays(todayStartMs, 1).getTime());
-          }}
-          className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] transition hover:bg-white"
-        >
-          Tomorrow
-        </button>
-        <button
-          type="button"
-          onClick={event => {
-            event.stopPropagation();
-            onRescheduleTasks([task.id], addDays(todayStartMs, 7).getTime());
-          }}
-          className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] transition hover:bg-white"
-        >
-          Next week
-        </button>
-        <select
-          value={task.priority}
-          onClick={event => event.stopPropagation()}
-          onChange={event => {
-            event.stopPropagation();
-            onSetTasksPriority([task.id], event.target.value as Priority);
-          }}
-          className="rounded-full border border-[#E1D5CA] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#6D5C50] outline-none transition hover:bg-[#FBF7F3]"
-        >
-          {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
-            <option key={priority} value={priority}>{priority}</option>
-          ))}
-        </select>
-      </>
+      <ProjectTaskRowActions
+        task={task}
+        todayStartMs={todayStartMs}
+        actionState={projectTaskActionState}
+        actionDate={projectTaskActionDate}
+        onSetActionState={setProjectTaskActionState}
+        onSetActionDate={setProjectTaskActionDate}
+        onRescheduleTasks={onRescheduleTasks}
+        onSetTasksPriority={onSetTasksPriority}
+      />
     );
   }
 
@@ -3788,38 +3763,44 @@ function ProjectPage({
           </div>
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setProjectView(projectView === 'BOARD' ? 'LIST' : 'BOARD')}
-              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              type="button"
+              onClick={() => setIsAddSectionDialogOpen(true)}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              title="Add section"
+              aria-label="Add section"
             >
-              {projectView === 'BOARD' ? 'List view' : 'Board view'}
+              <Plus size={16} />
             </button>
-            <button
-              onClick={() => {
-                setProjectRenameValue(currentProject.name);
-                setIsProjectRenameDialogOpen(true);
-              }}
-              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-            >
-              Rename
-            </button>
-            <button
-              onClick={toggleArchiveProject}
-              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-            >
-              {currentProject.archived ? 'Unarchive' : 'Archive'}
-            </button>
-            <button
-              onClick={() => setIsProjectDeleteDialogOpen(true)}
-              className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
-            >
-              Delete
-            </button>
+            <OverflowMenu
+              label="Project actions"
+              items={[
+                {
+                  label: projectView === 'BOARD' ? 'Switch to list view' : 'Switch to board view',
+                  onSelect: () => setProjectView(projectView === 'BOARD' ? 'LIST' : 'BOARD'),
+                },
+                {
+                  label: 'Rename project',
+                  onSelect: () => {
+                    setProjectRenameValue(currentProject.name);
+                    setIsProjectRenameDialogOpen(true);
+                  },
+                },
+                {
+                  label: currentProject.archived ? 'Unarchive project' : 'Archive project',
+                  onSelect: toggleArchiveProject,
+                },
+                {
+                  label: 'Delete project',
+                  tone: 'destructive',
+                  onSelect: () => setIsProjectDeleteDialogOpen(true),
+                },
+              ]}
+            />
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-        <div className="space-y-4">
+      <section className="space-y-4">
           {projectView === 'BOARD' ? (
             <div className="grid gap-4 xl:grid-cols-2">
               {boardColumns.map(column => (
@@ -3855,9 +3836,11 @@ function ProjectPage({
                     </div>
                     <button
                       onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: column.sectionId })}
-                      className="rounded-full bg-[#EE6A3C] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#d75e33]"
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EE6A3C] text-white transition hover:bg-[#d75e33]"
+                      title="Add task"
+                      aria-label="Add task"
                     >
-                      Add task
+                      <Plus size={16} />
                     </button>
                   </div>
                   <TaskListBlock
@@ -3891,9 +3874,11 @@ function ProjectPage({
                 headerActions={(
                   <button
                     onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id })}
-                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    title="Add task"
+                    aria-label="Add task"
                   >
-                    Add task
+                    <Plus size={14} />
                   </button>
                 )}
               />
@@ -3910,22 +3895,26 @@ function ProjectPage({
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: section.id })}
-                          className="rounded-full bg-[#EE6A3C] px-3 py-2 text-sm font-medium text-white transition hover:bg-[#d75e33]"
+                          className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EE6A3C] text-white transition hover:bg-[#d75e33]"
+                          title="Add task"
+                          aria-label="Add task"
                         >
-                          Add task
+                          <Plus size={16} />
                         </button>
-                        <button
-                          onClick={() => setSectionRenameState({ id: section.id, value: section.name })}
-                          className="rounded-full border border-[#E1D5CA] px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                        >
-                          Rename
-                        </button>
-                        <button
-                          onClick={() => setSectionDeleteState({ id: section.id, name: section.name })}
-                          className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-2 text-sm font-medium text-[#B64B28] transition hover:bg-[#FDE9E1]"
-                        >
-                          Delete
-                        </button>
+                        <OverflowMenu
+                          label={`Actions for ${section.name}`}
+                          items={[
+                            {
+                              label: 'Rename section',
+                              onSelect: () => setSectionRenameState({ id: section.id, value: section.name }),
+                            },
+                            {
+                              label: 'Delete section',
+                              tone: 'destructive',
+                              onSelect: () => setSectionDeleteState({ id: section.id, name: section.name }),
+                            },
+                          ]}
+                        />
                       </div>
                     </div>
                     <TaskListBlock
@@ -3961,53 +3950,23 @@ function ProjectPage({
               defaultCollapsed
             />
           ) : null}
-        </div>
-
-        <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Sections</p>
-          <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">Organize this project</h3>
-          <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-            Sections help break a project into swimlanes without changing the synced task model.
-          </p>
-          <form onSubmit={submitSection} className="mt-5 flex gap-3">
-            <input
-              ref={sectionInputRef}
-              value={sectionName}
-              onChange={event => setSectionName(event.target.value)}
-              placeholder="New section"
-              className="flex-1 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-            <button
-              type="submit"
-              className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-            >
-              Add
-            </button>
-          </form>
-
-          <div className="mt-5 space-y-3">
-            {sections.length ? (
-              <div className="flex flex-wrap gap-2">
-                {sections.map(section => (
-                  <span
-                    key={section.id}
-                    className="rounded-full border border-[#E7DDD4] bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]"
-                  >
-                    {section.name}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-[18px] border border-dashed border-[#D9CABC] bg-[#FBF7F3] px-4 py-6 text-center">
-                <p className="text-sm font-semibold text-[#1E2D2F]">No sections yet</p>
-                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                  Add a section to break this project into parts.
-                </p>
-              </div>
-            )}
-          </div>
-        </section>
       </section>
+
+      {isAddSectionDialogOpen ? (
+        <TextInputDialog
+          title="Add section"
+          description="Create a section for this project."
+          label="Section name"
+          value={sectionName}
+          submitLabel="Create section"
+          onChange={setSectionName}
+          onClose={() => {
+            setIsAddSectionDialogOpen(false);
+            setSectionName('');
+          }}
+          onSubmit={submitSectionName}
+        />
+      ) : null}
 
       {isProjectRenameDialogOpen ? (
         <TextInputDialog
@@ -6015,7 +5974,7 @@ function TaskRow({
           onPromoteSubtask(task.id);
         }
       }}
-      className={`flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${isDropActive
+      className={`group/task-row flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${isDropActive
         ? 'bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]'
         : selected
         ? 'bg-[#FFF3EE]'
@@ -6091,9 +6050,9 @@ function TaskRow({
           <span className="md:hidden">{locationLabel}</span>
         </div>
       </div>
-      <div className="mt-0.5 hidden min-w-[180px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
+      <div className="mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
         {rowActions ? (
-          <div className="flex flex-wrap justify-end gap-1.5">
+          <div className="flex flex-wrap justify-end gap-1.5 opacity-0 pointer-events-none transition group-hover/task-row:opacity-100 group-hover/task-row:pointer-events-auto group-focus-within/task-row:opacity-100 group-focus-within/task-row:pointer-events-auto">
             {rowActions(task)}
           </div>
         ) : null}
@@ -6287,6 +6246,236 @@ function TextInputDialog({
         </Field>
       </form>
     </ChoiceDialog>
+  );
+}
+
+function OverflowMenu({
+  label,
+  items,
+}: {
+  label: string;
+  items: Array<{ label: string; onSelect: () => void; tone?: 'default' | 'destructive' }>;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (containerRef.current?.contains(event.target as Node | null)) return;
+      setIsOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setIsOpen(false);
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-label={label}
+        onClick={event => {
+          event.stopPropagation();
+          setIsOpen(current => !current);
+        }}
+        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {isOpen ? (
+        <div className="absolute right-0 top-full z-20 mt-2 min-w-[220px] overflow-hidden rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl">
+          {items.map(item => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={event => {
+                event.stopPropagation();
+                setIsOpen(false);
+                item.onSelect();
+              }}
+              className={`flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-sm font-medium transition ${
+                item.tone === 'destructive'
+                  ? 'text-[#B64B28] hover:bg-[#FFF1EB]'
+                  : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ProjectTaskRowActions({
+  task,
+  todayStartMs,
+  actionState,
+  actionDate,
+  onSetActionState,
+  onSetActionDate,
+  onRescheduleTasks,
+  onSetTasksPriority,
+}: {
+  task: Task;
+  todayStartMs: number;
+  actionState: { mode: 'reschedule' | 'priority'; taskId: string } | null;
+  actionDate: string;
+  onSetActionState: (state: { mode: 'reschedule' | 'priority'; taskId: string } | null) => void;
+  onSetActionDate: (value: string) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+}) {
+  const isRescheduleOpen = actionState?.mode === 'reschedule' && actionState.taskId === task.id;
+  const isPriorityOpen = actionState?.mode === 'priority' && actionState.taskId === task.id;
+
+  function openRescheduleDialog(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    onSetActionDate(format(new Date(task.dueAt ?? todayStartMs), 'yyyy-MM-dd'));
+    onSetActionState({ mode: 'reschedule', taskId: task.id });
+  }
+
+  function openPriorityDialog(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.stopPropagation();
+    onSetActionState({ mode: 'priority', taskId: task.id });
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        title="Reschedule task"
+        aria-label={`Reschedule ${task.title}`}
+        onClick={openRescheduleDialog}
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+      >
+        <CalendarDays size={14} />
+      </button>
+      <button
+        type="button"
+        title={`Priority ${task.priority}`}
+        aria-label={`Change priority for ${task.title}`}
+        onClick={openPriorityDialog}
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+      >
+        <Flag size={14} />
+      </button>
+
+      {isRescheduleOpen ? (
+        <ChoiceDialog
+          title="Reschedule task"
+          description={`Pick a new date for "${task.title}".`}
+          onClose={() => onSetActionState(null)}
+          footer={(
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => onSetActionState(null)}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const dueAt = parseInputValue(actionDate, true);
+                  if (dueAt === null) return;
+                  onRescheduleTasks([task.id], dueAt);
+                  onSetActionState(null);
+                }}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+              >
+                Save date
+              </button>
+            </div>
+          )}
+        >
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onRescheduleTasks([task.id], todayStartMs);
+                  onSetActionState(null);
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRescheduleTasks([task.id], addDays(todayStartMs, 1).getTime());
+                  onSetActionState(null);
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Tomorrow
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onRescheduleTasks([task.id], addDays(todayStartMs, 7).getTime());
+                  onSetActionState(null);
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Next week
+              </button>
+            </div>
+            <Field label="Choose a date">
+              <input
+                type="date"
+                value={actionDate}
+                onChange={event => onSetActionDate(event.target.value)}
+                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+              />
+            </Field>
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {isPriorityOpen ? (
+        <ChoiceDialog
+          title="Change priority"
+          description={`Update the priority for "${task.title}".`}
+          onClose={() => onSetActionState(null)}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+              <button
+                key={priority}
+                type="button"
+                onClick={() => {
+                  onSetTasksPriority([task.id], priority);
+                  onSetActionState(null);
+                }}
+                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  task.priority === priority
+                    ? 'border-[#EE6A3C] bg-[#FFF1EB] text-[#B64B28]'
+                    : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                }`}
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+    </>
   );
 }
 
