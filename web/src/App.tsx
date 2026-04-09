@@ -6194,10 +6194,10 @@ function RescheduleDialog({
       title={title}
       description={description}
       onClose={onClose}
-      dialogClassName="max-w-[960px]"
+      dialogClassName="max-w-[1120px]"
       childrenClassName="overflow-x-hidden pr-0"
     >
-      <div className="grid gap-5 md:grid-cols-[200px_minmax(380px,1fr)]">
+      <div className="grid gap-6 md:grid-cols-[190px_minmax(440px,1fr)]">
         <div className="space-y-1">
           {shortcutItems.map((item, index) => {
             const Icon = item.icon;
@@ -6220,7 +6220,7 @@ function RescheduleDialog({
             );
           })}
         </div>
-        <div className="border-t border-[#EDE3DA] pt-4 md:min-w-[380px] md:border-l md:border-t-0 md:pl-5 md:pt-0">
+        <div className="border-t border-[#EDE3DA] pt-4 md:min-w-[440px] md:border-l md:border-t-0 md:pl-6 md:pt-0">
           <div className="flex items-center justify-between">
             <p className="text-base font-semibold text-[#1E2D2F]">{format(visibleMonthStart, 'MMM yyyy')}</p>
             <div className="flex items-center gap-1">
