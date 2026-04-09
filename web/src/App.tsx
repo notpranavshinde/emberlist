@@ -2022,6 +2022,7 @@ function WorkspaceShell({
         >
           <Field label="New date">
             <input
+              data-dialog-autofocus="true"
               type="date"
               value={focusedTaskActionDate}
               onChange={event => setFocusedTaskActionDate(event.target.value)}
@@ -2039,6 +2040,7 @@ function WorkspaceShell({
         >
           <div className="flex flex-wrap gap-2">
             <button
+              data-dialog-autofocus="true"
               type="button"
               onClick={() => submitFocusedTaskMove(null)}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
@@ -2069,6 +2071,7 @@ function WorkspaceShell({
             {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
               <button
                 key={priority}
+                data-dialog-autofocus={priority === 'P1' ? 'true' : undefined}
                 type="button"
                 onClick={() => submitFocusedTaskPriority(priority)}
                 className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
@@ -6162,6 +6165,8 @@ function ChoiceDialog({
   footer?: ReactNode;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -6173,9 +6178,26 @@ function ChoiceDialog({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const preferredTarget = dialog.querySelector<HTMLElement>('[data-dialog-autofocus="true"]');
+    if (preferredTarget) {
+      preferredTarget.focus();
+      return;
+    }
+    const fallbackTarget = dialog.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+    );
+    fallbackTarget?.focus();
+  }, []);
+
   return (
     <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
-      <div className="flex max-h-[min(82vh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl">
+      <div
+        ref={dialogRef}
+        className="flex max-h-[min(82vh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl"
+      >
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="text-xl font-semibold text-[#1E2D2F]">{title}</h3>
