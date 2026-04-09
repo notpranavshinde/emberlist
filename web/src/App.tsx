@@ -6161,9 +6161,8 @@ function RescheduleDialog({
   );
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(visibleMonthStart);
-    const monthEnd = endOfMonth(monthStart);
     const gridStart = startOfWeek(monthStart, { weekStartsOn });
-    const gridEnd = addDays(startOfWeek(monthEnd, { weekStartsOn }), 41);
+    const gridEnd = addDays(gridStart, 41);
     return eachDayOfInterval({ start: gridStart, end: gridEnd });
   }, [visibleMonthStart, weekStartsOn]);
   const weekdayLabels = useMemo(() => {
@@ -6196,9 +6195,9 @@ function RescheduleDialog({
       description={description}
       onClose={onClose}
       dialogClassName="max-w-[720px]"
-      childrenClassName="overflow-visible pr-0"
+      childrenClassName="overflow-x-hidden pr-0"
     >
-      <div className="grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
+      <div className="grid gap-5 sm:grid-cols-[240px_minmax(0,1fr)]">
         <div className="space-y-1">
           {shortcutItems.map((item, index) => {
             const Icon = item.icon;
@@ -6221,7 +6220,7 @@ function RescheduleDialog({
             );
           })}
         </div>
-        <div className="border-t border-[#EDE3DA] pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+        <div className="border-t border-[#EDE3DA] pt-4 sm:border-l sm:border-t-0 sm:pl-5 sm:pt-0">
           <div className="flex items-center justify-between">
             <p className="text-base font-semibold text-[#1E2D2F]">{format(visibleMonthStart, 'MMM yyyy')}</p>
             <div className="flex items-center gap-1">
