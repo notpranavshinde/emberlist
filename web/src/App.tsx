@@ -1875,6 +1875,11 @@ function WorkspaceShell({
                     payload={payload}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                    onRescheduleTasks={onRescheduleTasks}
+                    onPostponeTasks={onPostponeTasks}
+                    onMoveTasksToProject={onMoveTasksToProject}
+                    onSetTasksPriority={onSetTasksPriority}
+                    onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
                   />
                 }
@@ -1895,6 +1900,7 @@ function WorkspaceShell({
                     onPostponeTasks={onPostponeTasks}
                     onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
+                    onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
                     onOpenQuickAdd={onOpenQuickAdd}
                   />
@@ -3466,25 +3472,186 @@ function InboxPage({
   payload,
   onToggleTask,
   onReparentTaskAsSubtask,
+  onRescheduleTasks,
+  onPostponeTasks,
+  onMoveTasksToProject,
+  onSetTasksPriority,
+  onDeleteTasks,
   onPromoteSubtask,
 }: {
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
+  onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const tasks = getInboxTasks(payload);
   const completedTasks = getCompletedInboxTasks(payload);
+  const projects = useMemo(() => getActiveProjects(payload), [payload]);
+  const visibleTaskIds = useMemo(() => new Set(tasks.map(task => task.id)), [tasks]);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
+  const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
+  const selectedIds = useMemo(
+    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
+    [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedTasks = useMemo(
+    () => selectedIds
+      .map(taskId => tasks.find(task => task.id === taskId) ?? null)
+      .filter((task): task is Task => task !== null),
+    [selectedIds, tasks]
+  );
+  const selectedCount = selectedIds.length;
+
+  function clearSelection() {
+    setSelectionMode(false);
+    setSelectedTaskIds(new Set());
+  }
+
+  function toggleSelection(taskId: string) {
+    setSelectedTaskIds(current => {
+      const next = new Set(current);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function openSelection() {
+    setSelectionMode(true);
+  }
+
+  function closeDialog() {
+    setActiveDialog(null);
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setSelectionMode(true);
+        setSelectedTaskIds(new Set(tasks.map(task => task.id)));
+        return;
+      }
+
+      if (selectionMode && !activeDialog) {
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+          event.preventDefault();
+          setActiveDialog('reschedule');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          setActiveDialog('move');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+          event.preventDefault();
+          setActiveDialog('priority');
+          return;
+        }
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+          event.preventDefault();
+          setActiveDialog('delete');
+          return;
+        }
+      }
+
+      if (event.key === 'Escape') {
+        if (activeDialog) {
+          event.preventDefault();
+          closeDialog();
+          return;
+        }
+        if (selectionMode) {
+          event.preventDefault();
+          clearSelection();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeDialog, selectionMode, tasks]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
         eyebrow="Inbox"
         title="Unsorted tasks"
         description="These tasks are not attached to a project yet. Open one to move it into a project or section."
+        actions={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => (selectionMode ? clearSelection() : openSelection())}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                }`}
+            >
+              {selectionMode ? 'Cancel selection' : 'Select tasks'}
+            </button>
+            {selectionMode ? (
+              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+                {selectedCount} selected
+              </span>
+            ) : null}
+          </div>
+        )}
       />
+
+      {selectionMode ? (
+        <section className="rounded-[24px] border border-[#E1D5CA] bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('reschedule')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('move')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('priority')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Priority
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('delete')}
+              className="rounded-full border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE3D7] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Delete
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <TaskGroup
         title="Inbox"
         payload={payload}
@@ -3495,6 +3662,10 @@ function InboxPage({
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onPromoteSubtask={onPromoteSubtask}
         onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        selectionMode={selectionMode}
+        selectedTaskIds={selectedTaskIds}
+        onToggleSelection={toggleSelection}
+        onStartSelection={openSelection}
       />
 
       {completedTasks.length ? (
@@ -3511,6 +3682,101 @@ function InboxPage({
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
+        />
+      ) : null}
+
+      {activeDialog === 'reschedule' ? (
+        <RescheduleDialog
+          title="Reschedule tasks"
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          tasks={selectedTasks}
+          onClose={closeDialog}
+          onRescheduleTasks={(taskIds, dueAt) => {
+            onRescheduleTasks(taskIds, dueAt);
+            clearSelection();
+          }}
+          onPostponeTasks={taskIds => {
+            onPostponeTasks(taskIds);
+            clearSelection();
+          }}
+        />
+      ) : null}
+
+      {activeDialog === 'move' ? (
+        <ChoiceDialog
+          title="Move tasks"
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or keep them in Inbox.`}
+          onClose={closeDialog}
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              data-dialog-autofocus="true"
+              type="button"
+              onClick={() => {
+                onMoveTasksToProject(selectedIds, null);
+                closeDialog();
+                clearSelection();
+              }}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            >
+              Inbox
+            </button>
+            {projects.map(project => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => {
+                  onMoveTasksToProject(selectedIds, project.id);
+                  closeDialog();
+                  clearSelection();
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {project.name}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'priority' ? (
+        <ChoiceDialog
+          title="Change priority"
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          onClose={closeDialog}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map((priority, index) => (
+              <button
+                key={priority}
+                data-dialog-autofocus={index === 0 ? 'true' : undefined}
+                type="button"
+                onClick={() => {
+                  onSetTasksPriority(selectedIds, priority);
+                  closeDialog();
+                  clearSelection();
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'delete' ? (
+        <ConfirmDialog
+          title="Delete tasks"
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          confirmLabel="Delete tasks"
+          tone="destructive"
+          onClose={closeDialog}
+          onConfirm={() => {
+            onDeleteTasks(selectedIds);
+            closeDialog();
+            clearSelection();
+          }}
         />
       ) : null}
     </div>
@@ -3530,6 +3796,7 @@ function ProjectPage({
   onPostponeTasks,
   onMoveTasksToSection,
   onSetTasksPriority,
+  onDeleteTasks,
   onPromoteSubtask,
   onOpenQuickAdd,
 }: {
@@ -3545,6 +3812,7 @@ function ProjectPage({
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
 }) {
@@ -3564,33 +3832,93 @@ function ProjectPage({
     mode: 'reschedule' | 'priority';
     taskId: string;
   } | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
+  const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
+  const project = useMemo(() => (projectId ? getProjectById(payload, projectId) : undefined), [payload, projectId]);
+  const tasks = useMemo(() => (projectId ? getProjectTasks(payload, projectId) : []), [payload, projectId]);
+  const completedTasks = useMemo(() => (projectId ? getCompletedProjectTasks(payload, projectId) : []), [payload, projectId]);
+  const sections = useMemo(() => (projectId ? getProjectSections(payload, projectId) : []), [payload, projectId]);
+  const visibleTaskIds = useMemo(() => new Set(tasks.map(task => task.id)), [tasks]);
+  const selectedIds = useMemo(
+    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
+    [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedTasks = useMemo(
+    () => selectedIds
+      .map(taskId => tasks.find(task => task.id === taskId) ?? null)
+      .filter((task): task is Task => task !== null),
+    [selectedIds, tasks]
+  );
+  const selectedCount = selectedIds.length;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
-      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (event.key.toLowerCase() !== 's') return;
-      event.preventDefault();
-      setIsAddSectionDialogOpen(true);
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+        event.preventDefault();
+        setSelectionMode(true);
+        setSelectedTaskIds(new Set(tasks.map(task => task.id)));
+        return;
+      }
+
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        setIsAddSectionDialogOpen(true);
+        return;
+      }
+
+      if (selectionMode && !activeDialog) {
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+          event.preventDefault();
+          setActiveDialog('reschedule');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+          event.preventDefault();
+          setActiveDialog('move');
+          return;
+        }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+          event.preventDefault();
+          setActiveDialog('priority');
+          return;
+        }
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+          event.preventDefault();
+          setActiveDialog('delete');
+          return;
+        }
+      }
+
+      if (event.key === 'Escape') {
+        if (activeDialog) {
+          event.preventDefault();
+          setActiveDialog(null);
+          return;
+        }
+        if (selectionMode) {
+          event.preventDefault();
+          setSelectionMode(false);
+          setSelectedTaskIds(new Set());
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeDialog, selectionMode, tasks]);
 
   if (!projectId) {
     return <EmptyState title="Project not found" description="Select a project from Browse." />;
   }
 
-  const project = getProjectById(payload, projectId);
   if (!project) {
     return <EmptyState title="Project not found" description="This project may have been deleted or archived elsewhere." />;
   }
 
   const currentProject = project;
-  const tasks = getProjectTasks(payload, projectId);
-  const completedTasks = getCompletedProjectTasks(payload, projectId);
-  const sections = getProjectSections(payload, projectId);
   const unsectionedTasks = tasks.filter(task => !task.sectionId);
   const projectView = currentProject.viewPreference ?? 'LIST';
   const boardColumns = [
@@ -3701,8 +4029,29 @@ function ProjectPage({
     );
   }
 
+  function clearSelection() {
+    setSelectionMode(false);
+    setSelectedTaskIds(new Set());
+  }
+
+  function toggleSelection(taskId: string) {
+    setSelectedTaskIds(current => {
+      const next = new Set(current);
+      if (next.has(taskId)) {
+        next.delete(taskId);
+      } else {
+        next.add(taskId);
+      }
+      return next;
+    });
+  }
+
+  function openSelection() {
+    setSelectionMode(true);
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <section className="px-1 pb-2 pt-1">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
@@ -3712,6 +4061,21 @@ function ProjectPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => (selectionMode ? clearSelection() : openSelection())}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                }`}
+            >
+              {selectionMode ? 'Cancel selection' : 'Select tasks'}
+            </button>
+            {selectionMode ? (
+              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+                {selectedCount} selected
+              </span>
+            ) : null}
             <OverflowMenu
               label="Project actions"
               items={[
@@ -3744,6 +4108,45 @@ function ProjectPage({
           </div>
         </div>
       </section>
+
+      {selectionMode ? (
+        <section className="rounded-[24px] border border-[#E1D5CA] bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('reschedule')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reschedule
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('move')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Move
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('priority')}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Priority
+            </button>
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={() => setActiveDialog('delete')}
+              className="rounded-full border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE3D7] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Delete
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section className="space-y-4">
           {projectView === 'BOARD' ? (
@@ -3797,6 +4200,10 @@ function ProjectPage({
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onPromoteSubtask={onPromoteSubtask}
                     onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                    selectionMode={selectionMode}
+                    selectedTaskIds={selectedTaskIds}
+                    onToggleSelection={toggleSelection}
+                    onStartSelection={openSelection}
                     rowActions={renderProjectRowActions}
                   />
                 </section>
@@ -3815,6 +4222,10 @@ function ProjectPage({
                 onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                 onPromoteSubtask={onPromoteSubtask}
                 onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                selectionMode={selectionMode}
+                selectedTaskIds={selectedTaskIds}
+                onToggleSelection={toggleSelection}
+                onStartSelection={openSelection}
                 rowActions={renderProjectRowActions}
                 dropTargetState={{
                   active: activeListDropSectionId === '__loose__',
@@ -3887,6 +4298,10 @@ function ProjectPage({
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onPromoteSubtask={onPromoteSubtask}
                       onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                      selectionMode={selectionMode}
+                      selectedTaskIds={selectedTaskIds}
+                      onToggleSelection={toggleSelection}
+                      onStartSelection={openSelection}
                       rowActions={renderProjectRowActions}
                     />
                   </div>
@@ -3976,6 +4391,101 @@ function ProjectPage({
           onConfirm={() => {
             onDeleteSection(sectionDeleteState.id);
             setSectionDeleteState(null);
+          }}
+        />
+      ) : null}
+
+      {activeDialog === 'reschedule' ? (
+        <RescheduleDialog
+          title="Reschedule tasks"
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          tasks={selectedTasks}
+          onClose={() => setActiveDialog(null)}
+          onRescheduleTasks={(taskIds, dueAt) => {
+            onRescheduleTasks(taskIds, dueAt);
+            clearSelection();
+          }}
+          onPostponeTasks={taskIds => {
+            onPostponeTasks(taskIds);
+            clearSelection();
+          }}
+        />
+      ) : null}
+
+      {activeDialog === 'move' ? (
+        <ChoiceDialog
+          title="Move tasks"
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a section or keep them loose.`}
+          onClose={() => setActiveDialog(null)}
+        >
+          <div className="flex flex-wrap gap-2">
+            <button
+              data-dialog-autofocus="true"
+              type="button"
+              onClick={() => {
+                onMoveTasksToSection(selectedIds, null);
+                setActiveDialog(null);
+                clearSelection();
+              }}
+              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            >
+              Loose tasks
+            </button>
+            {sections.map(section => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => {
+                  onMoveTasksToSection(selectedIds, section.id);
+                  setActiveDialog(null);
+                  clearSelection();
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {section.name}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'priority' ? (
+        <ChoiceDialog
+          title="Change priority"
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          onClose={() => setActiveDialog(null)}
+        >
+          <div className="flex flex-wrap gap-2">
+            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map((priority, index) => (
+              <button
+                key={priority}
+                data-dialog-autofocus={index === 0 ? 'true' : undefined}
+                type="button"
+                onClick={() => {
+                  onSetTasksPriority(selectedIds, priority);
+                  setActiveDialog(null);
+                  clearSelection();
+                }}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                {priority}
+              </button>
+            ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {activeDialog === 'delete' ? (
+        <ConfirmDialog
+          title="Delete tasks"
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          confirmLabel="Delete tasks"
+          tone="destructive"
+          onClose={() => setActiveDialog(null)}
+          onConfirm={() => {
+            onDeleteTasks(selectedIds);
+            setActiveDialog(null);
+            clearSelection();
           }}
         />
       ) : null}
