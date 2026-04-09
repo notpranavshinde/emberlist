@@ -6242,12 +6242,12 @@ function RescheduleDialog({
               </button>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-medium uppercase tracking-[0.16em] text-[#9B8576]">
+          <div className="mt-4 grid grid-cols-7 gap-1.5 text-center text-xs font-medium uppercase tracking-[0.16em] text-[#9B8576]">
             {weekdayLabels.map(label => (
               <span key={label}>{label}</span>
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-7 gap-2">
+          <div className="mt-3 grid grid-cols-7 gap-1.5">
             {calendarDays.map(day => {
               const dayStart = startOfDay(day).getTime();
               const inCurrentMonth = day.getMonth() === visibleMonthStart.getMonth();
@@ -6257,7 +6257,7 @@ function RescheduleDialog({
                   key={day.toISOString()}
                   type="button"
                   onClick={() => applyDate(dayStart)}
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm transition ${
+                  className={`flex h-9 w-9 items-center justify-center justify-self-center rounded-full border text-sm transition ${
                     isSelected
                       ? 'border-[#EE6A3C] bg-[#FFF1EB] font-semibold text-[#B64B28]'
                       : inCurrentMonth
