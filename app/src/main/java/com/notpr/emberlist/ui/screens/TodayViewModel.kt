@@ -339,4 +339,32 @@ class TodayViewModel(
             )
         }
     }
+
+    fun reorderTodayTasks(taskIdsInOrder: List<String>) {
+        if (taskIdsInOrder.isEmpty()) return
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val startOfToday = startOfTodayMillis()
+            val todayTasks = repository.observeToday(endOfTodayMillis()).first()
+                .filter { it.parentTaskId == null }
+                .filter { task ->
+                    val dueAt = task.dueAt ?: return@filter false
+                    dueAt >= startOfToday
+                }
+            val tasksById = todayTasks.associateBy { it.id }
+            val before = taskIdsInOrder.mapNotNull { tasksById[it] }
+            if (before.isEmpty()) return@launch
+
+            val updated = before.mapIndexed { index, task ->
+                task.copy(order = index, updatedAt = now)
+            }
+            updated.forEach { repository.upsertTask(it) }
+            undoController.post(
+                UndoEvent(
+                    message = "Undo reorder Today",
+                    undo = { before.forEach { repository.upsertTask(it) } }
+                )
+            )
+        }
+    }
 }

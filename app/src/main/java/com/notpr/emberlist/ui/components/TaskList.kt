@@ -79,6 +79,7 @@ fun TaskRow(
     showExpand: Boolean = false,
     expanded: Boolean = false,
     onToggleExpand: (() -> Unit)? = null,
+    trailingAccessory: (@Composable () -> Unit)? = null,
     dragState: DragToSubtaskState? = null,
     onDropAsSubtask: ((TaskEntity, TaskEntity) -> Unit)? = null
 ) {
@@ -185,6 +186,16 @@ fun TaskRow(
                     )
                 }
                 TaskMetaLine(item = item)
+            }
+            if (trailingAccessory != null) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 4.dp, start = 4.dp)
+                        .size(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    trailingAccessory()
+                }
             }
             if (showExpand) {
                 Icon(
