@@ -4,8 +4,10 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  ChevronLeft,
   ChevronRight,
   Cloud,
+  CircleSlash,
   Download,
   Flag,
   Folder,
@@ -19,6 +21,8 @@ import {
   RefreshCw,
   Search,
   Settings,
+  SunMedium,
+  Sunrise,
   X,
 } from 'lucide-react';
 import {
@@ -31,7 +35,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom';
-import { addDays, endOfDay, format, isToday, isTomorrow, isYesterday, startOfDay } from 'date-fns';
+import { addDays, addMonths, eachDayOfInterval, endOfDay, endOfMonth, format, isSameDay, isToday, isTomorrow, isYesterday, startOfDay, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { RecoveryScreen } from './components/RecoveryScreen';
 import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './lib/banner';
 import {
@@ -71,6 +75,7 @@ import {
   formatClock,
   formatDateTimeValue,
   getDefaultWebDisplayPreferences,
+  getGlobalWebDisplayPreferences,
   setGlobalWebDisplayPreferences,
   type WeekStartsOn,
 } from './lib/webPreferences';
@@ -94,6 +99,7 @@ import {
   getProjectSections,
   getProjectTasks,
   getSubtasks,
+  getTaskPostponeDueAt,
   getTaskReminderDrafts,
   getTaskById,
   getTodayViewData,
@@ -102,6 +108,7 @@ import {
   getUpcomingOpenTasks,
   moveTasksToSection,
   moveTasksToProject,
+  postponeTasks,
   promoteSubtask,
   repairRecurringTasks,
   reparentTaskAsSubtask,
@@ -801,17 +808,39 @@ function App() {
     );
   }
 
-  async function handleRescheduleTasks(taskIds: string[], dueAt: number) {
+  async function handleRescheduleTasks(taskIds: string[], dueAt: number | null) {
     if (!taskIds.length) return;
     await applyUndoablePayloadUpdate(
       current => rescheduleTasksToDate(current, taskIds, dueAt),
       {
-        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`,
-        undoMessage: 'Reverted task dates.',
+        message: dueAt === null
+          ? `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to no date.`
+          : `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`,
+        undoMessage: dueAt === null ? 'Restored due dates.' : 'Reverted task dates.',
         activity: {
           taskIds,
-          title: taskIds.length === 1 ? 'Rescheduled task' : 'Rescheduled tasks',
-          detail: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to a new date.`,
+          title: dueAt === null
+            ? taskIds.length === 1 ? 'Cleared task date' : 'Cleared task dates'
+            : taskIds.length === 1 ? 'Rescheduled task' : 'Rescheduled tasks',
+          detail: dueAt === null
+            ? `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to no date.`
+            : `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to a new date.`,
+        },
+      }
+    );
+  }
+
+  async function handlePostponeTasks(taskIds: string[]) {
+    if (!taskIds.length) return;
+    await applyUndoablePayloadUpdate(
+      current => postponeTasks(current, taskIds),
+      {
+        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} postponed.`,
+        undoMessage: 'Reverted postponed tasks.',
+        activity: {
+          taskIds,
+          title: taskIds.length === 1 ? 'Postponed task' : 'Postponed tasks',
+          detail: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to the next occurrence.`,
         },
       }
     );
@@ -1160,6 +1189,7 @@ function App() {
         onArchiveTask={taskId => void handleArchiveTask(taskId)}
         onDeleteTask={taskId => void handleDeleteTask(taskId)}
         onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
+        onPostponeTasks={taskIds => void handlePostponeTasks(taskIds)}
         onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
         onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
         onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
@@ -1234,7 +1264,8 @@ type WorkspaceShellProps = {
   onToggleTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
-  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
@@ -1295,6 +1326,7 @@ function WorkspaceShell({
   onArchiveTask,
   onDeleteTask,
   onRescheduleTasks,
+  onPostponeTasks,
   onMoveTasksToProject,
   onMoveTasksToSection,
   onSetTasksPriority,
@@ -1355,7 +1387,6 @@ function WorkspaceShell({
   const [isRestoreBrowserBackupDialogOpen, setIsRestoreBrowserBackupDialogOpen] = useState(false);
   const [focusedTaskActionMode, setFocusedTaskActionMode] = useState<FocusedTaskActionMode | null>(null);
   const [focusedTaskActionTaskIds, setFocusedTaskActionTaskIds] = useState<string[]>([]);
-  const [focusedTaskActionDate, setFocusedTaskActionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
@@ -1428,18 +1459,8 @@ function WorkspaceShell({
   function openFocusedTaskAction(mode: FocusedTaskActionMode) {
     const focusedTaskId = getFocusedTaskRowId();
     if (!focusedTaskId) return;
-    setFocusedTaskActionDate(format(new Date(), 'yyyy-MM-dd'));
     setFocusedTaskActionTaskIds([focusedTaskId]);
     setFocusedTaskActionMode(mode);
-  }
-
-  function submitFocusedTaskReschedule() {
-    if (!focusedTaskActionDate || !focusedTaskActionTaskIds.length) return;
-    const dueAt = parseInputValue(focusedTaskActionDate, true);
-    if (dueAt === null) return;
-    const taskIdToFocus = focusedTaskActionTaskIds[0] ?? null;
-    onRescheduleTasks(focusedTaskActionTaskIds, dueAt);
-    closeFocusedTaskActionDialog(taskIdToFocus);
   }
 
   function submitFocusedTaskMove(projectId: string | null) {
@@ -1786,6 +1807,7 @@ function WorkspaceShell({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
+                    onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
@@ -1801,6 +1823,7 @@ function WorkspaceShell({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
+                    onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
@@ -1816,6 +1839,7 @@ function WorkspaceShell({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
+                    onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
@@ -1831,6 +1855,7 @@ function WorkspaceShell({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
+                    onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
@@ -1867,6 +1892,7 @@ function WorkspaceShell({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
+                    onPostponeTasks={onPostponeTasks}
                     onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onPromoteSubtask={onPromoteSubtask}
@@ -1997,39 +2023,14 @@ function WorkspaceShell({
       ) : null}
 
       {focusedTaskActionMode === 'reschedule' ? (
-        <ChoiceDialog
+        <RescheduleDialog
           title="Reschedule task"
           description={`Choose a new date for ${focusedTaskActionLabel}.`}
+          tasks={focusedTaskActionTasks}
           onClose={() => closeFocusedTaskActionDialog()}
-          footer={(
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => closeFocusedTaskActionDialog()}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitFocusedTaskReschedule}
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-              >
-                Save date
-              </button>
-            </div>
-          )}
-        >
-          <Field label="New date">
-            <input
-              data-dialog-autofocus="true"
-              type="date"
-              value={focusedTaskActionDate}
-              onChange={event => setFocusedTaskActionDate(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-        </ChoiceDialog>
+          onRescheduleTasks={onRescheduleTasks}
+          onPostponeTasks={onPostponeTasks}
+        />
       ) : null}
 
       {focusedTaskActionMode === 'move' ? (
@@ -2118,6 +2119,7 @@ function TodayPage({
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
+  onPostponeTasks,
   onMoveTasksToProject,
   onSetTasksPriority,
   onDeleteTasks,
@@ -2127,7 +2129,8 @@ function TodayPage({
   showCompletedToday: boolean;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
-  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
@@ -2143,7 +2146,6 @@ function TodayPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'reschedule-overdue' | 'move' | 'priority' | 'delete'>(null);
-  const [rescheduleDate, setRescheduleDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const visibleTasks = useMemo(
     () => (showCompletedToday ? [...data.overdue, ...data.today, ...data.completedToday] : [...data.overdue, ...data.today]),
     [data.completedToday, data.overdue, data.today, showCompletedToday]
@@ -2152,6 +2154,12 @@ function TodayPage({
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
     [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedTasks = useMemo(
+    () => selectedIds
+      .map(taskId => visibleTasks.find(task => task.id === taskId) ?? null)
+      .filter((task): task is Task => task !== null),
+    [selectedIds, visibleTasks]
   );
   const selectedCount = selectedIds.length;
 
@@ -2177,7 +2185,6 @@ function TodayPage({
   }
 
   function openDateDialog(mode: 'reschedule-selected' | 'reschedule-overdue') {
-    setRescheduleDate(format(new Date(), 'yyyy-MM-dd'));
     setActiveDialog(mode);
   }
 
@@ -2235,15 +2242,6 @@ function TodayPage({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeDialog, selectionMode, visibleTasks]);
-
-  function submitReschedule(taskIds: string[]) {
-    if (!rescheduleDate || !taskIds.length) return;
-    const dueAt = parseInputValue(rescheduleDate, true);
-    if (dueAt === null) return;
-    onRescheduleTasks(taskIds, dueAt);
-    closeDialog();
-    clearSelection();
-  }
 
   function submitMove(projectId: string | null) {
     if (!selectedIds.length) return;
@@ -2399,73 +2397,31 @@ function TodayPage({
       ) : null}
 
       {activeDialog === 'reschedule-selected' ? (
-        <ChoiceDialog
+        <RescheduleDialog
           title="Reschedule tasks"
           description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          tasks={selectedTasks}
           onClose={closeDialog}
-          footer={(
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => submitReschedule(selectedIds)}
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-              >
-                Save date
-              </button>
-            </div>
-          )}
-        >
-          <Field label="New date">
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={event => setRescheduleDate(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-        </ChoiceDialog>
+          onRescheduleTasks={(taskIds, dueAt) => {
+            onRescheduleTasks(taskIds, dueAt);
+            clearSelection();
+          }}
+          onPostponeTasks={taskIds => {
+            onPostponeTasks(taskIds);
+            clearSelection();
+          }}
+        />
       ) : null}
 
       {activeDialog === 'reschedule-overdue' ? (
-        <ChoiceDialog
+        <RescheduleDialog
           title="Reschedule overdue tasks"
           description={`Choose a new date for ${data.overdue.length} overdue task${data.overdue.length === 1 ? '' : 's'}.`}
+          tasks={data.overdue}
           onClose={closeDialog}
-          footer={(
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => submitReschedule(data.overdue.map(task => task.id))}
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-              >
-                Save date
-              </button>
-            </div>
-          )}
-        >
-          <Field label="New date">
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={event => setRescheduleDate(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-        </ChoiceDialog>
+          onRescheduleTasks={onRescheduleTasks}
+          onPostponeTasks={onPostponeTasks}
+        />
       ) : null}
 
       {activeDialog === 'move' ? (
@@ -2552,6 +2508,7 @@ function UpcomingPage({
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
+  onPostponeTasks,
   onMoveTasksToProject,
   onSetTasksPriority,
   onDeleteTasks,
@@ -2560,7 +2517,8 @@ function UpcomingPage({
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
-  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
@@ -2580,11 +2538,16 @@ function UpcomingPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'move' | 'priority' | 'delete'>(null);
-  const [rescheduleDate, setRescheduleDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(null);
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
     [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedTasks = useMemo(
+    () => selectedIds
+      .map(taskId => visibleTasks.find(task => task.id === taskId) ?? null)
+      .filter((task): task is Task => task !== null),
+    [selectedIds, visibleTasks]
   );
   const selectedCount = selectedIds.length;
 
@@ -2610,7 +2573,6 @@ function UpcomingPage({
   }
 
   function openDateDialog() {
-    setRescheduleDate(format(new Date(), 'yyyy-MM-dd'));
     setActiveDialog('reschedule-selected');
   }
 
@@ -2675,15 +2637,6 @@ function UpcomingPage({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeDialog, selectionMode, visibleTasks]);
-
-  function submitReschedule() {
-    if (!rescheduleDate || !selectedIds.length) return;
-    const dueAt = parseInputValue(rescheduleDate, true);
-    if (dueAt === null) return;
-    onRescheduleTasks(selectedIds, dueAt);
-    closeDialog();
-    clearSelection();
-  }
 
   function submitMove(projectId: string | null) {
     if (!selectedIds.length) return;
@@ -2864,38 +2817,20 @@ function UpcomingPage({
       ) : null}
 
       {activeDialog === 'reschedule-selected' ? (
-        <ChoiceDialog
+        <RescheduleDialog
           title="Reschedule tasks"
           description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          tasks={selectedTasks}
           onClose={closeDialog}
-          footer={(
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitReschedule}
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-              >
-                Save date
-              </button>
-            </div>
-          )}
-        >
-          <Field label="New date">
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={event => setRescheduleDate(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-        </ChoiceDialog>
+          onRescheduleTasks={(taskIds, dueAt) => {
+            onRescheduleTasks(taskIds, dueAt);
+            clearSelection();
+          }}
+          onPostponeTasks={taskIds => {
+            onPostponeTasks(taskIds);
+            clearSelection();
+          }}
+        />
       ) : null}
 
       {activeDialog === 'move' ? (
@@ -2981,6 +2916,7 @@ function SearchPage({
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
+  onPostponeTasks,
   onMoveTasksToProject,
   onSetTasksPriority,
   onDeleteTasks,
@@ -2990,7 +2926,8 @@ function SearchPage({
   payload: SyncPayload;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
-  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
@@ -3006,7 +2943,6 @@ function SearchPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
-  const [rescheduleDate, setRescheduleDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const deferredQuery = useDeferredValue(query);
   const filters = useMemo(() => {
     if (forcedFilter) {
@@ -3044,6 +2980,12 @@ function SearchPage({
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
     [selectedTaskIds, visibleTaskIds]
+  );
+  const selectedTasks = useMemo(
+    () => selectedIds
+      .map(taskId => results.find(task => task.id === taskId) ?? null)
+      .filter((task): task is Task => task !== null),
+    [results, selectedIds]
   );
   const selectedCount = selectedIds.length;
 
@@ -3088,7 +3030,6 @@ function SearchPage({
   }
 
   function openDateDialog() {
-    setRescheduleDate(format(new Date(), 'yyyy-MM-dd'));
     setActiveDialog('reschedule');
   }
 
@@ -3152,15 +3093,6 @@ function SearchPage({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeDialog, results, selectionMode]);
-
-  function submitReschedule() {
-    if (!rescheduleDate || !selectedIds.length) return;
-    const dueAt = parseInputValue(rescheduleDate, true);
-    if (dueAt === null) return;
-    onRescheduleTasks(selectedIds, dueAt);
-    closeDialog();
-    clearSelection();
-  }
 
   function submitMove(projectId: string | null) {
     if (!selectedIds.length) return;
@@ -3321,38 +3253,20 @@ function SearchPage({
       ) : null}
 
       {activeDialog === 'reschedule' ? (
-        <ChoiceDialog
+        <RescheduleDialog
           title="Reschedule tasks"
           description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          tasks={selectedTasks}
           onClose={closeDialog}
-          footer={(
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitReschedule}
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-              >
-                Save date
-              </button>
-            </div>
-          )}
-        >
-          <Field label="New date">
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={event => setRescheduleDate(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-        </ChoiceDialog>
+          onRescheduleTasks={(taskIds, dueAt) => {
+            onRescheduleTasks(taskIds, dueAt);
+            clearSelection();
+          }}
+          onPostponeTasks={taskIds => {
+            onPostponeTasks(taskIds);
+            clearSelection();
+          }}
+        />
       ) : null}
 
       {activeDialog === 'move' ? (
@@ -3613,6 +3527,7 @@ function ProjectPage({
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
+  onPostponeTasks,
   onMoveTasksToSection,
   onSetTasksPriority,
   onPromoteSubtask,
@@ -3626,7 +3541,8 @@ function ProjectPage({
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
-  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onPromoteSubtask: (taskId: string) => void;
@@ -3648,7 +3564,6 @@ function ProjectPage({
     mode: 'reschedule' | 'priority';
     taskId: string;
   } | null>(null);
-  const [projectTaskActionDate, setProjectTaskActionDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -3777,12 +3692,10 @@ function ProjectPage({
     return (
       <ProjectTaskRowActions
         task={task}
-        todayStartMs={todayStartMs}
         actionState={projectTaskActionState}
-        actionDate={projectTaskActionDate}
         onSetActionState={setProjectTaskActionState}
-        onSetActionDate={setProjectTaskActionDate}
         onRescheduleTasks={onRescheduleTasks}
+        onPostponeTasks={onPostponeTasks}
         onSetTasksPriority={onSetTasksPriority}
       />
     );
@@ -6158,12 +6071,16 @@ function ChoiceDialog({
   children,
   footer,
   onClose,
+  dialogClassName,
+  childrenClassName,
 }: {
   title: string;
   description: string;
   children?: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
+  dialogClassName?: string;
+  childrenClassName?: string;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -6196,7 +6113,7 @@ function ChoiceDialog({
     <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
       <div
         ref={dialogRef}
-        className="flex max-h-[min(82vh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl"
+        className={`flex max-h-[min(82vh,760px)] w-full max-w-lg flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl ${dialogClassName ?? ''}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -6212,10 +6129,151 @@ function ChoiceDialog({
             <X size={16} />
           </button>
         </div>
-        {children ? <div className="mt-5 overflow-y-auto pr-1">{children}</div> : null}
+        {children ? <div className={`mt-5 overflow-y-auto pr-1 ${childrenClassName ?? ''}`}>{children}</div> : null}
         {footer ? <div className="mt-5 shrink-0">{footer}</div> : null}
       </div>
     </div>
+  );
+}
+
+function RescheduleDialog({
+  title,
+  description,
+  tasks,
+  onClose,
+  onRescheduleTasks,
+  onPostponeTasks,
+}: {
+  title: string;
+  description: string;
+  tasks: Task[];
+  onClose: () => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
+}) {
+  const todayStartMs = useTodayStartMs();
+  const weekStartsOn = getGlobalWebDisplayPreferences().weekStartsOn;
+  const [visibleMonthStart, setVisibleMonthStart] = useState(() => startOfMonth(new Date(tasks[0]?.dueAt ?? todayStartMs)));
+  const taskIds = useMemo(() => tasks.map(task => task.id), [tasks]);
+  const postponeTargets = useMemo(
+    () => Array.from(new Set(tasks.map(task => getPostponeDate(task, todayStartMs)).filter((value): value is number => value !== null))),
+    [tasks, todayStartMs],
+  );
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(visibleMonthStart);
+    const monthEnd = endOfMonth(monthStart);
+    const gridStart = startOfWeek(monthStart, { weekStartsOn });
+    const gridEnd = addDays(startOfWeek(monthEnd, { weekStartsOn }), 41);
+    return eachDayOfInterval({ start: gridStart, end: gridEnd });
+  }, [visibleMonthStart, weekStartsOn]);
+  const weekdayLabels = useMemo(() => {
+    const weekStart = startOfWeek(todayStartMs, { weekStartsOn });
+    return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) }).map(day => format(day, 'EEEEE'));
+  }, [todayStartMs, weekStartsOn]);
+
+  function applyDate(dueAt: number | null) {
+    onRescheduleTasks(taskIds, dueAt);
+    onClose();
+  }
+
+  function applyPostpone() {
+    onPostponeTasks(taskIds);
+    onClose();
+  }
+
+  const shortcutItems = [
+    { key: 'today', label: 'Today', meta: format(todayStartMs, 'EEE'), icon: SunMedium, onSelect: () => applyDate(todayStartMs) },
+    { key: 'tomorrow', label: 'Tomorrow', meta: format(addDays(todayStartMs, 1), 'EEE'), icon: Sunrise, onSelect: () => applyDate(addDays(todayStartMs, 1).getTime()) },
+    { key: 'weekend', label: 'This weekend', meta: format(getWeekendDate(todayStartMs), 'EEE'), icon: CalendarDays, onSelect: () => applyDate(getWeekendDate(todayStartMs).getTime()) },
+    { key: 'next-week', label: 'Next week', meta: format(getNextWeekDate(todayStartMs, weekStartsOn), 'EEE MMM d'), icon: ChevronRight, onSelect: () => applyDate(getNextWeekDate(todayStartMs, weekStartsOn).getTime()) },
+    { key: 'postpone', label: 'Postpone', meta: postponeTargets.length === 1 ? format(postponeTargets[0], 'EEE MMM d') : 'Varies', icon: RefreshCw, onSelect: applyPostpone },
+    { key: 'no-date', label: 'No Date', meta: null, icon: CircleSlash, onSelect: () => applyDate(null) },
+  ] as const;
+
+  return (
+    <ChoiceDialog
+      title={title}
+      description={description}
+      onClose={onClose}
+      dialogClassName="max-w-[720px]"
+      childrenClassName="overflow-visible pr-0"
+    >
+      <div className="grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
+        <div className="space-y-1">
+          {shortcutItems.map((item, index) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                data-dialog-autofocus={index === 0 ? 'true' : undefined}
+                type="button"
+                onClick={item.onSelect}
+                className="flex w-full items-center gap-3 rounded-[18px] px-3 py-2 text-left transition hover:bg-[#FBF7F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EE6A3C]"
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF1EB] text-[#EE6A3C]">
+                  <Icon size={16} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[#1E2D2F]">{item.label}</span>
+                </span>
+                {item.meta ? <span className="text-sm text-[#6D5C50]">{item.meta}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+        <div className="border-t border-[#EDE3DA] pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+          <div className="flex items-center justify-between">
+            <p className="text-base font-semibold text-[#1E2D2F]">{format(visibleMonthStart, 'MMM yyyy')}</p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setVisibleMonthStart(current => subMonths(current, 1))}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                aria-label="Previous month"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setVisibleMonthStart(current => addMonths(current, 1))}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                aria-label="Next month"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs font-medium uppercase tracking-[0.16em] text-[#9B8576]">
+            {weekdayLabels.map(label => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+          <div className="mt-3 grid grid-cols-7 gap-2">
+            {calendarDays.map(day => {
+              const dayStart = startOfDay(day).getTime();
+              const inCurrentMonth = day.getMonth() === visibleMonthStart.getMonth();
+              const isSelected = tasks.some(task => task.dueAt !== null && isSameDay(task.dueAt, dayStart));
+              return (
+                <button
+                  key={day.toISOString()}
+                  type="button"
+                  onClick={() => applyDate(dayStart)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border text-sm transition ${
+                    isSelected
+                      ? 'border-[#EE6A3C] bg-[#FFF1EB] font-semibold text-[#B64B28]'
+                      : inCurrentMonth
+                        ? 'border-[#E1D5CA] text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                        : 'border-transparent text-[#C5B5A8] hover:bg-[#FBF7F3]'
+                  } ${isToday(dayStart) ? 'ring-2 ring-[#F4B79F] ring-offset-2 ring-offset-white' : ''}`}
+                >
+                  {format(day, 'd')}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </ChoiceDialog>
   );
 }
 
@@ -6409,21 +6467,17 @@ function OverflowMenu({
 
 function ProjectTaskRowActions({
   task,
-  todayStartMs,
   actionState,
-  actionDate,
   onSetActionState,
-  onSetActionDate,
   onRescheduleTasks,
+  onPostponeTasks,
   onSetTasksPriority,
 }: {
   task: Task;
-  todayStartMs: number;
   actionState: { mode: 'reschedule' | 'priority'; taskId: string } | null;
-  actionDate: string;
   onSetActionState: (state: { mode: 'reschedule' | 'priority'; taskId: string } | null) => void;
-  onSetActionDate: (value: string) => void;
-  onRescheduleTasks: (taskIds: string[], dueAt: number) => void;
+  onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
+  onPostponeTasks: (taskIds: string[]) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
 }) {
   const isRescheduleOpen = actionState?.mode === 'reschedule' && actionState.taskId === task.id;
@@ -6431,7 +6485,6 @@ function ProjectTaskRowActions({
 
   function openRescheduleDialog(event: ReactMouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    onSetActionDate(format(new Date(task.dueAt ?? todayStartMs), 'yyyy-MM-dd'));
     onSetActionState({ mode: 'reschedule', taskId: task.id });
   }
 
@@ -6462,77 +6515,14 @@ function ProjectTaskRowActions({
       </button>
 
       {isRescheduleOpen ? (
-        <ChoiceDialog
+        <RescheduleDialog
           title="Reschedule task"
           description={`Pick a new date for "${task.title}".`}
           onClose={() => onSetActionState(null)}
-          footer={(
-            <div className="flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => onSetActionState(null)}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const dueAt = parseInputValue(actionDate, true);
-                  if (dueAt === null) return;
-                  onRescheduleTasks([task.id], dueAt);
-                  onSetActionState(null);
-                }}
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-              >
-                Save date
-              </button>
-            </div>
-          )}
-        >
-          <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onRescheduleTasks([task.id], todayStartMs);
-                  onSetActionState(null);
-                }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onRescheduleTasks([task.id], addDays(todayStartMs, 1).getTime());
-                  onSetActionState(null);
-                }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
-              >
-                Tomorrow
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onRescheduleTasks([task.id], addDays(todayStartMs, 7).getTime());
-                  onSetActionState(null);
-                }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
-              >
-                Next week
-              </button>
-            </div>
-            <Field label="Choose a date">
-              <input
-                type="date"
-                value={actionDate}
-                onChange={event => onSetActionDate(event.target.value)}
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-              />
-            </Field>
-          </div>
-        </ChoiceDialog>
+          tasks={[task]}
+          onRescheduleTasks={onRescheduleTasks}
+          onPostponeTasks={onPostponeTasks}
+        />
       ) : null}
 
       {isPriorityOpen ? (
@@ -7457,6 +7447,22 @@ function formatDateTime(timestamp: number): string {
 function toInputValue(timestamp: number | null, allDay: boolean): string {
   if (!timestamp) return '';
   return allDay ? format(timestamp, 'yyyy-MM-dd') : format(timestamp, "yyyy-MM-dd'T'HH:mm");
+}
+
+function getWeekendDate(todayStartMs: number): Date {
+  const today = startOfDay(todayStartMs);
+  const dayOfWeek = today.getDay();
+  if (dayOfWeek === 0 || dayOfWeek === 6) return today;
+  return addDays(today, 6 - dayOfWeek);
+}
+
+function getNextWeekDate(todayStartMs: number, weekStartsOn: WeekStartsOn): Date {
+  const currentWeekStart = startOfWeek(todayStartMs, { weekStartsOn });
+  return addDays(currentWeekStart, 7);
+}
+
+function getPostponeDate(task: Task, todayStartMs: number): number | null {
+  return getTaskPostponeDueAt(task, todayStartMs);
 }
 
 function parseInputValue(value: string, allDay: boolean): number | null {

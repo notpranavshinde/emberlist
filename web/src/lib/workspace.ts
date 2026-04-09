@@ -673,10 +673,18 @@ export function deleteTask(payload: SyncPayload, taskId: string): SyncPayload {
     });
 }
 
-export function rescheduleTasksToDate(payload: SyncPayload, taskIds: string[], dueAt: number): SyncPayload {
+export function rescheduleTasksToDate(payload: SyncPayload, taskIds: string[], dueAt: number | null): SyncPayload {
     return updateTasks(payload, taskIds, task => ({
         ...task,
         dueAt,
+        allDay: dueAt === null ? false : true,
+    }));
+}
+
+export function postponeTasks(payload: SyncPayload, taskIds: string[], now: number = Date.now()): SyncPayload {
+    return updateTasks(payload, taskIds, task => ({
+        ...task,
+        dueAt: getTaskPostponeDueAt(task, now),
         allDay: true,
     }));
 }
@@ -1188,6 +1196,17 @@ function getNextRecurringDate(params: {
         ? alignDateToNow(currentAt, now, allDay)
         : currentAt;
     return nextAt(baseAt, rule, !allDay);
+}
+
+export function getTaskPostponeDueAt(task: Task, now: number): number {
+    const recurringDueAt = getNextRecurringDate({
+        rule: task.recurringRule ?? null,
+        currentAt: task.dueAt,
+        now,
+        allDay: task.allDay,
+    });
+    if (recurringDueAt !== null) return startOfDay(recurringDueAt).getTime();
+    return addDays(startOfDay(now), 1).getTime();
 }
 
 function alignDateToNow(taskAt: number, now: number, allDay: boolean): number {

@@ -15,6 +15,7 @@ import {
   getUpcomingOpenTasks,
   moveTasksToSection,
   moveTasksToProject,
+  postponeTasks,
   promoteSubtask,
   repairRecurringTasks,
   reparentTaskAsSubtask,
@@ -225,6 +226,49 @@ describe('workspace bulk task helpers', () => {
       dueAt: new Date('2026-03-31T00:00:00').getTime(),
       allDay: true,
       updatedAt: 1,
+    });
+  });
+
+  it('clears due dates for the selected tasks when rescheduled to no date', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(5100);
+    const payload = createPayload();
+
+    const updated = rescheduleTasksToDate(payload, ['task-overdue', 'task-open'], null);
+
+    expect(updated.tasks.find(task => task.id === 'task-overdue')).toMatchObject({
+      dueAt: null,
+      allDay: false,
+      updatedAt: 5100,
+    });
+    expect(updated.tasks.find(task => task.id === 'task-open')).toMatchObject({
+      dueAt: null,
+      allDay: false,
+      updatedAt: 5100,
+    });
+  });
+
+  it('postpones recurring tasks to their next occurrence and non-recurring tasks to tomorrow', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-08T09:00:00').getTime());
+    const payload = createPayload();
+    payload.tasks = [
+      ...payload.tasks,
+      createTask({
+        id: 'task-recurring',
+        title: 'Daily review',
+        dueAt: new Date('2026-04-08T00:00:00').getTime(),
+        recurringRule: 'FREQ=DAILY',
+      }),
+    ];
+
+    const updated = postponeTasks(payload, ['task-open', 'task-recurring']);
+
+    expect(updated.tasks.find(task => task.id === 'task-open')).toMatchObject({
+      dueAt: new Date('2026-04-09T00:00:00').getTime(),
+      allDay: true,
+    });
+    expect(updated.tasks.find(task => task.id === 'task-recurring')).toMatchObject({
+      dueAt: new Date('2026-04-09T00:00:00').getTime(),
+      allDay: true,
     });
   });
 
