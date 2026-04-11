@@ -87,13 +87,13 @@ describe('DriveSyncService', () => {
 
     expect(result).toBe(localPayload);
     expect(uploadPayload).toHaveBeenCalledWith(null, localPayload, false);
-    expect(savePayloadSpy).toHaveBeenCalledWith(localPayload);
+    expect(savePayloadSpy).not.toHaveBeenCalled();
 
     getPayloadSpy.mockRestore();
     savePayloadSpy.mockRestore();
   });
 
-  it('merges an existing remote payload and saves the merged result locally', async () => {
+  it('merges an existing remote payload without bypassing app-level local reconciliation', async () => {
     const service = new DriveSyncService('client-id');
     const testableService = service as unknown as TestableDriveSyncService;
     const localPayload = createPayload('Local');
@@ -115,7 +115,7 @@ describe('DriveSyncService', () => {
 
     expect(result.tasks[0].title).toBe('Remote');
     expect(uploadPayload).toHaveBeenCalledWith('file-1', result, false);
-    expect(savePayloadSpy).toHaveBeenCalledWith(result);
+    expect(savePayloadSpy).not.toHaveBeenCalled();
 
     getPayloadSpy.mockRestore();
     savePayloadSpy.mockRestore();
@@ -163,6 +163,33 @@ describe('DriveSyncService', () => {
     const savePayloadSpy = vi.spyOn(db, 'savePayload').mockResolvedValue(undefined);
 
     await expect(service.sync({ interactiveAuth: false })).rejects.toThrow('Cloud sync file is from a newer app version.');
+
+    getPayloadSpy.mockRestore();
+    savePayloadSpy.mockRestore();
+  });
+
+  it('does not overwrite local IndexedDB state while an app-level reconcile is still pending', async () => {
+    const service = new DriveSyncService('client-id');
+    const testableService = service as unknown as TestableDriveSyncService;
+    const localPayload = createPayload('Local before first edit');
+    const remotePayload = createPayload('Remote before first edit');
+    testableService.accessToken = 'token';
+    testableService.findSyncFileId = vi.fn(async () => 'file-1');
+    testableService.authorizedFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => remotePayload,
+    }));
+    const uploadPayload = vi.fn(async () => undefined);
+    testableService.uploadPayload = uploadPayload;
+    const getPayloadSpy = vi.spyOn(db, 'getPayload').mockResolvedValue(localPayload);
+    const savePayloadSpy = vi.spyOn(db, 'savePayload').mockResolvedValue(undefined);
+
+    const result = await service.sync({ interactiveAuth: false });
+
+    expect(result.tasks[0].title).toBe('Remote before first edit');
+    expect(uploadPayload).toHaveBeenCalledWith('file-1', result, false);
+    expect(savePayloadSpy).not.toHaveBeenCalled();
 
     getPayloadSpy.mockRestore();
     savePayloadSpy.mockRestore();

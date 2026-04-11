@@ -133,7 +133,6 @@ export class DriveSyncService {
             : localPayload;
 
         await this.uploadPayload(fileId, finalPayload, interactiveAuth);
-        await db.savePayload(finalPayload);
         return finalPayload;
     }
 

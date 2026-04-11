@@ -61,7 +61,7 @@ describe('DriveSyncService orchestration', () => {
       dueAt: new Date('2026-04-10T00:00:00Z').getTime(),
     });
     expect(uploadPayload).toHaveBeenCalledWith('file-1', result, false);
-    expect(savePayloadSpy).toHaveBeenCalledWith(result);
+    expect(savePayloadSpy).not.toHaveBeenCalled();
 
     getPayloadSpy.mockRestore();
     savePayloadSpy.mockRestore();
@@ -85,6 +85,33 @@ describe('DriveSyncService orchestration', () => {
     const savePayloadSpy = vi.spyOn(db, 'savePayload').mockResolvedValue(undefined);
 
     await expect(service.sync({ interactiveAuth: false })).rejects.toThrow('upload failed');
+    expect(savePayloadSpy).not.toHaveBeenCalled();
+
+    getPayloadSpy.mockRestore();
+    savePayloadSpy.mockRestore();
+  });
+
+  it('does not clobber a first local edit by persisting an in-flight sync snapshot directly to IndexedDB', async () => {
+    const service = new DriveSyncService('client-id');
+    const testable = service as unknown as TestableDriveSyncService;
+    const localPayload = createPayload('Original', 10);
+    const remotePayload = createPayload('Remote copy', 20);
+
+    testable.accessToken = 'token';
+    testable.findSyncFileId = vi.fn(async () => 'file-1');
+    testable.authorizedFetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => remotePayload,
+    }));
+    testable.uploadPayload = vi.fn(async () => undefined);
+
+    const getPayloadSpy = vi.spyOn(db, 'getPayload').mockResolvedValue(localPayload);
+    const savePayloadSpy = vi.spyOn(db, 'savePayload').mockResolvedValue(undefined);
+
+    const result = await service.sync({ interactiveAuth: false });
+
+    expect(result.tasks[0].title).toBe('Remote copy');
     expect(savePayloadSpy).not.toHaveBeenCalled();
 
     getPayloadSpy.mockRestore();
