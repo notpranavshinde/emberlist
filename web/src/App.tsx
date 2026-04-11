@@ -1888,6 +1888,16 @@ function WorkspaceShell({
               </button>
             ) : null}
           </div>
+
+          <div className={`mt-3 flex items-center justify-center gap-3 px-2 pb-1 text-[11px] text-[#b3aaa2] ${isSidebarCollapsed ? 'hidden' : ''}`}>
+            <NavLink to="/privacy" className="transition hover:text-[#7d6d62]">
+              Privacy
+            </NavLink>
+            <span aria-hidden="true">·</span>
+            <NavLink to="/terms" className="transition hover:text-[#7d6d62]">
+              Terms
+            </NavLink>
+          </div>
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
@@ -2535,6 +2545,27 @@ function TermsOfServicePage() {
       </div>
     </PublicSiteLayout>
   );
+}
+
+function buildFeedbackMailto(subject: string, pathname: string, cloudSession: CloudSession | null) {
+  const userAgent = typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent;
+  const body = [
+    'What happened?',
+    '',
+    '',
+    'What did you expect?',
+    '',
+    '',
+    'Route:',
+    pathname,
+    '',
+    'Connected account:',
+    cloudSession?.email ?? 'none',
+    '',
+    'Browser:',
+    userAgent,
+  ].join('\n');
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 function TodayPage({
@@ -5884,6 +5915,7 @@ function SettingsPage({
   lastCloudSyncAt: number | null;
   lastLocalBackupAt: number | null;
 }) {
+  const location = useLocation();
   const cloudStatus = getCloudStatus({
     cloudConfigured,
     cloudSession,
@@ -5893,6 +5925,8 @@ function SettingsPage({
     isSyncing,
     lastCloudSyncAt,
   });
+  const feedbackHref = buildFeedbackMailto('Emberlist feedback', location.pathname, cloudSession);
+  const issueHref = buildFeedbackMailto('Emberlist bug report', location.pathname, cloudSession);
 
   return (
     <div className="space-y-6">
@@ -6073,6 +6107,48 @@ function SettingsPage({
                 Monday
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Feedback</p>
+          <div className="mt-4 space-y-3">
+            <p className="text-sm leading-6 text-[#6D5C50]">
+              Send product feedback or a bug report straight from the app. The email draft includes the current route,
+              connected sync account, and browser details so issues are easier to reproduce.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href={feedbackHref}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Send feedback
+              </a>
+              <a
+                href={issueHref}
+                className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+              >
+                Report issue
+              </a>
+            </div>
+            <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
+              Support inbox: {SUPPORT_EMAIL}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Friend testing safety</p>
+          <div className="mt-4 space-y-3 text-sm leading-6 text-[#6D5C50]">
+            <p>Before heavy testing or imports, save a browser backup or export JSON from this screen.</p>
+            <ul className="list-disc space-y-2 pl-5">
+              <li>Use <span className="font-semibold text-[#1E2D2F]">Save browser backup</span> after major changes.</li>
+              <li>Use <span className="font-semibold text-[#1E2D2F]">Export JSON</span> before trying risky sync flows.</li>
+              <li>Use <span className="font-semibold text-[#1E2D2F]">Restore browser backup</span> if a browser-side test goes bad.</li>
+              <li>Tell testers to report the exact screen and action sequence when something breaks.</li>
+            </ul>
           </div>
         </div>
       </section>
