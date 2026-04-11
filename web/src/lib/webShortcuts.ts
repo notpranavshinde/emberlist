@@ -43,7 +43,6 @@ export const shortcutSections: ShortcutSection[] = [
       { keys: 'G then I', description: 'Go to Inbox' },
       { keys: 'G then T', description: 'Go to Today' },
       { keys: 'G then U', description: 'Go to Upcoming' },
-      { keys: 'G then B', description: 'Go to Browse' },
       { keys: 'G then P', description: 'Open the project switcher' },
       { keys: 'G then S', description: 'Go to Settings' },
       { keys: 'Ctrl+Shift+S', description: 'Open Settings' },
@@ -72,10 +71,9 @@ export const shortcutSections: ShortcutSection[] = [
     ],
   },
   {
-    title: 'Project and Browse',
+    title: 'Project',
     items: [
       { keys: 'S', description: 'Focus the Add section field on a project page' },
-      { keys: 'A', description: 'Focus the Create project field on Browse' },
     ],
   },
 ];
@@ -88,8 +86,6 @@ export function resolveGoShortcut(key: string): string | null {
       return '/today';
     case 'u':
       return '/upcoming';
-    case 'b':
-      return '/browse';
     case 'p':
       return '__project_switcher__';
     case 's':

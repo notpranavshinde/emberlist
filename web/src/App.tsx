@@ -16,7 +16,6 @@ import {
   GripVertical,
   Home,
   Import,
-  Layers3,
   ListTodo,
   MoreHorizontal,
   Plus,
@@ -202,6 +201,9 @@ function App() {
   const [showCompletedToday, setShowCompletedToday] = useState(() =>
     readStoredBoolean('emberlist.showCompletedToday', true)
   );
+  const [showSelectionButtons, setShowSelectionButtons] = useState(() =>
+    readStoredBoolean('emberlist.showSelectionButtons', false)
+  );
   const [weekStartsOn, setWeekStartsOn] = useState<WeekStartsOn>(() =>
     readStoredWeekStartsOn('emberlist.weekStartsOn', getDefaultWebDisplayPreferences().weekStartsOn)
   );
@@ -310,6 +312,10 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem('emberlist.showCompletedToday', JSON.stringify(showCompletedToday));
   }, [showCompletedToday]);
+
+  useEffect(() => {
+    window.localStorage.setItem('emberlist.showSelectionButtons', JSON.stringify(showSelectionButtons));
+  }, [showSelectionButtons]);
 
   useEffect(() => {
     window.localStorage.setItem('emberlist.weekStartsOn', String(weekStartsOn));
@@ -1270,6 +1276,8 @@ function App() {
         onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
         showCompletedToday={showCompletedToday}
         onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
+        showSelectionButtons={showSelectionButtons}
+        onToggleShowSelectionButtons={() => setShowSelectionButtons(value => !value)}
         weekStartsOn={weekStartsOn}
         onWeekStartsOnChange={value => setWeekStartsOn(value)}
         use24HourTime={use24HourTime}
@@ -1378,706 +1386,6 @@ function AppFrame({
   );
 }
 
-type BrowseProjectFilter = 'ALL' | 'OVERDUE' | 'NEEDS_STRUCTURE' | 'EMPTY' | 'FAVORITES' | 'NO_DUE';
-type BrowseProjectSort = 'UPDATED' | 'OVERDUE' | 'TASKS' | 'NAME';
-type BrowseTab = 'PROJECTS' | 'HEALTH';
-
-type BrowseProjectSummary = {
-  project: Project;
-  sections: Section[];
-  openTasks: Task[];
-  completedTasks: Task[];
-  openCount: number;
-  overdueCount: number;
-  dueTodayCount: number;
-  noDueCount: number;
-  completedCount: number;
-  sectionCount: number;
-  nextDueAt: number | null;
-  lastTouchedAt: number;
-  totalTaskCount: number;
-  needsStructure: boolean;
-  isEmpty: boolean;
-  isDormant: boolean;
-};
-
-function formatBrowseDueLabel(dueAt: number, todayStartMs: number) {
-  if (isToday(dueAt)) return 'Due today';
-  if (isTomorrow(dueAt)) return 'Due tomorrow';
-  if (dueAt < todayStartMs) return `Overdue since ${format(dueAt, 'MMM d')}`;
-  return `Next due ${format(dueAt, 'MMM d')}`;
-}
-
-function formatBrowseUpdatedLabel(timestamp: number, now: number) {
-  const dayDifference = Math.round((startOfDay(now).getTime() - startOfDay(timestamp).getTime()) / 86_400_000);
-  if (dayDifference <= 0) return 'Updated today';
-  if (dayDifference === 1) return 'Updated yesterday';
-  if (dayDifference < 7) return `Updated ${format(timestamp, 'EEE')}`;
-  return `Updated ${format(timestamp, 'MMM d')}`;
-}
-
-function BrowsePage({
-  payload,
-  onCreateProject,
-  onUpdateProject,
-  onDeleteProject,
-  onCreateSection,
-  onOpenQuickAdd,
-}: {
-  payload: SyncPayload;
-  onCreateProject: (name: string) => Promise<string | null>;
-  onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
-  onDeleteProject: (projectId: string) => void;
-  onCreateSection: (projectId: string, name: string) => void;
-  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
-}) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const todayStartMs = useTodayStartMs();
-  const todayEndMs = endOfDay(todayStartMs).getTime();
-  const projects = getActiveProjects(payload);
-  const inboxCount = getInboxTasks(payload).length;
-  const allOpenTasks = payload.tasks.filter(task => !task.deletedAt && task.status === 'OPEN');
-  const noDateTaskCount = allOpenTasks.filter(task => task.dueAt === null).length;
-  const [projectName, setProjectName] = useState('');
-  const [browseTab, setBrowseTab] = useState<BrowseTab>('PROJECTS');
-  const [projectFilter, setProjectFilter] = useState<BrowseProjectFilter>('ALL');
-  const [projectSort, setProjectSort] = useState<BrowseProjectSort>('UPDATED');
-  const [projectQuery, setProjectQuery] = useState('');
-  const [projectRenameState, setProjectRenameState] = useState<{ id: string; value: string } | null>(null);
-  const [projectDeleteState, setProjectDeleteState] = useState<{ id: string; name: string } | null>(null);
-  const [projectSectionState, setProjectSectionState] = useState<{ id: string; value: string } | null>(null);
-  const projectInputRef = useRef<HTMLInputElement | null>(null);
-
-  const projectSummaries = useMemo<BrowseProjectSummary[]>(() => {
-    return projects.map(project => {
-      const sections = getProjectSections(payload, project.id);
-      const openTasks = getProjectTasks(payload, project.id);
-      const completedTasks = getCompletedProjectTasks(payload, project.id);
-      const overdueCount = openTasks.filter(task => task.dueAt !== null && task.dueAt < todayStartMs).length;
-      const dueTodayCount = openTasks.filter(task => task.dueAt !== null && task.dueAt >= todayStartMs && task.dueAt <= todayEndMs).length;
-      const noDueCount = openTasks.filter(task => task.dueAt === null).length;
-      const nextDueAt = openTasks
-        .map(task => task.dueAt)
-        .filter((dueAt): dueAt is number => dueAt !== null)
-        .sort((left, right) => left - right)[0] ?? null;
-      const lastTouchedAt = Math.max(
-        project.updatedAt,
-        ...sections.map(section => section.updatedAt),
-        ...openTasks.map(task => task.updatedAt),
-        ...completedTasks.map(task => task.updatedAt)
-      );
-      const totalTaskCount = openTasks.length + completedTasks.length;
-
-      return {
-        project,
-        sections,
-        openTasks,
-        completedTasks,
-        openCount: openTasks.length,
-        overdueCount,
-        dueTodayCount,
-        noDueCount,
-        completedCount: completedTasks.length,
-        sectionCount: sections.length,
-        nextDueAt,
-        lastTouchedAt,
-        totalTaskCount,
-        needsStructure: openTasks.length > 0 && sections.length === 0,
-        isEmpty: totalTaskCount === 0,
-        isDormant: totalTaskCount > 0 && todayStartMs - startOfDay(lastTouchedAt).getTime() > 14 * 86_400_000,
-      };
-    });
-  }, [payload, projects, todayEndMs, todayStartMs]);
-
-  const filteredProjectSummaries = useMemo(() => {
-    const normalizedQuery = projectQuery.trim().toLowerCase();
-    const visible = projectSummaries.filter(summary => {
-      if (normalizedQuery && !summary.project.name.toLowerCase().includes(normalizedQuery)) return false;
-      switch (projectFilter) {
-        case 'OVERDUE':
-          return summary.overdueCount > 0;
-        case 'NEEDS_STRUCTURE':
-          return summary.needsStructure;
-        case 'EMPTY':
-          return summary.isEmpty;
-        case 'FAVORITES':
-          return summary.project.favorite;
-        case 'NO_DUE':
-          return summary.noDueCount > 0;
-        default:
-          return true;
-      }
-    });
-
-    return [...visible].sort((left, right) => {
-      if (projectSort === 'NAME') {
-        return left.project.name.localeCompare(right.project.name);
-      }
-      if (projectSort === 'TASKS') {
-        if (left.openCount !== right.openCount) return right.openCount - left.openCount;
-        if (left.dueTodayCount !== right.dueTodayCount) return right.dueTodayCount - left.dueTodayCount;
-        return left.project.name.localeCompare(right.project.name);
-      }
-      if (projectSort === 'OVERDUE') {
-        if (left.overdueCount !== right.overdueCount) return right.overdueCount - left.overdueCount;
-        if (left.openCount !== right.openCount) return right.openCount - left.openCount;
-        return left.project.name.localeCompare(right.project.name);
-      }
-      if (left.lastTouchedAt !== right.lastTouchedAt) return right.lastTouchedAt - left.lastTouchedAt;
-      return left.project.name.localeCompare(right.project.name);
-    });
-  }, [projectFilter, projectQuery, projectSort, projectSummaries]);
-
-  const healthBuckets = useMemo(() => ({
-    overdue: projectSummaries.filter(summary => summary.overdueCount > 0),
-    needsStructure: projectSummaries.filter(summary => summary.needsStructure),
-    empty: projectSummaries.filter(summary => summary.isEmpty),
-    dormant: projectSummaries.filter(summary => summary.isDormant),
-    noDue: projectSummaries.filter(summary => summary.noDueCount > 0),
-  }), [projectSummaries]);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const createdProjectId = await onCreateProject(projectName);
-    setProjectName('');
-    setBrowseTab('PROJECTS');
-    if (createdProjectId) {
-      navigate(`/project/${createdProjectId}`);
-    }
-  }
-
-  function submitProjectRename(nextName: string) {
-    const trimmedName = nextName.trim();
-    if (!trimmedName || !projectRenameState) return;
-    onUpdateProject(projectRenameState.id, current => ({ ...current, name: trimmedName }));
-    setProjectRenameState(null);
-  }
-
-  function submitProjectSection(nextName: string) {
-    const trimmedName = nextName.trim();
-    if (!trimmedName || !projectSectionState) return;
-    onCreateSection(projectSectionState.id, trimmedName);
-    setProjectSectionState(null);
-  }
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (isTypingTarget(event.target)) return;
-      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
-      if (event.key.toLowerCase() !== 'a') return;
-      event.preventDefault();
-      projectInputRef.current?.focus();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!location.search.includes('create=1')) return;
-    projectInputRef.current?.focus();
-  }, [location.search]);
-
-  return (
-    <div className="space-y-6">
-      <HeroCard
-        eyebrow="Browse"
-        title="Workspace control room"
-        description="Create projects, compare workload across the workspace, and catch overdue or unstructured work before it turns into drift."
-        actions={(
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setBrowseTab('PROJECTS')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                browseTab === 'PROJECTS'
-                  ? 'bg-[#EE6A3C] text-white'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-              }`}
-            >
-              Projects
-            </button>
-            <button
-              type="button"
-              onClick={() => setBrowseTab('HEALTH')}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                browseTab === 'HEALTH'
-                  ? 'bg-[#EE6A3C] text-white'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-              }`}
-            >
-              Workspace health
-            </button>
-          </div>
-        )}
-      />
-
-      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Create project</p>
-              <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">Spin up a new lane fast</h3>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-[#6D5C50]">
-                New projects appear in the sidebar immediately, sync to Android, and open straight into section planning.
-              </p>
-            </div>
-            <div className="rounded-[22px] bg-[#FBF7F3] px-4 py-3 text-right">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">Workspace</p>
-              <p className="mt-1 text-lg font-semibold text-[#1E2D2F]">{projectSummaries.length} projects</p>
-            </div>
-          </div>
-          <form onSubmit={submit} className="mt-5 flex flex-col gap-3 sm:flex-row">
-            <input
-              ref={projectInputRef}
-              value={projectName}
-              onChange={event => setProjectName(event.target.value)}
-              placeholder="Project name"
-              className="min-w-0 flex-1 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-            <button
-              type="submit"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-            >
-              <Plus size={16} />
-              Create and open
-            </button>
-          </form>
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-2">
-          <NavLink
-            to="/inbox"
-            className="rounded-[24px] border border-[#E1D5CA] bg-white p-5 shadow-sm transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Inbox</p>
-                <p className="mt-2 text-2xl font-semibold text-[#1E2D2F]">{inboxCount}</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">unsorted open task{inboxCount === 1 ? '' : 's'}</p>
-              </div>
-              <ChevronRight size={18} className="text-[#9F7B63]" />
-            </div>
-          </NavLink>
-          <NavLink
-            to="/search/no-due"
-            className="rounded-[24px] border border-[#E1D5CA] bg-white p-5 shadow-sm transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">No-date work</p>
-                <p className="mt-2 text-2xl font-semibold text-[#1E2D2F]">{noDateTaskCount}</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">open task{noDateTaskCount === 1 ? '' : 's'} with no due date</p>
-              </div>
-              <ChevronRight size={18} className="text-[#9F7B63]" />
-            </div>
-          </NavLink>
-          <button
-            type="button"
-            onClick={() => {
-              setBrowseTab('HEALTH');
-              setProjectFilter('OVERDUE');
-            }}
-            className="rounded-[24px] border border-[#E1D5CA] bg-white p-5 text-left shadow-sm transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Overdue projects</p>
-            <p className="mt-2 text-2xl font-semibold text-[#1E2D2F]">{healthBuckets.overdue.length}</p>
-            <p className="mt-1 text-sm text-[#6D5C50]">projects need attention right now</p>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setBrowseTab('HEALTH');
-              setProjectFilter('NEEDS_STRUCTURE');
-            }}
-            className="rounded-[24px] border border-[#E1D5CA] bg-white p-5 text-left shadow-sm transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-          >
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Needs structure</p>
-            <p className="mt-2 text-2xl font-semibold text-[#1E2D2F]">{healthBuckets.needsStructure.length}</p>
-            <p className="mt-1 text-sm text-[#6D5C50]">projects have open work but no sections</p>
-          </button>
-        </section>
-      </section>
-
-      {browseTab === 'PROJECTS' ? (
-        <>
-          <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex min-w-0 flex-1 items-center gap-3 rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3">
-                <Search size={16} className="shrink-0 text-[#9F7B63]" />
-                <input
-                  value={projectQuery}
-                  onChange={event => setProjectQuery(event.target.value)}
-                  placeholder="Filter projects by name"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#9F7B63]"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {([
-                  ['ALL', 'All'],
-                  ['OVERDUE', 'Overdue'],
-                  ['NEEDS_STRUCTURE', 'Needs structure'],
-                  ['NO_DUE', 'No due'],
-                  ['FAVORITES', 'Favorites'],
-                  ['EMPTY', 'Empty'],
-                ] as Array<[BrowseProjectFilter, string]>).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setProjectFilter(value)}
-                    className={`rounded-full px-3 py-2 text-sm font-semibold transition ${
-                      projectFilter === value
-                        ? 'bg-[#FFF1EB] text-[#B64B28]'
-                        : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-                <select
-                  value={projectSort}
-                  onChange={event => setProjectSort(event.target.value as BrowseProjectSort)}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] outline-none transition hover:bg-[#FBF7F3]"
-                >
-                  <option value="UPDATED">Recently updated</option>
-                  <option value="OVERDUE">Most overdue</option>
-                  <option value="TASKS">Most active</option>
-                  <option value="NAME">Name</option>
-                </select>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-2">
-            {filteredProjectSummaries.length ? (
-              filteredProjectSummaries.map(summary => (
-                <article
-                  key={summary.project.id}
-                  className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#FFF1EB] text-[#B64B28]">
-                          <Folder size={18} />
-                        </span>
-                        <div className="min-w-0">
-                          <h3 className="truncate text-lg font-semibold text-[#1E2D2F]">{summary.project.name}</h3>
-                          <p className="text-sm text-[#6D5C50]">
-                            {formatBrowseUpdatedLabel(summary.lastTouchedAt, todayStartMs)}
-                            {summary.nextDueAt !== null ? ` · ${formatBrowseDueLabel(summary.nextDueAt, todayStartMs)}` : ''}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    <OverflowMenu
-                      label={`Actions for ${summary.project.name}`}
-                      items={[
-                        {
-                          label: 'Rename project',
-                          onSelect: () => setProjectRenameState({ id: summary.project.id, value: summary.project.name }),
-                        },
-                        {
-                          label: 'Add section',
-                          onSelect: () => setProjectSectionState({ id: summary.project.id, value: '' }),
-                        },
-                        {
-                          label: summary.project.favorite ? 'Remove from favorites' : 'Add to favorites',
-                          onSelect: () => onUpdateProject(summary.project.id, current => ({ ...current, favorite: !current.favorite })),
-                        },
-                        {
-                          label: summary.project.archived ? 'Unarchive project' : 'Archive project',
-                          onSelect: () => onUpdateProject(summary.project.id, current => ({ ...current, archived: !current.archived })),
-                        },
-                        {
-                          label: 'Delete project',
-                          tone: 'destructive',
-                          onSelect: () => setProjectDeleteState({ id: summary.project.id, name: summary.project.name }),
-                        },
-                      ]}
-                    />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {summary.project.favorite ? (
-                      <span className="rounded-full bg-[#FFF1EB] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#B64B28]">
-                        Favorite
-                      </span>
-                    ) : null}
-                    {summary.overdueCount > 0 ? (
-                      <span className="rounded-full bg-[#FFF1EB] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#B64B28]">
-                        {summary.overdueCount} overdue
-                      </span>
-                    ) : null}
-                    {summary.needsStructure ? (
-                      <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#6D5C50]">
-                        Needs sections
-                      </span>
-                    ) : null}
-                    {summary.noDueCount > 0 ? (
-                      <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#6D5C50]">
-                        {summary.noDueCount} no due
-                      </span>
-                    ) : null}
-                    {summary.isDormant ? (
-                      <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#6D5C50]">
-                        Dormant
-                      </span>
-                    ) : null}
-                    {summary.isEmpty ? (
-                      <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#6D5C50]">
-                        Empty
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                    <div className="rounded-[20px] bg-[#FBF7F3] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9F7B63]">Open</p>
-                      <p className="mt-2 text-xl font-semibold text-[#1E2D2F]">{summary.openCount}</p>
-                    </div>
-                    <div className="rounded-[20px] bg-[#FBF7F3] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9F7B63]">Due today</p>
-                      <p className="mt-2 text-xl font-semibold text-[#1E2D2F]">{summary.dueTodayCount}</p>
-                    </div>
-                    <div className="rounded-[20px] bg-[#FBF7F3] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9F7B63]">Sections</p>
-                      <p className="mt-2 text-xl font-semibold text-[#1E2D2F]">{summary.sectionCount}</p>
-                    </div>
-                    <div className="rounded-[20px] bg-[#FBF7F3] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#9F7B63]">Completed</p>
-                      <p className="mt-2 text-xl font-semibold text-[#1E2D2F]">{summary.completedCount}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/project/${summary.project.id}`)}
-                      className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-                    >
-                      Open project
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenQuickAdd({ defaultProjectId: summary.project.id })}
-                      className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                    >
-                      Add task
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setProjectSectionState({ id: summary.project.id, value: '' })}
-                      className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                    >
-                      Add section
-                    </button>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="xl:col-span-2">
-                <EmptyState
-                  title="No projects match this view"
-                  description="Clear the filters, change the sort, or create a new project to keep shaping the workspace."
-                />
-              </div>
-            )}
-          </section>
-        </>
-      ) : (
-        <section className="space-y-4">
-          <div className="grid gap-4 xl:grid-cols-4">
-            <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Overdue projects</p>
-              <p className="mt-3 text-3xl font-semibold text-[#1E2D2F]">{healthBuckets.overdue.length}</p>
-              <p className="mt-2 text-sm leading-6 text-[#6D5C50]">Projects with active work that already slipped past its date.</p>
-            </div>
-            <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Needs structure</p>
-              <p className="mt-3 text-3xl font-semibold text-[#1E2D2F]">{healthBuckets.needsStructure.length}</p>
-              <p className="mt-2 text-sm leading-6 text-[#6D5C50]">Projects carrying open tasks without a section framework yet.</p>
-            </div>
-            <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Dormant projects</p>
-              <p className="mt-3 text-3xl font-semibold text-[#1E2D2F]">{healthBuckets.dormant.length}</p>
-              <p className="mt-2 text-sm leading-6 text-[#6D5C50]">Projects with task history that have not been touched in two weeks.</p>
-            </div>
-            <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Empty projects</p>
-              <p className="mt-3 text-3xl font-semibold text-[#1E2D2F]">{healthBuckets.empty.length}</p>
-              <p className="mt-2 text-sm leading-6 text-[#6D5C50]">Projects that exist but are not carrying any work yet.</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-3">
-            <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Needs attention</p>
-                  <h3 className="mt-2 text-lg font-semibold text-[#1E2D2F]">Overdue project backlog</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBrowseTab('PROJECTS');
-                    setProjectFilter('OVERDUE');
-                  }}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                >
-                  Review all
-                </button>
-              </div>
-              <div className="mt-4 space-y-3">
-                {healthBuckets.overdue.length ? (
-                  healthBuckets.overdue.slice(0, 5).map(summary => (
-                    <button
-                      key={summary.project.id}
-                      type="button"
-                      onClick={() => navigate(`/project/${summary.project.id}`)}
-                      className="flex w-full items-center justify-between rounded-[20px] border border-[#E7DDD4] px-4 py-3 text-left transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-[#1E2D2F]">{summary.project.name}</p>
-                        <p className="mt-1 text-sm text-[#6D5C50]">{summary.overdueCount} overdue · {summary.openCount} open</p>
-                      </div>
-                      <ChevronRight size={16} className="text-[#9F7B63]" />
-                    </button>
-                  ))
-                ) : (
-                  <EmptyState title="No overdue projects" description="Nothing in the workspace is currently past due." />
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Needs structure</p>
-                  <h3 className="mt-2 text-lg font-semibold text-[#1E2D2F]">Projects to shape</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBrowseTab('PROJECTS');
-                    setProjectFilter('NEEDS_STRUCTURE');
-                  }}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                >
-                  Focus these
-                </button>
-              </div>
-              <div className="mt-4 space-y-3">
-                {healthBuckets.needsStructure.length ? (
-                  healthBuckets.needsStructure.slice(0, 5).map(summary => (
-                    <div
-                      key={summary.project.id}
-                      className="rounded-[20px] border border-[#E7DDD4] px-4 py-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[#1E2D2F]">{summary.project.name}</p>
-                          <p className="mt-1 text-sm text-[#6D5C50]">{summary.openCount} open task{summary.openCount === 1 ? '' : 's'} with no sections</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setProjectSectionState({ id: summary.project.id, value: '' })}
-                          className="rounded-full border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                        >
-                          Add section
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <EmptyState title="Projects are structured" description="Every active project already has section scaffolding." />
-                )}
-              </div>
-            </section>
-
-            <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#9F7B63]">Workspace hygiene</p>
-              <h3 className="mt-2 text-lg font-semibold text-[#1E2D2F]">Loose ends to review</h3>
-              <div className="mt-4 space-y-3">
-                <button
-                  type="button"
-                  onClick={() => navigate('/search/no-due')}
-                  className="flex w-full items-center justify-between rounded-[20px] border border-[#E7DDD4] px-4 py-3 text-left transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-[#1E2D2F]">Tasks with no date</p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">{noDateTaskCount} open task{noDateTaskCount === 1 ? '' : 's'} need scheduling context</p>
-                  </div>
-                  <ChevronRight size={16} className="text-[#9F7B63]" />
-                </button>
-                <NavLink
-                  to="/inbox"
-                  className="flex items-center justify-between rounded-[20px] border border-[#E7DDD4] px-4 py-3 transition hover:border-[#EE6A3C]/30 hover:bg-[#FBF7F3]"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-[#1E2D2F]">Inbox backlog</p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">{inboxCount} unsorted task{inboxCount === 1 ? '' : 's'} waiting for a home</p>
-                  </div>
-                  <ChevronRight size={16} className="text-[#9F7B63]" />
-                </NavLink>
-                <div className="rounded-[20px] border border-[#E7DDD4] px-4 py-3">
-                  <p className="text-sm font-semibold text-[#1E2D2F]">Dormant projects</p>
-                  <p className="mt-1 text-sm text-[#6D5C50]">{healthBuckets.dormant.length} project{healthBuckets.dormant.length === 1 ? '' : 's'} have not been touched in two weeks.</p>
-                </div>
-                <div className="rounded-[20px] border border-[#E7DDD4] px-4 py-3">
-                  <p className="text-sm font-semibold text-[#1E2D2F]">Empty projects</p>
-                  <p className="mt-1 text-sm text-[#6D5C50]">{healthBuckets.empty.length} project{healthBuckets.empty.length === 1 ? '' : 's'} are ready for cleanup or first tasks.</p>
-                </div>
-              </div>
-            </section>
-          </div>
-        </section>
-      )}
-
-      {projectRenameState ? (
-        <TextInputDialog
-          title="Rename project"
-          description="Update the project name directly from Browse."
-          label="Project name"
-          value={projectRenameState.value}
-          submitLabel="Save project"
-          onChange={value => setProjectRenameState(current => (current ? { ...current, value } : current))}
-          onClose={() => setProjectRenameState(null)}
-          onSubmit={submitProjectRename}
-        />
-      ) : null}
-
-      {projectSectionState ? (
-        <TextInputDialog
-          title="Add section"
-          description="Create a section without opening the project first."
-          label="Section name"
-          value={projectSectionState.value}
-          submitLabel="Create section"
-          onChange={value => setProjectSectionState(current => (current ? { ...current, value } : current))}
-          onClose={() => setProjectSectionState(null)}
-          onSubmit={submitProjectSection}
-        />
-      ) : null}
-
-      {projectDeleteState ? (
-        <ConfirmDialog
-          title="Delete project"
-          description={`Delete "${projectDeleteState.name}" and tombstone its tasks and sections? This will sync to Android.`}
-          confirmLabel="Delete project"
-          tone="destructive"
-          onClose={() => setProjectDeleteState(null)}
-          onConfirm={() => {
-            onDeleteProject(projectDeleteState.id);
-            setProjectDeleteState(null);
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
-
 type WorkspaceShellProps = {
   payload: SyncPayload;
   banner: Banner | null;
@@ -2112,6 +1420,8 @@ type WorkspaceShellProps = {
   onDeleteSection: (sectionId: string) => void;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
+  showSelectionButtons: boolean;
+  onToggleShowSelectionButtons: () => void;
   weekStartsOn: WeekStartsOn;
   onWeekStartsOnChange: (value: WeekStartsOn) => void;
   use24HourTime: boolean;
@@ -2173,6 +1483,8 @@ function WorkspaceShell({
   onDeleteSection,
   showCompletedToday,
   onToggleShowCompletedToday,
+  showSelectionButtons,
+  onToggleShowSelectionButtons,
   weekStartsOn,
   onWeekStartsOnChange,
   use24HourTime,
@@ -2214,6 +1526,8 @@ function WorkspaceShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+  const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] = useState(false);
+  const [createProjectValue, setCreateProjectValue] = useState('');
   const [isResetCloudDialogOpen, setIsResetCloudDialogOpen] = useState(false);
   const [isRestoreBrowserBackupDialogOpen, setIsRestoreBrowserBackupDialogOpen] = useState(false);
   const [focusedTaskActionMode, setFocusedTaskActionMode] = useState<FocusedTaskActionMode | null>(null);
@@ -2321,6 +1635,22 @@ function WorkspaceShell({
 
   function requestRestoreBrowserBackup() {
     setIsRestoreBrowserBackupDialogOpen(true);
+  }
+
+  function requestCreateProject(initialValue = '') {
+    setCreateProjectValue(initialValue);
+    setIsCreateProjectDialogOpen(true);
+  }
+
+  async function submitCreateProject(nextName: string) {
+    const trimmedName = nextName.trim();
+    if (!trimmedName) return;
+    const projectId = await onCreateProject(trimmedName);
+    setIsCreateProjectDialogOpen(false);
+    setCreateProjectValue('');
+    if (projectId) {
+      navigate(`/project/${projectId}`);
+    }
   }
 
   useEffect(() => {
@@ -2511,7 +1841,6 @@ function WorkspaceShell({
             <RailLink to="/inbox" icon={ListTodo} label="Inbox" count={getInboxTasks(payload).length} collapsed={isSidebarCollapsed} />
             <RailLink to="/today" icon={Home} label="Today" count={todayViewData.overdue.length + todayViewData.today.length} collapsed={isSidebarCollapsed} />
             <RailLink to="/upcoming" icon={Calendar} label="Upcoming" collapsed={isSidebarCollapsed} />
-            <RailLink to="/browse" icon={Layers3} label="Browse" collapsed={isSidebarCollapsed} />
             <RailLink to="/settings" icon={Settings} label="Settings" collapsed={isSidebarCollapsed} />
           </nav>
 
@@ -2538,14 +1867,15 @@ function WorkspaceShell({
             <div className="flex items-center gap-2">
               <p className="text-sm font-semibold text-[#5f5b57]">My Projects</p>
             </div>
-            <NavLink
-              to="/browse?create=1"
+            <button
+              type="button"
+              onClick={() => requestCreateProject()}
               className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:border-[#EE6A3C]/40 hover:bg-[#FBF7F3] hover:text-[#1E2D2F]"
               title="Create project"
               aria-label="Create project"
             >
               <Plus size={14} />
-            </NavLink>
+            </button>
           </div>
           <div className={`mt-2 flex-1 space-y-0.5 overflow-y-auto ${isSidebarCollapsed ? 'hidden' : ''}`}>
             {regularProjects.map(project => (
@@ -2575,7 +1905,7 @@ function WorkspaceShell({
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
-              <span>{isSyncing ? 'Syncing...' : cloudSession ? 'Sync now' : 'Connect Google Drive'}</span>
+              <span>{isSyncing ? 'Syncing...' : cloudSession ? 'Sync' : 'Connect Google Drive'}</span>
             </button>
             {cloudSession ? (
               <button
@@ -2609,7 +1939,7 @@ function WorkspaceShell({
                 <button
                   onClick={onCloudSync}
                   disabled={isSyncing}
-                  className="flex items-center gap-2 rounded-full border border-[#ece7e3] bg-white px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70"
+                  className={`flex items-center gap-2 rounded-full border border-[#ece7e3] bg-white px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70 ${isSidebarCollapsed ? '' : 'md:hidden'}`}
                 >
                   {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
                   <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
@@ -2656,6 +1986,7 @@ function WorkspaceShell({
                   <TodayPage
                     payload={payload}
                     showCompletedToday={showCompletedToday}
+                    showSelectionButtons={showSelectionButtons}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
@@ -2672,6 +2003,7 @@ function WorkspaceShell({
                 element={
                   <UpcomingPage
                     payload={payload}
+                    showSelectionButtons={showSelectionButtons}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
@@ -2688,6 +2020,7 @@ function WorkspaceShell({
                 element={
                   <SearchPage
                     payload={payload}
+                    showSelectionButtons={showSelectionButtons}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
@@ -2704,6 +2037,7 @@ function WorkspaceShell({
                 element={
                   <SearchPage
                     payload={payload}
+                    showSelectionButtons={showSelectionButtons}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
@@ -2716,24 +2050,13 @@ function WorkspaceShell({
                   />
                 }
               />
-              <Route
-                path="/browse"
-                element={(
-                  <BrowsePage
-                    payload={payload}
-                    onCreateProject={onCreateProject}
-                    onUpdateProject={onUpdateProject}
-                    onDeleteProject={onDeleteProject}
-                    onCreateSection={onCreateSection}
-                    onOpenQuickAdd={onOpenQuickAdd}
-                  />
-                )}
-              />
+              <Route path="/browse" element={<Navigate to="/today" replace />} />
               <Route
                 path="/inbox"
                 element={
                   <InboxPage
                     payload={payload}
+                    showSelectionButtons={showSelectionButtons}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
@@ -2750,6 +2073,7 @@ function WorkspaceShell({
                 element={
                   <ProjectPage
                     payload={payload}
+                    showSelectionButtons={showSelectionButtons}
                     onCreateSection={onCreateSection}
                     onUpdateProject={onUpdateProject}
                     onDeleteProject={onDeleteProject}
@@ -2797,6 +2121,8 @@ function WorkspaceShell({
                     isOnline={isOnline}
                     showCompletedToday={showCompletedToday}
                     onToggleShowCompletedToday={onToggleShowCompletedToday}
+                    showSelectionButtons={showSelectionButtons}
+                    onToggleShowSelectionButtons={onToggleShowSelectionButtons}
                     weekStartsOn={weekStartsOn}
                     onWeekStartsOnChange={onWeekStartsOnChange}
                     use24HourTime={use24HourTime}
@@ -2805,7 +2131,6 @@ function WorkspaceShell({
                     onToggleAutoSyncEnabled={onToggleAutoSyncEnabled}
                     autoBackupEnabled={autoBackupEnabled}
                     onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
-                    onCloudSync={onCloudSync}
                     onDisconnectCloud={onDisconnectCloud}
                     onResetCloudSync={requestResetCloudSync}
                     onResetLocalCache={onResetLocalCache}
@@ -2828,12 +2153,11 @@ function WorkspaceShell({
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F7F4F0]/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-xl grid-cols-6 gap-1">
+        <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           <BottomLink to="/today" icon={Home} label="Today" />
           <BottomLink to="/inbox" icon={ListTodo} label="Inbox" />
           <BottomLink to="/upcoming" icon={Calendar} label="Upcoming" />
           <BottomLink to="/search" icon={Search} label="Search" />
-          <BottomLink to="/browse" icon={Layers3} label="Browse" />
           <BottomLink to="/settings" icon={Settings} label="Settings" />
         </div>
       </nav>
@@ -2858,6 +2182,22 @@ function WorkspaceShell({
           onClose={() => setIsProjectSwitcherOpen(false)}
           onOpenProject={projectId => navigate(`/project/${projectId}`)}
           onCreateProject={onCreateProject}
+        />
+      ) : null}
+
+      {isCreateProjectDialogOpen ? (
+        <TextInputDialog
+          title="Create project"
+          description="Create a project and open it immediately."
+          label="Project name"
+          value={createProjectValue}
+          onChange={setCreateProjectValue}
+          onClose={() => {
+            setIsCreateProjectDialogOpen(false);
+            setCreateProjectValue('');
+          }}
+          onSubmit={value => void submitCreateProject(value)}
+          submitLabel="Create project"
         />
       ) : null}
 
@@ -3278,6 +2618,7 @@ function buildFeedbackMailto(subject: string, pathname: string, cloudSession: Cl
 function TodayPage({
   payload,
   showCompletedToday,
+  showSelectionButtons,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -3289,6 +2630,7 @@ function TodayPage({
 }: {
   payload: SyncPayload;
   showCompletedToday: boolean;
+  showSelectionButtons: boolean;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
@@ -3434,16 +2776,18 @@ function TodayPage({
         description="Review what is due now, what slipped past due, and what you already finished today."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => (selectionMode ? clearSelection() : openSelection())}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                }`}
-            >
-              {selectionMode ? 'Cancel selection' : 'Select tasks'}
-            </button>
+            {showSelectionButtons || selectionMode ? (
+              <button
+                type="button"
+                onClick={() => (selectionMode ? clearSelection() : openSelection())}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                  }`}
+              >
+                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+              </button>
+            ) : null}
             {selectionMode ? (
               <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
@@ -3667,6 +3011,7 @@ function TodayPage({
 
 function UpcomingPage({
   payload,
+  showSelectionButtons,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -3677,6 +3022,7 @@ function UpcomingPage({
   onPromoteSubtask,
 }: {
   payload: SyncPayload;
+  showSelectionButtons: boolean;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
@@ -3829,16 +3175,18 @@ function UpcomingPage({
         description="Look ahead at upcoming deadlines and future work across the workspace. Drag tasks into a date lane when you want to reschedule them quickly."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => (selectionMode ? clearSelection() : openSelection())}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                }`}
-            >
-              {selectionMode ? 'Cancel selection' : 'Select tasks'}
-            </button>
+            {showSelectionButtons || selectionMode ? (
+              <button
+                type="button"
+                onClick={() => (selectionMode ? clearSelection() : openSelection())}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                  }`}
+              >
+                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+              </button>
+            ) : null}
             {selectionMode ? (
               <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
@@ -4075,6 +3423,7 @@ function UpcomingPage({
 
 function SearchPage({
   payload,
+  showSelectionButtons,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -4086,6 +3435,7 @@ function SearchPage({
   forcedFilter,
 }: {
   payload: SyncPayload;
+  showSelectionButtons: boolean;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
@@ -4285,20 +3635,22 @@ function SearchPage({
         description={
           forcedFilter === 'NO_DUE'
             ? 'This is a real filtered view of open tasks that do not have a due date yet.'
-            : 'Search titles, descriptions, project names, and sections. Select tasks here when you need to reschedule, move, reprioritize, or delete in bulk.'
+            : 'Search titles, descriptions, project names, and sections. Bulk actions stay available when you need to reschedule, move, reprioritize, or delete several tasks at once.'
         }
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => (selectionMode ? clearSelection() : openSelection())}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                }`}
-            >
-              {selectionMode ? 'Cancel selection' : 'Select tasks'}
-            </button>
+            {showSelectionButtons || selectionMode ? (
+              <button
+                type="button"
+                onClick={() => (selectionMode ? clearSelection() : openSelection())}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                  }`}
+              >
+                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+              </button>
+            ) : null}
             {selectionMode ? (
               <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
@@ -4512,6 +3864,7 @@ function SearchPage({
 
 function InboxPage({
   payload,
+  showSelectionButtons,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -4522,6 +3875,7 @@ function InboxPage({
   onPromoteSubtask,
 }: {
   payload: SyncPayload;
+  showSelectionButtons: boolean;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
@@ -4636,16 +3990,18 @@ function InboxPage({
         description="These tasks are not attached to a project yet. Open one to move it into a project or section."
         actions={(
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => (selectionMode ? clearSelection() : openSelection())}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                }`}
-            >
-              {selectionMode ? 'Cancel selection' : 'Select tasks'}
-            </button>
+            {showSelectionButtons || selectionMode ? (
+              <button
+                type="button"
+                onClick={() => (selectionMode ? clearSelection() : openSelection())}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                  }`}
+              >
+                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+              </button>
+            ) : null}
             {selectionMode ? (
               <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
@@ -4827,6 +4183,7 @@ function InboxPage({
 
 function ProjectPage({
   payload,
+  showSelectionButtons,
   onCreateSection,
   onUpdateProject,
   onDeleteProject,
@@ -4843,6 +4200,7 @@ function ProjectPage({
   onOpenQuickAdd,
 }: {
   payload: SyncPayload;
+  showSelectionButtons: boolean;
   onCreateSection: (projectId: string, name: string) => void;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
   onDeleteProject: (projectId: string) => void;
@@ -4953,7 +4311,7 @@ function ProjectPage({
   }, [activeDialog, selectionMode, tasks]);
 
   if (!projectId) {
-    return <EmptyState title="Project not found" description="Select a project from Browse." />;
+    return <EmptyState title="Project not found" description="Choose a project from the sidebar or create a new one." />;
   }
 
   if (!project) {
@@ -5034,7 +4392,7 @@ function ProjectPage({
   function confirmDeleteProject() {
     onDeleteProject(currentProject.id);
     setIsProjectDeleteDialogOpen(false);
-    navigate('/browse');
+    navigate('/today');
   }
 
   function submitSectionRename() {
@@ -5103,16 +4461,18 @@ function ProjectPage({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => (selectionMode ? clearSelection() : openSelection())}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                }`}
-            >
-              {selectionMode ? 'Cancel selection' : 'Select tasks'}
-            </button>
+            {showSelectionButtons || selectionMode ? (
+              <button
+                type="button"
+                onClick={() => (selectionMode ? clearSelection() : openSelection())}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
+                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                  }`}
+              >
+                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+              </button>
+            ) : null}
             {selectionMode ? (
               <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
@@ -6449,6 +5809,41 @@ function TaskEditor({
   );
 }
 
+function SettingsDisclosure({
+  title,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  description: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setIsOpen(value => !value)}
+        className="flex w-full items-start justify-between gap-4 text-left"
+        aria-expanded={isOpen}
+      >
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">{title}</p>
+          <p className="mt-2 text-sm leading-6 text-[#6D5C50]">{description}</p>
+        </div>
+        <ChevronDown
+          size={18}
+          className={`mt-1 shrink-0 text-[#9F7B63] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {isOpen ? <div className="mt-4 space-y-4">{children}</div> : null}
+    </section>
+  );
+}
+
 function SettingsPage({
   cloudConfigured,
   cloudSession,
@@ -6457,6 +5852,8 @@ function SettingsPage({
   isOnline,
   showCompletedToday,
   onToggleShowCompletedToday,
+  showSelectionButtons,
+  onToggleShowSelectionButtons,
   weekStartsOn,
   onWeekStartsOnChange,
   use24HourTime,
@@ -6465,7 +5862,6 @@ function SettingsPage({
   onToggleAutoSyncEnabled,
   autoBackupEnabled,
   onToggleAutoBackupEnabled,
-  onCloudSync,
   onDisconnectCloud,
   onResetCloudSync,
   onResetLocalCache,
@@ -6486,6 +5882,8 @@ function SettingsPage({
   isOnline: boolean;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
+  showSelectionButtons: boolean;
+  onToggleShowSelectionButtons: () => void;
   weekStartsOn: WeekStartsOn;
   onWeekStartsOnChange: (value: WeekStartsOn) => void;
   use24HourTime: boolean;
@@ -6494,7 +5892,6 @@ function SettingsPage({
   onToggleAutoSyncEnabled: () => void;
   autoBackupEnabled: boolean;
   onToggleAutoBackupEnabled: () => void;
-  onCloudSync: () => void;
   onDisconnectCloud: () => void;
   onResetCloudSync: () => void;
   onResetLocalCache: () => void;
@@ -6529,10 +5926,9 @@ function SettingsPage({
         description="Manage Google Drive sync, this browser's local workspace, and the display options that stay local to the web app."
       />
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Cloud sync</p>
-          <div className="mt-4 space-y-3">
+      <div className="space-y-4">
+        <SettingsDisclosure title="Cloud sync" description="Connection status, sync account, and whether this browser should sync automatically." defaultOpen>
+          <div className="space-y-3">
             <InfoRow label="Status" value={cloudStatus.label} />
             <InfoRow label="Account" value={cloudSession?.email ?? 'No Google account connected in this tab'} />
             <InfoRow label="Last sync" value={lastCloudSyncAt ? formatDateTime(lastCloudSyncAt) : 'No recent sync'} />
@@ -6546,13 +5942,6 @@ function SettingsPage({
               </p>
             ) : null}
             <div className="flex flex-wrap gap-3 pt-2">
-              <button
-                onClick={onCloudSync}
-                disabled={isSyncing || !cloudConfigured}
-                className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSyncing ? 'Syncing...' : 'Sync now'}
-              </button>
               {cloudSession ? (
                 <button
                   onClick={onDisconnectCloud}
@@ -6582,11 +5971,10 @@ function SettingsPage({
               />
             </label>
           </div>
-        </div>
+        </SettingsDisclosure>
 
-        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Backups and recovery</p>
-          <div className="mt-4 space-y-3">
+        <SettingsDisclosure title="Backups and recovery" description="Save a browser snapshot, export JSON, or recover this browser's local workspace.">
+          <div className="space-y-3">
             <InfoRow label="Last browser backup" value={lastLocalBackupAt ? formatDateTime(lastLocalBackupAt) : 'No browser backup saved yet'} />
             <p className="text-sm leading-6 text-[#6D5C50]">
               Keep a local browser backup snapshot, restore it, or download a JSON export you can keep outside the browser.
@@ -6637,77 +6025,76 @@ function SettingsPage({
               />
             </label>
           </div>
-        </div>
-      </section>
+        </SettingsDisclosure>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Display</p>
-          <label className="mt-4 flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
-            <div>
-              <p className="text-sm font-semibold text-[#1E2D2F]">Show completed tasks in Today</p>
-              <p className="mt-1 text-sm text-[#6D5C50]">This toggle is local to the web app and does not affect Android.</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={showCompletedToday}
-              onChange={onToggleShowCompletedToday}
-              className="h-5 w-5 accent-[#EE6A3C]"
-            />
-          </label>
-          <label className="mt-4 flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
-            <div>
-              <p className="text-sm font-semibold text-[#1E2D2F]">Use 24-hour time</p>
-              <p className="mt-1 text-sm text-[#6D5C50]">Applies to task times, reminders, sync stamps, and activity history in the web app.</p>
-            </div>
-            <input
-              type="checkbox"
-              checked={use24HourTime}
-              onChange={onToggleUse24HourTime}
-              className="h-5 w-5 accent-[#EE6A3C]"
-            />
-          </label>
-        </div>
-
-        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Week layout</p>
-          <div className="mt-4 space-y-3">
-            <InfoRow label="Current start day" value={weekStartsOn === 1 ? 'Monday' : 'Sunday'} />
-            <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
-              This setting affects week-based filters like Search → This week and keeps the web app aligned with how you think about your week.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => onWeekStartsOnChange(0)}
-                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
-                  weekStartsOn === 0
-                    ? 'bg-[#EE6A3C] text-white'
-                    : 'border border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
-                }`}
-              >
-                Sunday
-              </button>
-              <button
-                type="button"
-                onClick={() => onWeekStartsOnChange(1)}
-                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
-                  weekStartsOn === 1
-                    ? 'bg-[#EE6A3C] text-white'
-                    : 'border border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
-                }`}
-              >
-                Monday
-              </button>
+        <SettingsDisclosure title="Display and behavior" description="Local-only web preferences that do not affect Android." defaultOpen>
+          <div className="space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">Show completed tasks in Today</p>
+                <p className="mt-1 text-sm text-[#6D5C50]">This toggle is local to the web app and does not affect Android.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={showCompletedToday}
+                onChange={onToggleShowCompletedToday}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">Show Select tasks buttons on list pages</p>
+                <p className="mt-1 text-sm text-[#6D5C50]">Keyboard selection with X still works even when this is off.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={showSelectionButtons}
+                onChange={onToggleShowSelectionButtons}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">Use 24-hour time</p>
+                <p className="mt-1 text-sm text-[#6D5C50]">Applies to task times, reminders, and sync timestamps in the web app.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={use24HourTime}
+                onChange={onToggleUse24HourTime}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
+            <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold text-[#1E2D2F]">Week starts on</p>
+                  <p className="mt-1 text-sm text-[#6D5C50]">Affects week-based filters and calendars in the web app.</p>
+                </div>
+                <span className="text-sm font-semibold text-[#6D5C50]">{weekStartsOn === 1 ? 'Monday' : 'Sunday'}</span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => onWeekStartsOnChange(0)}
+                  className={`rounded-full px-4 py-3 text-sm font-semibold transition ${weekStartsOn === 0 ? 'bg-[#EE6A3C] text-white' : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FFFDFC]'}`}
+                >
+                  Sunday
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onWeekStartsOnChange(1)}
+                  className={`rounded-full px-4 py-3 text-sm font-semibold transition ${weekStartsOn === 1 ? 'bg-[#EE6A3C] text-white' : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FFFDFC]'}`}
+                >
+                  Monday
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </SettingsDisclosure>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Feedback</p>
-          <div className="mt-4 space-y-3">
+        <SettingsDisclosure title="Feedback" description="Quick paths for bug reports and product feedback.">
+          <div className="space-y-3">
             <p className="text-sm leading-6 text-[#6D5C50]">
               Send product feedback or a bug report straight from the app. The email draft includes the current route,
               connected sync account, and browser details so issues are easier to reproduce.
@@ -6730,21 +6117,8 @@ function SettingsPage({
               Support inbox: {SUPPORT_EMAIL}
             </p>
           </div>
-        </div>
-
-        <div className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Friend testing safety</p>
-          <div className="mt-4 space-y-3 text-sm leading-6 text-[#6D5C50]">
-            <p>Before heavy testing or imports, save a browser backup or export JSON from this screen.</p>
-            <ul className="list-disc space-y-2 pl-5">
-              <li>Use <span className="font-semibold text-[#1E2D2F]">Save browser backup</span> after major changes.</li>
-              <li>Use <span className="font-semibold text-[#1E2D2F]">Export JSON</span> before trying risky sync flows.</li>
-              <li>Use <span className="font-semibold text-[#1E2D2F]">Restore browser backup</span> if a browser-side test goes bad.</li>
-              <li>Tell testers to report the exact screen and action sequence when something breaks.</li>
-            </ul>
-          </div>
-        </div>
-      </section>
+        </SettingsDisclosure>
+      </div>
     </div>
   );
 }
@@ -7605,11 +6979,11 @@ function QuickAddDialog({
                   if (showBulkChoices) setShowBulkChoices(false);
                 }}
                 rows={1}
-                placeholder="Task name"
+                placeholder="Pay rent every month on the 1st at 9am p1 #bills"
                 className="min-h-[60px] w-full resize-none border-0 bg-transparent px-0 py-0 text-[18px] font-semibold text-[#1E2D2F] outline-none placeholder:text-[#9A9188]"
               />
             </label>
-            <p className="mt-1 text-sm text-[#8A8076]">Natural language works here: `p1 tomorrow 9pm #bills`.</p>
+            <p className="mt-1 text-sm text-[#8A8076]">Use plain language for dates, priorities, projects, reminders, and repeat rules. Example: `Pay rent every month on the 1st at 9am p1 #bills`.</p>
 
             <label className="mt-4 block">
               <span className="sr-only">Description</span>
@@ -9545,7 +8919,6 @@ function getRouteTitle(pathname: string, payload: SyncPayload): string {
   if (pathname.startsWith('/today')) return 'Today';
   if (pathname.startsWith('/upcoming')) return 'Upcoming';
   if (pathname.startsWith('/search')) return 'Search';
-  if (pathname.startsWith('/browse')) return 'Browse';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/inbox')) return 'Inbox';
   if (pathname.startsWith('/project/')) {
@@ -9683,4 +9056,5 @@ function writeStoredCloudSession(session: CloudSession | null) {
   }
   window.localStorage.setItem('emberlist.cloudSession', JSON.stringify(session));
 }
+
 

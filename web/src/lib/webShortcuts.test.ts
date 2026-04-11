@@ -6,7 +6,7 @@ describe('webShortcuts', () => {
     expect(resolveGoShortcut('i')).toBe('/inbox');
     expect(resolveGoShortcut('t')).toBe('/today');
     expect(resolveGoShortcut('u')).toBe('/upcoming');
-    expect(resolveGoShortcut('b')).toBe('/browse');
+    expect(resolveGoShortcut('b')).toBeNull();
     expect(resolveGoShortcut('p')).toBe('__project_switcher__');
     expect(resolveGoShortcut('s')).toBe('/settings');
     expect(resolveGoShortcut('h')).toBe('/today');
@@ -20,7 +20,7 @@ describe('webShortcuts', () => {
       'Navigate',
       'Task Actions',
       'Task Detail',
-      'Project and Browse',
+      'Project',
     ]);
     expect(shortcutSections.some(section => section.items.some(item => item.keys === 'Shift+S'))).toBe(true);
     expect(shortcutSections.some(section => section.items.some(item => item.keys === 'G then P'))).toBe(true);
