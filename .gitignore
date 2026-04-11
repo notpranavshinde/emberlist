@@ -39,3 +39,5 @@ out/
 # Misc
 *.keystore
 *.jks
+.env
+agent-auth.json
