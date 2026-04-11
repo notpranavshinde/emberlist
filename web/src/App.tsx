@@ -7263,8 +7263,8 @@ function CloudConnectDialog({
           <p className="text-sm font-semibold text-[#1E2D2F]">What to expect</p>
           <ol className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
             <li>1. Google will ask you to pick an account.</li>
-            <li>2. You may see an unverified-app warning while the app is still in testing.</li>
-            <li>3. On the last screen, check the Google Drive permission box before you press Continue.</li>
+            <li>2. Google will show a permissions review before returning you to Emberlist.</li>
+            <li>3. On the last Google screen, check the Drive permission box before you press Continue.</li>
           </ol>
         </div>
         <div className="flex flex-wrap gap-3">
