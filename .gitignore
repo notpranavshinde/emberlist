@@ -41,3 +41,8 @@ out/
 *.jks
 .env
 agent-auth.json
+.gemini/
+web/.gemini/
+.playwright-mcp/
+web/.playwright-mcp/
+.artifacts/
