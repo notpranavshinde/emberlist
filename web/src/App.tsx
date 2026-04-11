@@ -132,6 +132,7 @@ const QUICK_ADD_PLACEHOLDER = 'Try: pay rent p1 tomorrow 9pm #bills';
 const QUICK_ADD_AUTO_VALUE = '__auto__';
 const QUICK_ADD_INBOX_VALUE = '__inbox__';
 const QUICK_ADD_NONE_VALUE = '__none__';
+const FIRST_RUN_WELCOME_DISMISSED_KEY = 'emberlist.firstRunWelcomeDismissed';
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: 'All', value: 'ALL' },
   { label: 'Overdue', value: 'OVERDUE' },
@@ -162,6 +163,26 @@ let activeDraggedTaskId: string | null = null;
 
 function normalizeInternalHref(href: string) {
   return href.startsWith('#') ? href.slice(1) : href;
+}
+
+function isWorkspaceEmpty(payload: SyncPayload | null): boolean {
+  if (!payload) return false;
+  const hasLiveProjects = payload.projects.some(project => !project.deletedAt);
+  const hasLiveSections = payload.sections.some(section => !section.deletedAt);
+  const hasLiveTasks = payload.tasks.some(task => !task.deletedAt);
+  return !hasLiveProjects && !hasLiveSections && !hasLiveTasks;
+}
+
+function normalizeCloudSyncErrorMessage(message: string): string {
+  if (message.includes('insufficientPermissions')) {
+    return 'Google sign-in finished, but Drive access was not granted. Try again and check the final box that allows Emberlist to access its own configuration data in Google Drive.';
+  }
+
+  if (message.includes('popup_closed')) {
+    return 'Google sign-in was closed before it finished. Try again and keep the Google window open until you return to Emberlist.';
+  }
+
+  return message;
 }
 
 function App() {
@@ -200,6 +221,11 @@ function App() {
   const [cloudSession, setCloudSession] = useState<CloudSession | null>(() => readStoredCloudSession());
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>(() => readStoredActivityEntries());
+  const [hasDismissedFirstRunWelcome, setHasDismissedFirstRunWelcome] = useState(() =>
+    readStoredBoolean(FIRST_RUN_WELCOME_DISMISSED_KEY, false)
+  );
+  const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
+  const [isCloudConnectDialogOpen, setIsCloudConnectDialogOpen] = useState(false);
 
   const payloadRef = useRef<SyncPayload | null>(null);
   const cloudSessionRef = useRef<CloudSession | null>(cloudSession);
@@ -323,6 +349,10 @@ function App() {
   useEffect(() => {
     writeStoredActivityEntries(activityEntries);
   }, [activityEntries]);
+
+  useEffect(() => {
+    window.localStorage.setItem(FIRST_RUN_WELCOME_DISMISSED_KEY, JSON.stringify(hasDismissedFirstRunWelcome));
+  }, [hasDismissedFirstRunWelcome]);
 
   useEffect(() => {
     const autoDismissMs = resolveBannerAutoDismissMs(banner);
@@ -501,7 +531,7 @@ function App() {
       }
     } catch (error) {
       console.error('Cloud sync failed', error);
-      const message = error instanceof Error ? error.message : 'Cloud sync failed.';
+      const message = normalizeCloudSyncErrorMessage(error instanceof Error ? error.message : 'Cloud sync failed.');
       setLastSyncError(message);
       if (!automatic) {
         showBanner('error', message);
@@ -648,6 +678,28 @@ function App() {
   }
 
   async function handleCloudSync() {
+    if (!syncService) {
+      const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+      setLastSyncError(message);
+      showBanner('error', message);
+      return;
+    }
+
+    if (!cloudSessionRef.current) {
+      setHasDismissedFirstRunWelcome(true);
+      setIsWelcomeDialogOpen(false);
+      setIsCloudConnectDialogOpen(true);
+      return;
+    }
+
+    await runCloudSync({ interactiveAuth: true, automatic: false });
+    setBootState('ready');
+  }
+
+  async function handleConnectCloudSync() {
+    setHasDismissedFirstRunWelcome(true);
+    setIsWelcomeDialogOpen(false);
+    setIsCloudConnectDialogOpen(false);
     await runCloudSync({ interactiveAuth: true, automatic: false });
     setBootState('ready');
   }
@@ -1067,6 +1119,17 @@ function App() {
   }, [bootState, cloudSession, syncService]);
 
   useEffect(() => {
+    if (bootState !== 'ready') return;
+    if (cloudSession) {
+      setIsWelcomeDialogOpen(false);
+      return;
+    }
+    if (hasDismissedFirstRunWelcome) return;
+    if (!isWorkspaceEmpty(payload)) return;
+    setIsWelcomeDialogOpen(true);
+  }, [bootState, cloudSession, hasDismissedFirstRunWelcome, payload]);
+
+  useEffect(() => {
     const previous = previousAutoSyncStateRef.current;
     const current = {
       autoSyncEnabled,
@@ -1175,72 +1238,103 @@ function App() {
 
   return (
     <HashRouter>
-      <WorkspaceShell
-        payload={payload}
-        banner={banner}
-        onDismissBanner={() => setBanner(null)}
-        onShowBanner={showBanner}
-        onCloudSync={() => void handleCloudSync()}
-        onResetCloudSync={() => void handleResetCloudSync()}
-        onResetLocalCache={() => void handleResetLocalCache()}
-        onImport={handleImport}
-        onCreateTask={handleCreateTask}
-        onToggleTask={taskId => void handleToggleTask(taskId)}
-        onArchiveTask={taskId => void handleArchiveTask(taskId)}
-        onDeleteTask={taskId => void handleDeleteTask(taskId)}
-        onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
-        onPostponeTasks={taskIds => void handlePostponeTasks(taskIds)}
-        onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
-        onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
-        onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
-        onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
-        onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
-        onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
-        onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
-        onCreateProject={handleCreateProject}
-        onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
-        onDeleteProject={projectId => void handleDeleteProject(projectId)}
-        onCreateSection={(projectId, name) => void handleCreateSection(projectId, name)}
-        onUpdateSection={(sectionId, updater) => void handleUpdateSection(sectionId, updater)}
-        onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
-        showCompletedToday={showCompletedToday}
-        onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
-        weekStartsOn={weekStartsOn}
-        onWeekStartsOnChange={value => setWeekStartsOn(value)}
-        use24HourTime={use24HourTime}
-        onToggleUse24HourTime={() => setUse24HourTime(value => !value)}
-        autoSyncEnabled={autoSyncEnabled}
-        onToggleAutoSyncEnabled={() => setAutoSyncEnabled(value => !value)}
-        autoBackupEnabled={autoBackupEnabled}
-        onToggleAutoBackupEnabled={() => setAutoBackupEnabled(value => !value)}
-        cloudConfigured={Boolean(syncService)}
-        cloudSession={cloudSession}
-        lastSyncError={lastSyncError}
-        hasPendingLocalChanges={hasPendingLocalChanges}
-        isOnline={isOnline}
-        isSyncing={isSyncing}
-        isResettingCloud={isResettingCloud}
-        isResettingCache={isResettingCache}
-        lastCloudSyncAt={lastCloudSyncAt}
-        lastLocalBackupAt={lastLocalBackupAt}
-        onExportJson={handleExportJson}
-        onSaveBrowserBackupNow={handleSaveBrowserBackupNow}
-        onRestoreBrowserBackup={() => void handleRestoreBrowserBackup()}
-        onDisconnectCloud={() => void handleDisconnectCloud()}
-        isQuickAddOpen={isQuickAddOpen}
-        quickAddOverride={quickAddOverride}
-        onOpenQuickAdd={overrides => {
-          setQuickAddOverride(overrides ?? null);
-          setIsQuickAddOpen(true);
-        }}
-        onCloseQuickAdd={() => {
-          setIsQuickAddOpen(false);
-          setQuickAddOverride(null);
-        }}
-        activityEntries={activityEntries}
-        onUndoActivity={activityId => void handleUndoActivity(activityId)}
-        canUndoActivity={activityId => undoActivityMapRef.current.has(activityId)}
-      />
+      <>
+        <WorkspaceShell
+          payload={payload}
+          banner={banner}
+          onDismissBanner={() => setBanner(null)}
+          onShowBanner={showBanner}
+          onCloudSync={() => void handleCloudSync()}
+          onResetCloudSync={() => void handleResetCloudSync()}
+          onResetLocalCache={() => void handleResetLocalCache()}
+          onImport={handleImport}
+          onCreateTask={handleCreateTask}
+          onToggleTask={taskId => void handleToggleTask(taskId)}
+          onArchiveTask={taskId => void handleArchiveTask(taskId)}
+          onDeleteTask={taskId => void handleDeleteTask(taskId)}
+          onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
+          onPostponeTasks={taskIds => void handlePostponeTasks(taskIds)}
+          onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
+          onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
+          onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
+          onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
+          onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
+          onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
+          onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
+          onCreateProject={handleCreateProject}
+          onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
+          onDeleteProject={projectId => void handleDeleteProject(projectId)}
+          onCreateSection={(projectId, name) => void handleCreateSection(projectId, name)}
+          onUpdateSection={(sectionId, updater) => void handleUpdateSection(sectionId, updater)}
+          onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
+          showCompletedToday={showCompletedToday}
+          onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
+          weekStartsOn={weekStartsOn}
+          onWeekStartsOnChange={value => setWeekStartsOn(value)}
+          use24HourTime={use24HourTime}
+          onToggleUse24HourTime={() => setUse24HourTime(value => !value)}
+          autoSyncEnabled={autoSyncEnabled}
+          onToggleAutoSyncEnabled={() => setAutoSyncEnabled(value => !value)}
+          autoBackupEnabled={autoBackupEnabled}
+          onToggleAutoBackupEnabled={() => setAutoBackupEnabled(value => !value)}
+          cloudConfigured={Boolean(syncService)}
+          cloudSession={cloudSession}
+          lastSyncError={lastSyncError}
+          hasPendingLocalChanges={hasPendingLocalChanges}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+          isResettingCloud={isResettingCloud}
+          isResettingCache={isResettingCache}
+          lastCloudSyncAt={lastCloudSyncAt}
+          lastLocalBackupAt={lastLocalBackupAt}
+          onExportJson={handleExportJson}
+          onSaveBrowserBackupNow={handleSaveBrowserBackupNow}
+          onRestoreBrowserBackup={() => void handleRestoreBrowserBackup()}
+          onDisconnectCloud={() => void handleDisconnectCloud()}
+          isQuickAddOpen={isQuickAddOpen}
+          quickAddOverride={quickAddOverride}
+          onOpenQuickAdd={overrides => {
+            setQuickAddOverride(overrides ?? null);
+            setIsQuickAddOpen(true);
+          }}
+          onCloseQuickAdd={() => {
+            setIsQuickAddOpen(false);
+            setQuickAddOverride(null);
+          }}
+          activityEntries={activityEntries}
+          onUndoActivity={activityId => void handleUndoActivity(activityId)}
+          canUndoActivity={activityId => undoActivityMapRef.current.has(activityId)}
+        />
+
+        {isWelcomeDialogOpen ? (
+          <WelcomeDialog
+            cloudConfigured={Boolean(syncService)}
+            onClose={() => {
+              setIsWelcomeDialogOpen(false);
+              setHasDismissedFirstRunWelcome(true);
+            }}
+            onContinueLocal={() => {
+              setIsWelcomeDialogOpen(false);
+              setHasDismissedFirstRunWelcome(true);
+            }}
+            onConnectGoogle={() => {
+              setHasDismissedFirstRunWelcome(true);
+              setIsWelcomeDialogOpen(false);
+              setIsCloudConnectDialogOpen(true);
+            }}
+          />
+        ) : null}
+
+        {isCloudConnectDialogOpen ? (
+          <CloudConnectDialog
+            lastSyncError={lastSyncError}
+            onClose={() => setIsCloudConnectDialogOpen(false)}
+            onConnect={() => {
+              void handleConnectCloudSync();
+            }}
+          />
+        ) : null}
+      </>
     </HashRouter>
   );
 }
@@ -1725,7 +1819,7 @@ function WorkspaceShell({
               <StatusPill label={cloudStatus.label} tone={cloudStatus.tone} />
             </div>
             <p className="mt-2 text-xs leading-5 text-[#7a746d]">
-              {cloudSession?.email ?? 'No Google account connected in this tab'}
+              {cloudSession?.email ?? 'Connect Google Drive to keep this workspace synced across browsers and devices.'}
             </p>
             <button
               onClick={onCloudSync}
@@ -1733,7 +1827,7 @@ function WorkspaceShell({
               className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
-              <span>{isSyncing ? 'Syncing...' : 'Sync now'}</span>
+              <span>{isSyncing ? 'Syncing...' : cloudSession ? 'Sync now' : 'Connect Google Drive'}</span>
             </button>
             {cloudSession ? (
               <button
@@ -7086,6 +7180,110 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
             </div>
           </section>
         ))}
+      </div>
+    </ChoiceDialog>
+  );
+}
+
+function WelcomeDialog({
+  cloudConfigured,
+  onClose,
+  onContinueLocal,
+  onConnectGoogle,
+}: {
+  cloudConfigured: boolean;
+  onClose: () => void;
+  onContinueLocal: () => void;
+  onConnectGoogle: () => void;
+}) {
+  return (
+    <ChoiceDialog
+      title="Welcome to Emberlist"
+      description="You can use Emberlist locally right away, or connect Google Drive now so your tasks stay in sync across devices."
+      onClose={onClose}
+      dialogClassName="max-w-2xl"
+    >
+      <div className="space-y-4">
+        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+          <p className="text-sm font-semibold text-[#1E2D2F]">What sync gives you</p>
+          <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
+            <li>Keep the same tasks on every browser and device.</li>
+            <li>Store sync data in your own Google Drive app data area.</li>
+            <li>You can skip this and keep using Emberlist locally.</li>
+          </ul>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onConnectGoogle}
+            data-dialog-autofocus="true"
+            disabled={!cloudConfigured}
+            className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {cloudConfigured ? 'Connect Google Drive' : 'Cloud sync unavailable'}
+          </button>
+          <button
+            type="button"
+            onClick={onContinueLocal}
+            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+          >
+            Continue local-only
+          </button>
+        </div>
+      </div>
+    </ChoiceDialog>
+  );
+}
+
+function CloudConnectDialog({
+  lastSyncError,
+  onClose,
+  onConnect,
+}: {
+  lastSyncError: string | null;
+  onClose: () => void;
+  onConnect: () => void;
+}) {
+  const needsDrivePermissionRetry = Boolean(lastSyncError?.includes('Drive access was not granted'));
+
+  return (
+    <ChoiceDialog
+      title="Connect Google Drive"
+      description="Emberlist will open Google sign-in in a new window and ask for access to its own app-specific Drive data."
+      onClose={onClose}
+      dialogClassName="max-w-2xl"
+    >
+      <div className="space-y-4">
+        {needsDrivePermissionRetry ? (
+          <div className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-5 py-4 text-sm leading-6 text-[#A24628]">
+            The last attempt finished sign-in, but Google Drive access was not granted. On the final Google screen, check the box for Drive configuration data before continuing.
+          </div>
+        ) : null}
+        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+          <p className="text-sm font-semibold text-[#1E2D2F]">What to expect</p>
+          <ol className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
+            <li>1. Google will ask you to pick an account.</li>
+            <li>2. You may see an unverified-app warning while the app is still in testing.</li>
+            <li>3. On the last screen, check the Google Drive permission box before you press Continue.</li>
+          </ol>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={onConnect}
+            data-dialog-autofocus="true"
+            className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335]"
+          >
+            Continue to Google
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+          >
+            Not now
+          </button>
+        </div>
       </div>
     </ChoiceDialog>
   );
