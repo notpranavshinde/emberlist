@@ -166,7 +166,7 @@ function normalizeInternalHref(href: string) {
 }
 
 function isPublicMarketingPath(pathname: string) {
-  return pathname === '/' || pathname === '/privacy' || pathname === '/terms';
+  return pathname === '/privacy' || pathname === '/terms';
 }
 
 function isWorkspaceEmpty(payload: SyncPayload | null): boolean {
