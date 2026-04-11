@@ -113,6 +113,11 @@
 - [x] Add web project board view.
 - [x] Add a toggle between list and board view for projects on web.
 - [x] Add richer direct task operations in the web project view, including reschedule and stronger row actions.
+- [x] Turn Browse into a workspace dashboard instead of a duplicate project list.
+- [x] Add Browse project sorting, filtering, and workload scanning.
+- [x] Add project-level management actions directly from Browse.
+- [x] Add workspace health summaries for overdue, unstructured, empty, and no-date project work.
+- [x] Strengthen project creation and project comparison on Browse.
 - [x] Add task-level activity timeline inside web task detail.
 - [x] Add parser-style inline task editing on web task detail for faster project and section assignment.
 - [x] Add richer undo behavior for archive, unarchive, and update flows in web task detail.
