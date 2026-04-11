@@ -9,6 +9,7 @@ import {
   Cloud,
   CircleSlash,
   Download,
+  Bell,
   Flag,
   Folder,
   GripVertical,
@@ -6751,481 +6752,6 @@ function SettingsPage({
   );
 }
 
-function QuickAddDialog({
-  payload,
-  context,
-  onClose,
-  onCreateTask,
-  onShowBanner,
-}: {
-  payload: SyncPayload;
-  context: QuickAddContext;
-  onClose: () => void;
-  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
-  onShowBanner: (
-    tone: Banner['tone'],
-    message: string,
-    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
-  ) => void;
-}) {
-  const todayStartMs = useTodayStartMs();
-  const [input, setInput] = useState('');
-  const [description, setDescription] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
-  const [showBulkChoices, setShowBulkChoices] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(async () => undefined);
-  const createBulkTasksRef = useRef<(mode: 'single' | 'many') => Promise<void>>(async () => undefined);
-  const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
-  const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
-  const hasInput = input.trim().length > 0;
-  const previewDraft = useMemo(
-    () => buildDraftFromParsed(payload, parsedPreview, description, context, todayStartMs),
-    [context, description, parsedPreview, payload, todayStartMs]
-  );
-  const [projectOverrideId, setProjectOverrideId] = useState<string | null | undefined>(undefined);
-  const [sectionOverrideId, setSectionOverrideId] = useState<string | null | undefined>(undefined);
-  const [priorityOverride, setPriorityOverride] = useState<Priority | undefined>(undefined);
-  const [recurrenceOverride, setRecurrenceOverride] = useState<string | null | undefined>(undefined);
-  const [reminderEditorsOverride, setReminderEditorsOverride] = useState<ReminderEditorDraft[] | undefined>(undefined);
-  const effectiveProjectId = projectOverrideId === undefined ? previewDraft.projectId : projectOverrideId;
-  const effectiveProjectName = projectOverrideId === undefined ? previewDraft.projectName : null;
-  const quickAddSectionOptions = effectiveProjectId ? getProjectSections(payload, effectiveProjectId) : [];
-  const effectiveSectionId = effectiveProjectId
-    ? (sectionOverrideId === undefined ? previewDraft.sectionId : sectionOverrideId)
-    : null;
-  const effectiveSectionName = effectiveProjectId
-    ? (sectionOverrideId === undefined ? previewDraft.sectionName : null)
-    : null;
-  const effectivePriority = priorityOverride ?? previewDraft.priority;
-  const effectiveRecurrenceRule = recurrenceOverride === undefined ? previewDraft.recurringRule : recurrenceOverride;
-  const parsedReminderEditors = useMemo(() => buildReminderEditors(previewDraft.reminders), [previewDraft.reminders]);
-  const effectiveReminderEditors = reminderEditorsOverride ?? parsedReminderEditors;
-  const effectiveReminderDrafts = useMemo(
-    () => serializeReminderEditors(effectiveReminderEditors),
-    [effectiveReminderEditors]
-  );
-  const effectiveDraft = useMemo<TaskDraft>(
-    () => ({
-      ...previewDraft,
-      projectId: effectiveProjectId ?? null,
-      projectName: effectiveProjectName,
-      sectionId: effectiveSectionId ?? null,
-      sectionName: effectiveSectionName,
-      priority: effectivePriority,
-      recurringRule: effectiveRecurrenceRule,
-      reminders: effectiveReminderDrafts,
-    }),
-    [
-      effectivePriority,
-      effectiveProjectId,
-      effectiveProjectName,
-      effectiveRecurrenceRule,
-      effectiveReminderDrafts,
-      effectiveSectionId,
-      effectiveSectionName,
-      previewDraft,
-    ]
-  );
-  const hasManualMetadataOverrides =
-    projectOverrideId !== undefined ||
-    sectionOverrideId !== undefined ||
-    priorityOverride !== undefined ||
-    recurrenceOverride !== undefined ||
-    reminderEditorsOverride !== undefined;
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const lowerKey = event.key.toLowerCase();
-      const typing = isTypingTarget(event.target);
-      if ((event.metaKey || event.ctrlKey) && lowerKey === 'enter' && !event.altKey) {
-        if (!typing) return;
-        event.preventDefault();
-        if (showBulkChoices) {
-          return;
-        }
-        void submitDraftRef.current('continue');
-        return;
-      }
-
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === 'Enter' && !event.shiftKey) {
-        if (!typing) return;
-        event.preventDefault();
-        if (showBulkChoices) {
-          return;
-        }
-        void submitDraftRef.current('close');
-        return;
-      }
-
-      if (event.key !== 'Escape') return;
-      if (isSaving) return;
-
-      event.preventDefault();
-      const action = getQuickAddEscapeAction(showBulkChoices);
-      if (action === 'dismiss-bulk') {
-        setShowBulkChoices(false);
-        return;
-      }
-      onClose();
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isSaving, onClose, showBulkChoices]);
-
-  function resetDialogFields() {
-    setInput('');
-    setDescription('');
-    setShowBulkChoices(false);
-    setProjectOverrideId(undefined);
-    setSectionOverrideId(undefined);
-    setPriorityOverride(undefined);
-    setRecurrenceOverride(undefined);
-    setReminderEditorsOverride(undefined);
-    window.setTimeout(() => {
-      inputRef.current?.focus();
-    }, 0);
-  }
-
-  async function submitDraft(mode: QuickAddSubmitMode = 'close') {
-    if (!hasInput) return;
-    if (shouldPromptBulkQuickAdd(input)) {
-      setShowBulkChoices(true);
-      return;
-    }
-    if (hasIncompleteReminderEditors(effectiveReminderEditors)) {
-      onShowBanner('error', 'Complete each reminder row or remove it before creating the task.');
-      return;
-    }
-    if (effectiveReminderEditors.some(editor => editor.mode === 'OFFSET') && effectiveDraft.dueAt === null) {
-      onShowBanner('error', 'Relative reminders need a due date. Add one in the parser or switch the reminder to a fixed time.');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      const taskId = await onCreateTask(effectiveDraft);
-      if (taskId) {
-        if (shouldCloseQuickAddAfterCreate(mode)) {
-          onClose();
-        } else {
-          resetDialogFields();
-        }
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await submitDraft('close');
-  }
-
-  async function createBulkTasks(mode: 'single' | 'many') {
-    if (hasIncompleteReminderEditors(effectiveReminderEditors)) {
-      onShowBanner('error', 'Complete each reminder row or remove it before creating tasks.');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      if (mode === 'single') {
-        const mergedDraft = mergeBulkDraftWithDefaults(
-          createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs),
-          effectiveDraft,
-          '',
-        );
-        if (mergedDraft.reminders.some(reminder => reminder.kind === 'OFFSET') && mergedDraft.dueAt === null) {
-          onShowBanner('error', 'Relative reminders need a due date before they can be applied to the combined task.');
-          return;
-        }
-        const taskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 task.' });
-        if (taskId) {
-          onClose();
-        }
-        return;
-      }
-
-      for (const line of bulkLines) {
-        const parsedLine = parseQuickAdd(line);
-        const baseDraft = buildDraftFromParsed(payload, parsedLine, description, context, todayStartMs);
-        const draft = mergeBulkDraftWithDefaults(baseDraft, effectiveDraft, line);
-        if (draft.reminders.some(reminder => reminder.kind === 'OFFSET') && draft.dueAt === null) {
-          onShowBanner('error', 'Each task needs a due date before a relative reminder can be applied.');
-          return;
-        }
-        await onCreateTask(draft, { silent: true });
-      }
-      onShowBanner('success', `${bulkLines.length} tasks created.`);
-      onClose();
-    } finally {
-      setIsSaving(false);
-      setShowBulkChoices(false);
-    }
-  }
-
-  submitDraftRef.current = submitDraft;
-  createBulkTasksRef.current = createBulkTasks;
-
-  return (
-    <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[32px] border border-[#E7DDD4] bg-[#F7F4F0] p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Quick add</p>
-            <h3 className="mt-2 text-2xl font-semibold text-[#1E2D2F]">Create a task</h3>
-          </div>
-          <button onClick={onClose} className="rounded-full border border-[#E1D5CA] bg-white p-2 text-[#1E2D2F] transition hover:bg-[#FBF7F3]">
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={submit} className="mt-5 space-y-4">
-          <Field label="Task parser">
-            <textarea
-              autoFocus
-              ref={inputRef}
-              value={input}
-              onChange={event => {
-                setInput(event.target.value);
-                if (showBulkChoices) {
-                  setShowBulkChoices(false);
-                }
-              }}
-              rows={4}
-              placeholder={QUICK_ADD_PLACEHOLDER}
-              className="w-full rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
-            />
-            <p className="mt-2 text-xs text-[#8a8076]">Or paste a whole list, one task per line.</p>
-          </Field>
-
-          <Field label="Notes">
-            <textarea
-              value={description}
-              onChange={event => setDescription(event.target.value)}
-              rows={4}
-              placeholder="Add notes"
-              className="w-full rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-
-          <section className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">Metadata overrides</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  Leave a field alone to keep using parsed metadata. Change a field here to override the parser.
-                </p>
-              </div>
-              {hasManualMetadataOverrides ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProjectOverrideId(undefined);
-                    setSectionOverrideId(undefined);
-                    setPriorityOverride(undefined);
-                    setRecurrenceOverride(undefined);
-                    setReminderEditorsOverride(undefined);
-                  }}
-                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white"
-                >
-                  Use parser values
-                </button>
-              ) : null}
-            </div>
-
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <Field label="Project">
-                <select
-                  value={projectOverrideId === undefined ? QUICK_ADD_AUTO_VALUE : projectOverrideId ?? QUICK_ADD_INBOX_VALUE}
-                  onChange={event => {
-                    const nextValue = event.target.value;
-                    if (nextValue === QUICK_ADD_AUTO_VALUE) {
-                      setProjectOverrideId(undefined);
-                      setSectionOverrideId(undefined);
-                      return;
-                    }
-                    setProjectOverrideId(nextValue === QUICK_ADD_INBOX_VALUE ? null : nextValue);
-                    setSectionOverrideId(null);
-                  }}
-                  className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-                >
-                  <option value={QUICK_ADD_AUTO_VALUE}>
-                    {`Parser / context: ${describeQuickAddProject(payload, previewDraft)}`}
-                  </option>
-                  <option value={QUICK_ADD_INBOX_VALUE}>Inbox</option>
-                  {getActiveProjects(payload, true).map(project => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Section">
-                <select
-                  value={sectionOverrideId === undefined ? QUICK_ADD_AUTO_VALUE : sectionOverrideId ?? QUICK_ADD_NONE_VALUE}
-                  onChange={event => {
-                    const nextValue = event.target.value;
-                    if (nextValue === QUICK_ADD_AUTO_VALUE) {
-                      setSectionOverrideId(undefined);
-                      return;
-                    }
-                    setSectionOverrideId(nextValue === QUICK_ADD_NONE_VALUE ? null : nextValue);
-                  }}
-                  disabled={!effectiveProjectId && sectionOverrideId !== undefined}
-                  className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <option value={QUICK_ADD_AUTO_VALUE}>
-                    {`Parser / context: ${describeQuickAddSection(payload, previewDraft)}`}
-                  </option>
-                  <option value={QUICK_ADD_NONE_VALUE}>No section</option>
-                  {quickAddSectionOptions.map(section => (
-                    <option key={section.id} value={section.id}>
-                      {section.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Priority">
-                <select
-                  value={priorityOverride ?? QUICK_ADD_AUTO_VALUE}
-                  onChange={event => setPriorityOverride(event.target.value === QUICK_ADD_AUTO_VALUE ? undefined : event.target.value as Priority)}
-                  className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-                >
-                  <option value={QUICK_ADD_AUTO_VALUE}>{`Parser / context: ${previewDraft.priority}`}</option>
-                  <option value="P1">P1 · Critical</option>
-                  <option value="P2">P2 · High</option>
-                  <option value="P3">P3 · Medium</option>
-                  <option value="P4">P4 · Low</option>
-                </select>
-              </Field>
-
-              <RecurrenceField
-                label="Repeat schedule"
-                value={effectiveRecurrenceRule}
-                onChange={rule => setRecurrenceOverride(rule)}
-                autoLabel={recurrenceOverride === undefined ? undefined : `Parser / context: ${previewDraft.recurringRule ? renderRecurrenceLabel(previewDraft.recurringRule) : 'No repeat'}`}
-                onReset={recurrenceOverride !== undefined ? () => setRecurrenceOverride(undefined) : undefined}
-                description="Set a repeat rule explicitly without relying only on the parser."
-              />
-            </div>
-
-            <div className="mt-4">
-              <ReminderListEditor
-                reminders={effectiveReminderEditors}
-                dueAt={effectiveDraft.dueAt}
-                onChange={nextEditors => setReminderEditorsOverride(nextEditors)}
-                autoLabel={reminderEditorsOverride !== undefined ? renderReminderSourceLabel(previewDraft.reminders) : undefined}
-                onReset={reminderEditorsOverride !== undefined ? () => setReminderEditorsOverride(undefined) : undefined}
-              />
-            </div>
-          </section>
-
-          <section className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  {bulkLines.length > 1 ? `Bulk add preview · ${bulkLines.length} tasks` : 'Parsed metadata'}
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  {bulkLines.length > 1
-                    ? 'Each line will be parsed as its own task. You can also combine the pasted list into one task.'
-                    : 'Quick Add uses the same parser rules as Android: projects, dates, priorities, recurrence, and reminders.'}
-                </p>
-              </div>
-              {context.defaultDueToday || context.defaultProjectId ? (
-                <span className="rounded-full bg-[#FBF7F3] px-3 py-1 text-xs font-semibold text-[#9F7B63]">
-                  {describeQuickAddContext(payload, context)}
-                </span>
-              ) : null}
-            </div>
-
-            {bulkLines.length > 1 ? (
-              <div className="mt-4 rounded-[18px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3 text-sm text-[#6D5C50]">
-                <p className="font-medium text-[#1E2D2F]">First task preview</p>
-                <p className="mt-2">{bulkLines[0]}</p>
-              </div>
-            ) : (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {renderQuickAddMetadata(payload, effectiveDraft).map(item => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-[#E7DDD4] bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
-                  >
-                    {item}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {showBulkChoices ? (
-            <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
-              <p className="text-sm font-semibold text-[#A24628]">Add {bulkLines.length} tasks?</p>
-              <p className="mt-1 text-sm text-[#8A5A44]">
-                Review the pasted list, then either combine it into one task or create one task per line.
-              </p>
-              <div className="mt-4 flex flex-wrap justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowBulkChoices(false)}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isSaving || bulkLines.length === 0}
-                  onClick={() => void createBulkTasks('single')}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSaving ? 'Adding...' : 'Combine into 1 task'}
-                </button>
-                <button
-                  type="button"
-                  disabled={isSaving || bulkLines.length === 0}
-                  onClick={() => void createBulkTasks('many')}
-                  className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isSaving ? 'Adding...' : `Add all ${bulkLines.length}`}
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving || !hasInput}
-              className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isSaving ? 'Creating...' : bulkLines.length > 1 ? `Review ${bulkLines.length} tasks` : 'Create task'}
-            </button>
-            <button
-              type="button"
-              disabled={isSaving || !hasInput || bulkLines.length > 1}
-              onClick={() => void submitDraft('continue')}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isSaving ? 'Creating...' : 'Create & add another'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 function TaskGroup({
   title,
   subtitle,
@@ -7730,6 +7256,547 @@ function ChoiceDialog({
         </div>
         {children ? <div className={`mt-5 overflow-y-auto pr-1 ${childrenClassName ?? ''}`}>{children}</div> : null}
         {footer ? <div className="mt-5 shrink-0">{footer}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function QuickAddDialog({
+  payload,
+  context,
+  onClose,
+  onCreateTask,
+  onShowBanner,
+}: {
+  payload: SyncPayload;
+  context: QuickAddContext;
+  onClose: () => void;
+  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onShowBanner: (
+    tone: Banner['tone'],
+    message: string,
+    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+  ) => void;
+}) {
+  const todayStartMs = useTodayStartMs();
+  const [input, setInput] = useState('');
+  const [description, setDescription] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [showBulkChoices, setShowBulkChoices] = useState(false);
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
+  const [showReminderEditor, setShowReminderEditor] = useState(false);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(async () => undefined);
+  const createBulkTasksRef = useRef<(mode: 'single' | 'many') => Promise<void>>(async () => undefined);
+  const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
+  const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
+  const hasInput = input.trim().length > 0;
+  const previewDraft = useMemo(
+    () => buildDraftFromParsed(payload, parsedPreview, description, context, todayStartMs),
+    [context, description, parsedPreview, payload, todayStartMs]
+  );
+  const [projectOverrideId, setProjectOverrideId] = useState<string | null | undefined>(undefined);
+  const [sectionOverrideId, setSectionOverrideId] = useState<string | null | undefined>(undefined);
+  const [priorityOverride, setPriorityOverride] = useState<Priority | undefined>(undefined);
+  const [recurrenceOverride, setRecurrenceOverride] = useState<string | null | undefined>(undefined);
+  const [reminderEditorsOverride, setReminderEditorsOverride] = useState<ReminderEditorDraft[] | undefined>(undefined);
+  const effectiveProjectId = projectOverrideId === undefined ? previewDraft.projectId : projectOverrideId;
+  const effectiveProjectName = projectOverrideId === undefined ? previewDraft.projectName : null;
+  const quickAddSectionOptions = effectiveProjectId ? getProjectSections(payload, effectiveProjectId) : [];
+  const effectiveSectionId = effectiveProjectId
+    ? (sectionOverrideId === undefined ? previewDraft.sectionId : sectionOverrideId)
+    : null;
+  const effectiveSectionName = effectiveProjectId
+    ? (sectionOverrideId === undefined ? previewDraft.sectionName : null)
+    : null;
+  const effectivePriority = priorityOverride ?? previewDraft.priority;
+  const effectiveRecurrenceRule = recurrenceOverride === undefined ? previewDraft.recurringRule : recurrenceOverride;
+  const parsedReminderEditors = useMemo(() => buildReminderEditors(previewDraft.reminders), [previewDraft.reminders]);
+  const effectiveReminderEditors = reminderEditorsOverride ?? parsedReminderEditors;
+  const effectiveReminderDrafts = useMemo(
+    () => serializeReminderEditors(effectiveReminderEditors),
+    [effectiveReminderEditors]
+  );
+  const effectiveDraft = useMemo<TaskDraft>(
+    () => ({
+      ...previewDraft,
+      projectId: effectiveProjectId ?? null,
+      projectName: effectiveProjectName,
+      sectionId: effectiveSectionId ?? null,
+      sectionName: effectiveSectionName,
+      priority: effectivePriority,
+      recurringRule: effectiveRecurrenceRule,
+      reminders: effectiveReminderDrafts,
+    }),
+    [
+      effectivePriority,
+      effectiveProjectId,
+      effectiveProjectName,
+      effectiveRecurrenceRule,
+      effectiveReminderDrafts,
+      effectiveSectionId,
+      effectiveSectionName,
+      previewDraft,
+    ]
+  );
+  const dueSummaryLabel = effectiveDraft.dueAt !== null
+    ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
+    : context.defaultDueToday
+      ? 'Today'
+      : null;
+  const reminderSummaryLabel = effectiveDraft.reminders.length
+    ? renderReminderLabel(effectiveDraft.reminders)
+    : 'Reminders';
+  const prioritySummaryLabel = priorityOverride === undefined ? `Priority ${previewDraft.priority}` : `Priority ${effectivePriority}`;
+  const hasManualMetadataOverrides =
+    projectOverrideId !== undefined ||
+    sectionOverrideId !== undefined ||
+    priorityOverride !== undefined ||
+    recurrenceOverride !== undefined ||
+    reminderEditorsOverride !== undefined;
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const lowerKey = event.key.toLowerCase();
+      const typing = isTypingTarget(event.target);
+      if ((event.metaKey || event.ctrlKey) && lowerKey === 'enter' && !event.altKey) {
+        if (!typing) return;
+        event.preventDefault();
+        if (showBulkChoices) return;
+        void submitDraftRef.current('continue');
+        return;
+      }
+
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === 'Enter' && !event.shiftKey) {
+        if (!typing) return;
+        event.preventDefault();
+        if (showBulkChoices) return;
+        void submitDraftRef.current('close');
+        return;
+      }
+
+      if (event.key !== 'Escape') return;
+      if (isSaving) return;
+
+      event.preventDefault();
+      const action = getQuickAddEscapeAction(showBulkChoices);
+      if (action === 'dismiss-bulk') {
+        setShowBulkChoices(false);
+        return;
+      }
+      onClose();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSaving, onClose, showBulkChoices]);
+
+  function resetDialogFields() {
+    setInput('');
+    setDescription('');
+    setShowBulkChoices(false);
+    setShowAdvancedFields(false);
+    setShowReminderEditor(false);
+    setProjectOverrideId(undefined);
+    setSectionOverrideId(undefined);
+    setPriorityOverride(undefined);
+    setRecurrenceOverride(undefined);
+    setReminderEditorsOverride(undefined);
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }
+
+  async function submitDraft(mode: QuickAddSubmitMode = 'close') {
+    if (!hasInput) return;
+    if (shouldPromptBulkQuickAdd(input)) {
+      setShowBulkChoices(true);
+      return;
+    }
+    if (hasIncompleteReminderEditors(effectiveReminderEditors)) {
+      onShowBanner('error', 'Complete each reminder row or remove it before creating the task.');
+      return;
+    }
+    if (effectiveReminderEditors.some(editor => editor.mode === 'OFFSET') && effectiveDraft.dueAt === null) {
+      onShowBanner('error', 'Relative reminders need a due date. Add one in the parser or switch the reminder to a fixed time.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const taskId = await onCreateTask(effectiveDraft);
+      if (taskId) {
+        if (shouldCloseQuickAddAfterCreate(mode)) {
+          onClose();
+        } else {
+          resetDialogFields();
+        }
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitDraft('close');
+  }
+
+  async function createBulkTasks(mode: 'single' | 'many') {
+    if (hasIncompleteReminderEditors(effectiveReminderEditors)) {
+      onShowBanner('error', 'Complete each reminder row or remove it before creating tasks.');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      if (mode === 'single') {
+        const mergedDraft = mergeBulkDraftWithDefaults(
+          createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs),
+          effectiveDraft,
+          '',
+        );
+        if (mergedDraft.reminders.some(reminder => reminder.kind === 'OFFSET') && mergedDraft.dueAt === null) {
+          onShowBanner('error', 'Relative reminders need a due date before they can be applied to the combined task.');
+          return;
+        }
+        const taskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 task.' });
+        if (taskId) onClose();
+        return;
+      }
+
+      for (const line of bulkLines) {
+        const parsedLine = parseQuickAdd(line);
+        const baseDraft = buildDraftFromParsed(payload, parsedLine, description, context, todayStartMs);
+        const draft = mergeBulkDraftWithDefaults(baseDraft, effectiveDraft, line);
+        if (draft.reminders.some(reminder => reminder.kind === 'OFFSET') && draft.dueAt === null) {
+          onShowBanner('error', 'Each task needs a due date before a relative reminder can be applied.');
+          return;
+        }
+        await onCreateTask(draft, { silent: true });
+      }
+      onShowBanner('success', `${bulkLines.length} tasks created.`);
+      onClose();
+    } finally {
+      setIsSaving(false);
+      setShowBulkChoices(false);
+    }
+  }
+
+  submitDraftRef.current = submitDraft;
+  createBulkTasksRef.current = createBulkTasks;
+
+  return (
+    <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
+      <div className="w-full max-w-3xl rounded-[32px] border border-[#E7DDD4] bg-[#F7F4F0] p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Quick add</p>
+            <h3 className="mt-2 text-2xl font-semibold text-[#1E2D2F]">Add task</h3>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-[#E1D5CA] bg-white p-2 text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="mt-5 space-y-4">
+          <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+            <textarea
+              autoFocus
+              ref={inputRef}
+              value={input}
+              onChange={event => {
+                setInput(event.target.value);
+                if (showBulkChoices) setShowBulkChoices(false);
+              }}
+              rows={3}
+              placeholder={QUICK_ADD_PLACEHOLDER}
+              className="w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-base leading-7 outline-none transition focus:border-[#EE6A3C]"
+            />
+            <p className="mt-2 text-xs text-[#8A8076]">Paste one task per line for bulk add.</p>
+
+            <textarea
+              value={description}
+              onChange={event => setDescription(event.target.value)}
+              rows={2}
+              placeholder="Description or notes"
+              className="mt-3 w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            />
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {dueSummaryLabel ? (
+                <span className="inline-flex items-center gap-2 rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm font-medium text-[#1E2D2F]">
+                  <CalendarDays size={14} className="text-[#9F7B63]" />
+                  {dueSummaryLabel}
+                </span>
+              ) : null}
+              {effectiveDraft.recurringRule ? (
+                <span className="inline-flex items-center gap-2 rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm font-medium text-[#1E2D2F]">
+                  <RefreshCw size={14} className="text-[#9F7B63]" />
+                  {renderRecurrenceLabel(effectiveDraft.recurringRule)}
+                </span>
+              ) : null}
+
+              <label className="inline-flex items-center gap-2 rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-white">
+                <Flag size={14} className="text-[#9F7B63]" />
+                <select
+                  value={priorityOverride ?? QUICK_ADD_AUTO_VALUE}
+                  onChange={event => setPriorityOverride(event.target.value === QUICK_ADD_AUTO_VALUE ? undefined : event.target.value as Priority)}
+                  className="bg-transparent pr-1 text-sm font-medium outline-none"
+                >
+                  <option value={QUICK_ADD_AUTO_VALUE}>{prioritySummaryLabel}</option>
+                  <option value="P1">Priority P1</option>
+                  <option value="P2">Priority P2</option>
+                  <option value="P3">Priority P3</option>
+                  <option value="P4">Priority P4</option>
+                </select>
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setShowReminderEditor(current => !current)}
+                className={`inline-flex items-center gap-2 rounded-[16px] border px-3 py-2 text-sm font-medium transition ${
+                  showReminderEditor || effectiveDraft.reminders.length
+                    ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                    : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                }`}
+              >
+                <Bell size={14} className={showReminderEditor || effectiveDraft.reminders.length ? 'text-[#B64B28]' : 'text-[#9F7B63]'} />
+                {reminderSummaryLabel}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAdvancedFields(current => !current)}
+                className={`inline-flex items-center gap-2 rounded-[16px] border px-3 py-2 text-sm font-medium transition ${
+                  showAdvancedFields || hasManualMetadataOverrides
+                    ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
+                    : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                }`}
+              >
+                <MoreHorizontal size={14} className={showAdvancedFields || hasManualMetadataOverrides ? 'text-[#B64B28]' : 'text-[#9F7B63]'} />
+                More
+              </button>
+            </div>
+
+            {showReminderEditor ? (
+              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1E2D2F]">Reminders</p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">Add fixed-time or relative reminders for this task.</p>
+                  </div>
+                  {reminderEditorsOverride !== undefined ? (
+                    <button
+                      type="button"
+                      onClick={() => setReminderEditorsOverride(undefined)}
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    >
+                      Use parser
+                    </button>
+                  ) : null}
+                </div>
+                <ReminderListEditor
+                  reminders={effectiveReminderEditors}
+                  dueAt={effectiveDraft.dueAt}
+                  onChange={nextEditors => setReminderEditorsOverride(nextEditors)}
+                  autoLabel={reminderEditorsOverride !== undefined ? renderReminderSourceLabel(previewDraft.reminders) : undefined}
+                  onReset={reminderEditorsOverride !== undefined ? () => setReminderEditorsOverride(undefined) : undefined}
+                />
+              </section>
+            ) : null}
+
+            {showAdvancedFields ? (
+              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1E2D2F]">More options</p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">Override parsed section and repeat settings only when you need to.</p>
+                  </div>
+                  {hasManualMetadataOverrides ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProjectOverrideId(undefined);
+                        setSectionOverrideId(undefined);
+                        setPriorityOverride(undefined);
+                        setRecurrenceOverride(undefined);
+                        setReminderEditorsOverride(undefined);
+                      }}
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    >
+                      Use parser values
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <Field label="Section">
+                    <select
+                      value={sectionOverrideId === undefined ? QUICK_ADD_AUTO_VALUE : sectionOverrideId ?? QUICK_ADD_NONE_VALUE}
+                      onChange={event => {
+                        const nextValue = event.target.value;
+                        if (nextValue === QUICK_ADD_AUTO_VALUE) {
+                          setSectionOverrideId(undefined);
+                          return;
+                        }
+                        setSectionOverrideId(nextValue === QUICK_ADD_NONE_VALUE ? null : nextValue);
+                      }}
+                      disabled={!effectiveProjectId && sectionOverrideId !== undefined}
+                      className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value={QUICK_ADD_AUTO_VALUE}>
+                        {`Parser / context: ${describeQuickAddSection(payload, previewDraft)}`}
+                      </option>
+                      <option value={QUICK_ADD_NONE_VALUE}>No section</option>
+                      {quickAddSectionOptions.map(section => (
+                        <option key={section.id} value={section.id}>
+                          {section.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <RecurrenceField
+                    label="Repeat schedule"
+                    value={effectiveRecurrenceRule}
+                    onChange={rule => setRecurrenceOverride(rule)}
+                    autoLabel={recurrenceOverride === undefined ? undefined : `Parser / context: ${previewDraft.recurringRule ? renderRecurrenceLabel(previewDraft.recurringRule) : 'No repeat'}`}
+                    onReset={recurrenceOverride !== undefined ? () => setRecurrenceOverride(undefined) : undefined}
+                    description="Set a repeat rule explicitly without relying only on the parser."
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[#1E2D2F]">
+                    {bulkLines.length > 1 ? `Bulk add preview · ${bulkLines.length} tasks` : 'Parsed metadata'}
+                  </p>
+                  <p className="mt-1 text-sm text-[#6D5C50]">
+                    {bulkLines.length > 1
+                      ? 'Each line will be parsed as its own task. You can also combine the pasted list into one task.'
+                      : 'Parser output stays visible here so you can trust what will be created.'}
+                  </p>
+                </div>
+                {context.defaultDueToday || context.defaultProjectId ? (
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#9F7B63]">
+                    {describeQuickAddContext(payload, context)}
+                  </span>
+                ) : null}
+              </div>
+
+              {bulkLines.length > 1 ? (
+                <div className="mt-4 rounded-[18px] border border-[#E7DDD4] bg-white px-4 py-3 text-sm text-[#6D5C50]">
+                  <p className="font-medium text-[#1E2D2F]">First task preview</p>
+                  <p className="mt-2">{bulkLines[0]}</p>
+                </div>
+              ) : (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {renderQuickAddMetadata(payload, effectiveDraft).map(item => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-[#E7DDD4] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          </section>
+
+          {showBulkChoices ? (
+            <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
+              <p className="text-sm font-semibold text-[#A24628]">Add {bulkLines.length} tasks?</p>
+              <p className="mt-1 text-sm text-[#8A5A44]">
+                Review the pasted list, then either combine it into one task or create one task per line.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBulkChoices(false)}
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving || bulkLines.length === 0}
+                  onClick={() => void createBulkTasks('single')}
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSaving ? 'Adding...' : 'Combine into 1 task'}
+                </button>
+                <button
+                  type="button"
+                  disabled={isSaving || bulkLines.length === 0}
+                  onClick={() => void createBulkTasks('many')}
+                  className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSaving ? 'Adding...' : `Add all ${bulkLines.length}`}
+                </button>
+              </div>
+            </section>
+          ) : null}
+
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <label className="inline-flex items-center gap-2 self-start rounded-[16px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]">
+              <Folder size={14} className="text-[#9F7B63]" />
+              <select
+                value={projectOverrideId === undefined ? QUICK_ADD_AUTO_VALUE : projectOverrideId ?? QUICK_ADD_INBOX_VALUE}
+                onChange={event => {
+                  const nextValue = event.target.value;
+                  if (nextValue === QUICK_ADD_AUTO_VALUE) {
+                    setProjectOverrideId(undefined);
+                    setSectionOverrideId(undefined);
+                    return;
+                  }
+                  setProjectOverrideId(nextValue === QUICK_ADD_INBOX_VALUE ? null : nextValue);
+                  setSectionOverrideId(null);
+                }}
+                className="bg-transparent pr-1 text-sm font-medium outline-none"
+              >
+                <option value={QUICK_ADD_AUTO_VALUE}>{describeQuickAddProject(payload, previewDraft)}</option>
+                <option value={QUICK_ADD_INBOX_VALUE}>Inbox</option>
+                {getActiveProjects(payload, true).map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving || !hasInput}
+                className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSaving ? 'Creating...' : bulkLines.length > 1 ? `Review ${bulkLines.length} tasks` : 'Create task'}
+              </button>
+              <button
+                type="button"
+                disabled={isSaving || !hasInput || bulkLines.length > 1}
+                onClick={() => void submitDraft('continue')}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {isSaving ? 'Creating...' : 'Create & add another'}
+              </button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -9245,3 +9312,4 @@ function writeStoredCloudSession(session: CloudSession | null) {
   }
   window.localStorage.setItem('emberlist.cloudSession', JSON.stringify(session));
 }
+
