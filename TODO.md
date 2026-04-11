@@ -171,3 +171,16 @@
 - Undo should cover both single-task and bulk-task mutations before expanding task-management UI further.
 - Subtasks should land before Search and Upcoming parity work, because those screens need hierarchy-aware rendering.
 - Board view is intentionally deferred until the shared hierarchy and task-operation model is stable.
+
+## Auth Hardening Backlog
+
+### Do Not Block Friend Testing
+- [ ] Add a public privacy policy URL to Google Auth Platform branding.
+- [ ] Add a public terms of service URL to Google Auth Platform branding.
+- [ ] Add a production consent-screen logo for Emberlist.
+
+### Security / OAuth Follow-Up
+- [ ] Audit the web Google Drive auth flow against Google's current secure-flow guidance and decide whether to keep the current GIS token flow or move to an authorization-code + backend/BFF model later.
+- [ ] Audit Android Google Drive auth against Google's modern OAuth guidance and plan a migration away from legacy `GoogleSignIn` APIs if needed.
+- [ ] Review whether Cross-Account Protection is worth adding for the published OAuth app, and document the decision.
+- [ ] Review incremental-authorization support for Google Drive sync and document whether Emberlist should stay single-consent or adopt staged scope requests later.
