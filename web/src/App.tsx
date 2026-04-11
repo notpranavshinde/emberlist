@@ -165,6 +165,10 @@ function normalizeInternalHref(href: string) {
   return href.startsWith('#') ? href.slice(1) : href;
 }
 
+function isPublicMarketingPath(pathname: string) {
+  return pathname === '/' || pathname === '/privacy' || pathname === '/terms';
+}
+
 function isWorkspaceEmpty(payload: SyncPayload | null): boolean {
   if (!payload) return false;
   const hasLiveProjects = payload.projects.some(project => !project.deletedAt);
@@ -1238,108 +1242,143 @@ function App() {
 
   return (
     <HashRouter>
-      <>
-        <WorkspaceShell
-          payload={payload}
-          banner={banner}
-          onDismissBanner={() => setBanner(null)}
-          onShowBanner={showBanner}
-          onCloudSync={() => void handleCloudSync()}
-          onResetCloudSync={() => void handleResetCloudSync()}
-          onResetLocalCache={() => void handleResetLocalCache()}
-          onImport={handleImport}
-          onCreateTask={handleCreateTask}
-          onToggleTask={taskId => void handleToggleTask(taskId)}
-          onArchiveTask={taskId => void handleArchiveTask(taskId)}
-          onDeleteTask={taskId => void handleDeleteTask(taskId)}
-          onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
-          onPostponeTasks={taskIds => void handlePostponeTasks(taskIds)}
-          onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
-          onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
-          onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
-          onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
-          onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
-          onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
-          onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
-          onCreateProject={handleCreateProject}
-          onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
-          onDeleteProject={projectId => void handleDeleteProject(projectId)}
-          onCreateSection={(projectId, name) => void handleCreateSection(projectId, name)}
-          onUpdateSection={(sectionId, updater) => void handleUpdateSection(sectionId, updater)}
-          onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
-          showCompletedToday={showCompletedToday}
-          onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
-          weekStartsOn={weekStartsOn}
-          onWeekStartsOnChange={value => setWeekStartsOn(value)}
-          use24HourTime={use24HourTime}
-          onToggleUse24HourTime={() => setUse24HourTime(value => !value)}
-          autoSyncEnabled={autoSyncEnabled}
-          onToggleAutoSyncEnabled={() => setAutoSyncEnabled(value => !value)}
-          autoBackupEnabled={autoBackupEnabled}
-          onToggleAutoBackupEnabled={() => setAutoBackupEnabled(value => !value)}
-          cloudConfigured={Boolean(syncService)}
-          cloudSession={cloudSession}
-          lastSyncError={lastSyncError}
-          hasPendingLocalChanges={hasPendingLocalChanges}
-          isOnline={isOnline}
-          isSyncing={isSyncing}
-          isResettingCloud={isResettingCloud}
-          isResettingCache={isResettingCache}
-          lastCloudSyncAt={lastCloudSyncAt}
-          lastLocalBackupAt={lastLocalBackupAt}
-          onExportJson={handleExportJson}
-          onSaveBrowserBackupNow={handleSaveBrowserBackupNow}
-          onRestoreBrowserBackup={() => void handleRestoreBrowserBackup()}
-          onDisconnectCloud={() => void handleDisconnectCloud()}
-          isQuickAddOpen={isQuickAddOpen}
-          quickAddOverride={quickAddOverride}
-          onOpenQuickAdd={overrides => {
-            setQuickAddOverride(overrides ?? null);
-            setIsQuickAddOpen(true);
-          }}
-          onCloseQuickAdd={() => {
-            setIsQuickAddOpen(false);
-            setQuickAddOverride(null);
-          }}
-          activityEntries={activityEntries}
-          onUndoActivity={activityId => void handleUndoActivity(activityId)}
-          canUndoActivity={activityId => undoActivityMapRef.current.has(activityId)}
-        />
-
-        {isWelcomeDialogOpen ? (
-          <WelcomeDialog
-            cloudConfigured={Boolean(syncService)}
-            onClose={() => {
-              setIsWelcomeDialogOpen(false);
-              setHasDismissedFirstRunWelcome(true);
-            }}
-            onContinueLocal={() => {
-              setIsWelcomeDialogOpen(false);
-              setHasDismissedFirstRunWelcome(true);
-            }}
-            onConnectGoogle={() => {
-              setHasDismissedFirstRunWelcome(true);
-              setIsWelcomeDialogOpen(false);
-              setIsCloudConnectDialogOpen(true);
-            }}
-          />
-        ) : null}
-
-        {isCloudConnectDialogOpen ? (
-          <CloudConnectDialog
-            lastSyncError={lastSyncError}
-            onClose={() => setIsCloudConnectDialogOpen(false)}
-            onConnect={() => {
-              void handleConnectCloudSync();
-            }}
-          />
-        ) : null}
-      </>
+      <AppFrame
+        payload={payload}
+        banner={banner}
+        onDismissBanner={() => setBanner(null)}
+        onShowBanner={showBanner}
+        onCloudSync={() => void handleCloudSync()}
+        onResetCloudSync={() => void handleResetCloudSync()}
+        onResetLocalCache={() => void handleResetLocalCache()}
+        onImport={handleImport}
+        onCreateTask={handleCreateTask}
+        onToggleTask={taskId => void handleToggleTask(taskId)}
+        onArchiveTask={taskId => void handleArchiveTask(taskId)}
+        onDeleteTask={taskId => void handleDeleteTask(taskId)}
+        onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
+        onPostponeTasks={taskIds => void handlePostponeTasks(taskIds)}
+        onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
+        onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
+        onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
+        onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
+        onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
+        onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
+        onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
+        onCreateProject={handleCreateProject}
+        onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
+        onDeleteProject={projectId => void handleDeleteProject(projectId)}
+        onCreateSection={(projectId, name) => void handleCreateSection(projectId, name)}
+        onUpdateSection={(sectionId, updater) => void handleUpdateSection(sectionId, updater)}
+        onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
+        showCompletedToday={showCompletedToday}
+        onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
+        weekStartsOn={weekStartsOn}
+        onWeekStartsOnChange={value => setWeekStartsOn(value)}
+        use24HourTime={use24HourTime}
+        onToggleUse24HourTime={() => setUse24HourTime(value => !value)}
+        autoSyncEnabled={autoSyncEnabled}
+        onToggleAutoSyncEnabled={() => setAutoSyncEnabled(value => !value)}
+        autoBackupEnabled={autoBackupEnabled}
+        onToggleAutoBackupEnabled={() => setAutoBackupEnabled(value => !value)}
+        cloudConfigured={Boolean(syncService)}
+        cloudSession={cloudSession}
+        lastSyncError={lastSyncError}
+        hasPendingLocalChanges={hasPendingLocalChanges}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        isResettingCloud={isResettingCloud}
+        isResettingCache={isResettingCache}
+        lastCloudSyncAt={lastCloudSyncAt}
+        lastLocalBackupAt={lastLocalBackupAt}
+        onExportJson={handleExportJson}
+        onSaveBrowserBackupNow={handleSaveBrowserBackupNow}
+        onRestoreBrowserBackup={() => void handleRestoreBrowserBackup()}
+        onDisconnectCloud={() => void handleDisconnectCloud()}
+        isQuickAddOpen={isQuickAddOpen}
+        quickAddOverride={quickAddOverride}
+        onOpenQuickAdd={overrides => {
+          setQuickAddOverride(overrides ?? null);
+          setIsQuickAddOpen(true);
+        }}
+        onCloseQuickAdd={() => {
+          setIsQuickAddOpen(false);
+          setQuickAddOverride(null);
+        }}
+        activityEntries={activityEntries}
+        onUndoActivity={activityId => void handleUndoActivity(activityId)}
+        canUndoActivity={activityId => undoActivityMapRef.current.has(activityId)}
+        isWelcomeDialogOpen={isWelcomeDialogOpen}
+        onCloseWelcomeDialog={() => {
+          setIsWelcomeDialogOpen(false);
+          setHasDismissedFirstRunWelcome(true);
+        }}
+        onContinueLocalWelcome={() => {
+          setIsWelcomeDialogOpen(false);
+          setHasDismissedFirstRunWelcome(true);
+        }}
+        onConnectGoogleWelcome={() => {
+          setHasDismissedFirstRunWelcome(true);
+          setIsWelcomeDialogOpen(false);
+          setIsCloudConnectDialogOpen(true);
+        }}
+        isCloudConnectDialogOpen={isCloudConnectDialogOpen}
+        onCloseCloudConnectDialog={() => setIsCloudConnectDialogOpen(false)}
+        onConnectCloudDialog={() => {
+          void handleConnectCloudSync();
+        }}
+      />
     </HashRouter>
   );
 }
 
 export default App;
+
+type AppFrameProps = WorkspaceShellProps & {
+  isWelcomeDialogOpen: boolean;
+  onCloseWelcomeDialog: () => void;
+  onContinueLocalWelcome: () => void;
+  onConnectGoogleWelcome: () => void;
+  isCloudConnectDialogOpen: boolean;
+  onCloseCloudConnectDialog: () => void;
+  onConnectCloudDialog: () => void;
+};
+
+function AppFrame({
+  isWelcomeDialogOpen,
+  onCloseWelcomeDialog,
+  onContinueLocalWelcome,
+  onConnectGoogleWelcome,
+  isCloudConnectDialogOpen,
+  onCloseCloudConnectDialog,
+  onConnectCloudDialog,
+  ...workspaceShellProps
+}: AppFrameProps) {
+  const location = useLocation();
+  const isPublicRoute = isPublicMarketingPath(location.pathname);
+
+  return (
+    <>
+      <WorkspaceShell {...workspaceShellProps} />
+
+      {!isPublicRoute && isWelcomeDialogOpen ? (
+        <WelcomeDialog
+          cloudConfigured={workspaceShellProps.cloudConfigured}
+          onClose={onCloseWelcomeDialog}
+          onContinueLocal={onContinueLocalWelcome}
+          onConnectGoogle={onConnectGoogleWelcome}
+        />
+      ) : null}
+
+      {!isPublicRoute && isCloudConnectDialogOpen ? (
+        <CloudConnectDialog
+          lastSyncError={workspaceShellProps.lastSyncError}
+          onClose={onCloseCloudConnectDialog}
+          onConnect={onConnectCloudDialog}
+        />
+      ) : null}
+    </>
+  );
+}
 
 type WorkspaceShellProps = {
   payload: SyncPayload;
@@ -1485,6 +1524,7 @@ function WorkspaceShell({
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
     [payload, todayStartMs]
   );
+  const isPublicPage = isPublicMarketingPath(location.pathname);
   const title = getRouteTitle(location.pathname, payload);
   const projects = getActiveProjects(payload);
   const favoriteProjects = projects.filter(project => project.favorite);
@@ -1733,6 +1773,16 @@ function WorkspaceShell({
       clearGoPrefix();
     };
   }, [banner, isBannerActionRunning, isShortcutDialogOpen, navigate, onOpenQuickAdd]);
+
+  if (isPublicPage) {
+    if (location.pathname === '/privacy') {
+      return <PrivacyPolicyPage />;
+    }
+    if (location.pathname === '/terms') {
+      return <TermsOfServicePage />;
+    }
+    return <MarketingHomePage />;
+  }
 
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
@@ -2210,6 +2260,280 @@ function WorkspaceShell({
         />
       ) : null}
     </div>
+  );
+}
+
+const LEGAL_LAST_UPDATED = 'April 11, 2026';
+const SUPPORT_EMAIL = 'notpranavshinde@gmail.com';
+
+function PublicSiteLayout({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="min-h-screen bg-[#faf8f6] text-[#1e2d2f]">
+      <header className="border-b border-[#ece7e3] bg-[#fffdfb]">
+        <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-4 px-5 py-4 md:px-8">
+          <NavLink to="/" className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#dc4c3e] text-base font-semibold text-white">
+              E
+            </div>
+            <div>
+              <p className="text-base font-semibold text-[#1e2d2f]">Emberlist</p>
+              <p className="text-xs text-[#7a746d]">Offline-first tasks with Google Drive sync</p>
+            </div>
+          </NavLink>
+          <div className="flex items-center gap-2">
+            <NavLink
+              to="/privacy"
+              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9]"
+            >
+              Privacy
+            </NavLink>
+            <NavLink
+              to="/terms"
+              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9]"
+            >
+              Terms
+            </NavLink>
+            <NavLink
+              to="/today"
+              className="rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
+            >
+              Open app
+            </NavLink>
+          </div>
+        </div>
+      </header>
+
+      <main className="px-5 py-10 md:px-8 md:py-14">
+        <div className="mx-auto w-full max-w-[1120px]">
+          <div className="max-w-[760px]">
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b1775c]">{eyebrow}</p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#1e2d2f] md:text-5xl">{title}</h1>
+            <p className="mt-4 text-lg leading-8 text-[#6d5c50]">{description}</p>
+          </div>
+          <div className="mt-10">{children}</div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function PublicSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-[#e1d5ca] bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-semibold text-[#1e2d2f]">{title}</h2>
+      <div className="mt-4 space-y-4 text-sm leading-7 text-[#4d4a45]">{children}</div>
+    </section>
+  );
+}
+
+function MarketingHomePage() {
+  return (
+    <PublicSiteLayout
+      eyebrow="Task management"
+      title="Emberlist keeps your tasks local-first and syncs through your own Google Drive."
+      description="Emberlist is a personal task manager for people who want fast local task editing, recurring work, and cross-device sync without handing their whole workspace to a custom backend."
+    >
+      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+        <PublicSection title="What Emberlist does">
+          <p>
+            Emberlist stores your tasks locally on each device so the app stays usable offline. When you connect Google
+            Drive, Emberlist syncs the workspace through your personal Google Drive app-data area.
+          </p>
+          <p>
+            The app is built for personal task planning: projects, sections, reminders, recurrence, subtasks, quick
+            capture, and keyboard-heavy desktop workflows.
+          </p>
+          <div className="flex flex-wrap gap-3 pt-2">
+            <NavLink
+              to="/today"
+              className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335]"
+            >
+              Open Emberlist
+            </NavLink>
+            <NavLink
+              to="/privacy"
+              className="rounded-full border border-[#e1d5ca] bg-[#fbf7f3] px-5 py-2.5 text-sm font-semibold text-[#1e2d2f] transition hover:bg-[#f4ede7]"
+            >
+              Read privacy policy
+            </NavLink>
+          </div>
+        </PublicSection>
+
+        <PublicSection title="How sync works">
+          <ul className="space-y-3">
+            <li>1. Emberlist writes your workspace into local browser or device storage first.</li>
+            <li>2. If you connect Google Drive, Emberlist syncs an app-specific file in your Drive appData folder.</li>
+            <li>3. Emberlist does not browse or manage your normal Drive files.</li>
+            <li>4. You can disconnect Google Drive and continue using the app locally.</li>
+          </ul>
+        </PublicSection>
+
+        <PublicSection title="Data handling summary">
+          <ul className="space-y-3">
+            <li>Google account data used: basic profile identity needed to show which account is connected.</li>
+            <li>Google Drive data used: only Emberlist&apos;s own sync file in the appData folder.</li>
+            <li>Data shared or sold: Emberlist does not sell user task data.</li>
+            <li>Support contact: {SUPPORT_EMAIL}</li>
+          </ul>
+        </PublicSection>
+
+        <PublicSection title="Useful links">
+          <div className="flex flex-col gap-3">
+            <NavLink to="/terms" className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]">
+              Terms of service
+            </NavLink>
+            <NavLink to="/privacy" className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]">
+              Privacy policy
+            </NavLink>
+            <NavLink to="/today" className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]">
+              Open the app
+            </NavLink>
+          </div>
+        </PublicSection>
+      </div>
+    </PublicSiteLayout>
+  );
+}
+
+function PrivacyPolicyPage() {
+  return (
+    <PublicSiteLayout
+      eyebrow="Privacy policy"
+      title="How Emberlist stores and uses your data."
+      description={`Last updated ${LEGAL_LAST_UPDATED}. This page explains what data Emberlist uses, where it is stored, and what happens when you connect Google Drive sync.`}
+    >
+      <div className="grid gap-5">
+        <PublicSection title="What Emberlist collects">
+          <p>
+            Emberlist stores the task data you create in the app, including tasks, projects, sections, reminders,
+            recurrence settings, and related task metadata.
+          </p>
+          <p>
+            If you connect Google Drive sync, Emberlist also reads your Google account email address and basic profile
+            name so the app can show which Google account is currently connected.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="How data is stored">
+          <p>
+            On the web, Emberlist stores workspace data locally in your browser. On supported clients, it may also store
+            workspace data locally on your device.
+          </p>
+          <p>
+            If you enable Google Drive sync, Emberlist stores a sync file in your Google Drive appData folder. That
+            folder is reserved for app-specific data and is not used to access your ordinary Drive files.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="How Google Drive access is used">
+          <p>Emberlist uses Google Drive access only to:</p>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>create the Emberlist sync file in your appData folder</li>
+            <li>read the current sync file</li>
+            <li>update or delete the Emberlist sync file when sync settings change</li>
+          </ul>
+          <p>Emberlist does not use Google Drive access to browse, read, or modify your general Drive documents.</p>
+        </PublicSection>
+
+        <PublicSection title="How Emberlist uses your data">
+          <ul className="list-disc space-y-2 pl-5">
+            <li>to show your tasks and projects inside the app</li>
+            <li>to keep your local workspace usable offline</li>
+            <li>to sync your workspace between devices when you enable Google Drive sync</li>
+            <li>to show which account is connected for sync</li>
+          </ul>
+        </PublicSection>
+
+        <PublicSection title="Sharing and retention">
+          <p>
+            Emberlist does not sell your personal data. Your data is stored locally and, if enabled, inside your own
+            Google Drive appData storage.
+          </p>
+          <p>
+            You can disconnect Google Drive sync, reset cloud sync, clear local browser data, or export your workspace
+            from the app. Data retention therefore depends largely on the storage you choose to keep.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Contact">
+          <p>Questions about privacy or Google Drive sync can be sent to {SUPPORT_EMAIL}.</p>
+        </PublicSection>
+      </div>
+    </PublicSiteLayout>
+  );
+}
+
+function TermsOfServicePage() {
+  return (
+    <PublicSiteLayout
+      eyebrow="Terms of service"
+      title="Terms for using Emberlist."
+      description={`Last updated ${LEGAL_LAST_UPDATED}. These terms are intentionally short and written to match the current state of the app.`}
+    >
+      <div className="grid gap-5">
+        <PublicSection title="Use of the service">
+          <p>
+            Emberlist is a task-management application. You may use it to create, edit, organize, and sync personal or
+            work task data.
+          </p>
+          <p>
+            You agree not to use Emberlist in a way that breaks the service, interferes with other users, or violates
+            applicable law.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Accounts and sync">
+          <p>
+            Google Drive sync is optional. If you choose to connect Google Drive, you are responsible for the Google
+            account you authorize and for the data stored there.
+          </p>
+          <p>
+            You can disconnect sync at any time. Emberlist may continue to store your workspace locally on the device or
+            browser you are using.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Availability and backups">
+          <p>
+            Emberlist is provided on an as-is and as-available basis. Features may change, and sync or storage failures
+            can happen.
+          </p>
+          <p>
+            You are responsible for keeping backups of data you consider important. Emberlist includes local export and
+            backup controls for that reason.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Liability">
+          <p>
+            To the maximum extent allowed by law, Emberlist is not liable for indirect, incidental, special, or
+            consequential damages, including loss of data, interruption of work, or other business or personal losses
+            resulting from use of the app.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Changes and contact">
+          <p>These terms may be updated as Emberlist changes. The page date will be updated when that happens.</p>
+          <p>Questions about these terms can be sent to {SUPPORT_EMAIL}.</p>
+        </PublicSection>
+      </div>
+    </PublicSiteLayout>
   );
 }
 
@@ -8105,6 +8429,9 @@ function getWorkspaceIdentity(cloudSession: CloudSession | null): { label: strin
 }
 
 function getRouteTitle(pathname: string, payload: SyncPayload): string {
+  if (pathname === '/') return 'Emberlist';
+  if (pathname === '/privacy') return 'Privacy Policy';
+  if (pathname === '/terms') return 'Terms of Service';
   if (pathname.startsWith('/search/no-due')) return 'Tasks without due dates';
   if (pathname.startsWith('/today')) return 'Today';
   if (pathname.startsWith('/upcoming')) return 'Upcoming';
