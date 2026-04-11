@@ -2264,7 +2264,7 @@ function WorkspaceShell({
 }
 
 const LEGAL_LAST_UPDATED = 'April 11, 2026';
-const SUPPORT_EMAIL = 'notpranavshinde@gmail.com';
+const SUPPORT_EMAIL = 'codexemberlistwebdev@gmail.com';
 
 function PublicSiteLayout({
   eyebrow,
