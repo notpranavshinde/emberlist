@@ -4,6 +4,7 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Cloud,
@@ -129,10 +130,6 @@ import type { Priority, Project, Section, SyncPayload, Task } from './types/sync
 
 const syncEngine = new SyncEngine();
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
-const QUICK_ADD_PLACEHOLDER = 'Try: pay rent p1 tomorrow 9pm #bills';
-const QUICK_ADD_AUTO_VALUE = '__auto__';
-const QUICK_ADD_INBOX_VALUE = '__inbox__';
-const QUICK_ADD_NONE_VALUE = '__none__';
 const FIRST_RUN_WELCOME_DISMISSED_KEY = 'emberlist.firstRunWelcomeDismissed';
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: 'All', value: 'ALL' },
@@ -7285,7 +7282,15 @@ function QuickAddDialog({
   const [showBulkChoices, setShowBulkChoices] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [showReminderEditor, setShowReminderEditor] = useState(false);
+  const [showDueDialog, setShowDueDialog] = useState(false);
+  const [showPriorityMenu, setShowPriorityMenu] = useState(false);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [showSectionMenu, setShowSectionMenu] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const projectMenuRef = useRef<HTMLDivElement | null>(null);
+  const sectionMenuRef = useRef<HTMLDivElement | null>(null);
+  const priorityMenuRef = useRef<HTMLDivElement | null>(null);
+  const projectQueryRef = useRef<HTMLInputElement | null>(null);
   const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(async () => undefined);
   const createBulkTasksRef = useRef<(mode: 'single' | 'many') => Promise<void>>(async () => undefined);
   const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
@@ -7300,6 +7305,13 @@ function QuickAddDialog({
   const [priorityOverride, setPriorityOverride] = useState<Priority | undefined>(undefined);
   const [recurrenceOverride, setRecurrenceOverride] = useState<string | null | undefined>(undefined);
   const [reminderEditorsOverride, setReminderEditorsOverride] = useState<ReminderEditorDraft[] | undefined>(undefined);
+  const [dueOverrideAt, setDueOverrideAt] = useState<number | null | undefined>(undefined);
+  const [dueOverrideAllDay, setDueOverrideAllDay] = useState<boolean | undefined>(undefined);
+  const [deadlineEnabledOverride, setDeadlineEnabledOverride] = useState<boolean | undefined>(undefined);
+  const [deadlineAllDayOverride, setDeadlineAllDayOverride] = useState<boolean | undefined>(undefined);
+  const [deadlineInputOverride, setDeadlineInputOverride] = useState<string | undefined>(undefined);
+  const [projectQuery, setProjectQuery] = useState('');
+  const deferredProjectQuery = useDeferredValue(projectQuery.trim().toLowerCase());
   const effectiveProjectId = projectOverrideId === undefined ? previewDraft.projectId : projectOverrideId;
   const effectiveProjectName = projectOverrideId === undefined ? previewDraft.projectName : null;
   const quickAddSectionOptions = effectiveProjectId ? getProjectSections(payload, effectiveProjectId) : [];
@@ -7309,8 +7321,16 @@ function QuickAddDialog({
   const effectiveSectionName = effectiveProjectId
     ? (sectionOverrideId === undefined ? previewDraft.sectionName : null)
     : null;
+  const effectiveDueAt = dueOverrideAt === undefined ? previewDraft.dueAt : dueOverrideAt;
+  const effectiveAllDay = dueOverrideAt === undefined ? previewDraft.allDay : (dueOverrideAllDay ?? true);
   const effectivePriority = priorityOverride ?? previewDraft.priority;
   const effectiveRecurrenceRule = recurrenceOverride === undefined ? previewDraft.recurringRule : recurrenceOverride;
+  const effectiveDeadlineEnabled = deadlineEnabledOverride ?? (previewDraft.deadlineAt !== null);
+  const effectiveDeadlineAllDay = deadlineAllDayOverride ?? previewDraft.deadlineAllDay;
+  const effectiveDeadlineInput = deadlineInputOverride ?? toInputValue(previewDraft.deadlineAt ?? null, previewDraft.deadlineAllDay ?? false);
+  const effectiveDeadlineAt = effectiveDeadlineEnabled
+    ? parseInputValue(effectiveDeadlineInput, effectiveDeadlineAllDay)
+    : null;
   const parsedReminderEditors = useMemo(() => buildReminderEditors(previewDraft.reminders), [previewDraft.reminders]);
   const effectiveReminderEditors = reminderEditorsOverride ?? parsedReminderEditors;
   const effectiveReminderDrafts = useMemo(
@@ -7320,15 +7340,24 @@ function QuickAddDialog({
   const effectiveDraft = useMemo<TaskDraft>(
     () => ({
       ...previewDraft,
+      dueAt: effectiveDueAt,
+      allDay: effectiveAllDay,
       projectId: effectiveProjectId ?? null,
       projectName: effectiveProjectName,
       sectionId: effectiveSectionId ?? null,
       sectionName: effectiveSectionName,
       priority: effectivePriority,
+      deadlineAt: effectiveDeadlineAt,
+      deadlineAllDay: effectiveDeadlineEnabled ? effectiveDeadlineAllDay : false,
       recurringRule: effectiveRecurrenceRule,
       reminders: effectiveReminderDrafts,
     }),
     [
+      effectiveAllDay,
+      effectiveDeadlineAllDay,
+      effectiveDeadlineAt,
+      effectiveDeadlineEnabled,
+      effectiveDueAt,
       effectivePriority,
       effectiveProjectId,
       effectiveProjectName,
@@ -7339,21 +7368,54 @@ function QuickAddDialog({
       previewDraft,
     ]
   );
+  const quickAddPreviewTask = useMemo(() => buildQuickAddPreviewTask(effectiveDraft), [effectiveDraft]);
+  const activeProjects = useMemo(() => getActiveProjects(payload, true), [payload]);
+  const filteredProjects = useMemo(
+    () => activeProjects.filter(project => project.name.toLowerCase().includes(deferredProjectQuery)),
+    [activeProjects, deferredProjectQuery]
+  );
+  const recurrencePreset = getRecurrencePreset(effectiveRecurrenceRule);
   const dueSummaryLabel = effectiveDraft.dueAt !== null
     ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
-    : context.defaultDueToday
-      ? 'Today'
-      : null;
+    : 'Today';
   const reminderSummaryLabel = effectiveDraft.reminders.length
     ? renderReminderLabel(effectiveDraft.reminders)
     : 'Reminders';
-  const prioritySummaryLabel = priorityOverride === undefined ? `Priority ${previewDraft.priority}` : `Priority ${effectivePriority}`;
+  const prioritySummaryLabel = effectivePriority === 'P4' && priorityOverride === undefined ? 'Priority' : effectivePriority;
   const hasManualMetadataOverrides =
+    dueOverrideAt !== undefined ||
+    deadlineEnabledOverride !== undefined ||
+    deadlineAllDayOverride !== undefined ||
+    deadlineInputOverride !== undefined ||
     projectOverrideId !== undefined ||
     sectionOverrideId !== undefined ||
     priorityOverride !== undefined ||
     recurrenceOverride !== undefined ||
     reminderEditorsOverride !== undefined;
+
+  useEffect(() => {
+    if (!showProjectMenu) return;
+    window.setTimeout(() => projectQueryRef.current?.focus(), 0);
+  }, [showProjectMenu]);
+
+  useEffect(() => {
+    function handlePointerDown(event: globalThis.MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (projectMenuRef.current && !projectMenuRef.current.contains(target)) {
+        setShowProjectMenu(false);
+      }
+      if (sectionMenuRef.current && !sectionMenuRef.current.contains(target)) {
+        setShowSectionMenu(false);
+      }
+      if (priorityMenuRef.current && !priorityMenuRef.current.contains(target)) {
+        setShowPriorityMenu(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -7397,11 +7459,21 @@ function QuickAddDialog({
     setShowBulkChoices(false);
     setShowAdvancedFields(false);
     setShowReminderEditor(false);
+    setShowDueDialog(false);
+    setShowPriorityMenu(false);
+    setShowProjectMenu(false);
+    setShowSectionMenu(false);
+    setProjectQuery('');
     setProjectOverrideId(undefined);
     setSectionOverrideId(undefined);
     setPriorityOverride(undefined);
     setRecurrenceOverride(undefined);
     setReminderEditorsOverride(undefined);
+    setDueOverrideAt(undefined);
+    setDueOverrideAllDay(undefined);
+    setDeadlineEnabledOverride(undefined);
+    setDeadlineAllDayOverride(undefined);
+    setDeadlineInputOverride(undefined);
     window.setTimeout(() => {
       inputRef.current?.focus();
     }, 0);
@@ -7419,6 +7491,10 @@ function QuickAddDialog({
     }
     if (effectiveReminderEditors.some(editor => editor.mode === 'OFFSET') && effectiveDraft.dueAt === null) {
       onShowBanner('error', 'Relative reminders need a due date. Add one in the parser or switch the reminder to a fixed time.');
+      return;
+    }
+    if (effectiveDeadlineEnabled && effectiveDeadlineAt === null) {
+      onShowBanner('error', 'Choose a valid deadline before creating the task.');
       return;
     }
 
@@ -7485,13 +7561,28 @@ function QuickAddDialog({
   submitDraftRef.current = submitDraft;
   createBulkTasksRef.current = createBulkTasks;
 
+  function applyQuickAddDueAt(nextDueAt: number | null, nextAllDay = true) {
+    setDueOverrideAt(nextDueAt);
+    setDueOverrideAllDay(nextAllDay);
+    setShowDueDialog(false);
+  }
+
+  function applyQuickAddPostpone() {
+    const postponedDueAt = getPostponeDate(quickAddPreviewTask, todayStartMs);
+    if (postponedDueAt === null) {
+      applyQuickAddDueAt(null, false);
+      return;
+    }
+    applyQuickAddDueAt(postponedDueAt, postponedDueAt === startOfDay(postponedDueAt).getTime());
+  }
+
   return (
     <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-3xl rounded-[32px] border border-[#E7DDD4] bg-[#F7F4F0] p-6 shadow-2xl">
+      <div className="w-full max-w-2xl rounded-[32px] border border-[#E7DDD4] bg-[#F7F4F0] p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Quick add</p>
-            <h3 className="mt-2 text-2xl font-semibold text-[#1E2D2F]">Add task</h3>
+            <h3 className="mt-2 text-2xl font-semibold text-[#1E2D2F]">Create a task</h3>
           </div>
           <button
             onClick={onClose}
@@ -7503,81 +7594,139 @@ function QuickAddDialog({
 
         <form onSubmit={submit} className="mt-5 space-y-4">
           <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-            <textarea
-              autoFocus
-              ref={inputRef}
-              value={input}
-              onChange={event => {
-                setInput(event.target.value);
-                if (showBulkChoices) setShowBulkChoices(false);
-              }}
-              rows={3}
-              placeholder={QUICK_ADD_PLACEHOLDER}
-              className="w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-base leading-7 outline-none transition focus:border-[#EE6A3C]"
-            />
-            <p className="mt-2 text-xs text-[#8A8076]">Paste one task per line for bulk add.</p>
+            <label className="block">
+              <span className="sr-only">Task parser</span>
+              <textarea
+                autoFocus
+                ref={inputRef}
+                value={input}
+                onChange={event => {
+                  setInput(event.target.value);
+                  if (showBulkChoices) setShowBulkChoices(false);
+                }}
+                rows={1}
+                placeholder="Task name"
+                className="min-h-[60px] w-full resize-none border-0 bg-transparent px-0 py-0 text-[18px] font-semibold text-[#1E2D2F] outline-none placeholder:text-[#9A9188]"
+              />
+            </label>
+            <p className="mt-1 text-sm text-[#8A8076]">Natural language works here: `p1 tomorrow 9pm #bills`.</p>
 
-            <textarea
-              value={description}
-              onChange={event => setDescription(event.target.value)}
-              rows={2}
-              placeholder="Description or notes"
-              className="mt-3 w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
+            <label className="mt-4 block">
+              <span className="sr-only">Description</span>
+              <textarea
+                value={description}
+                onChange={event => setDescription(event.target.value)}
+                rows={2}
+                placeholder="Description"
+                className="w-full resize-none border-0 bg-transparent px-0 py-0 text-[15px] text-[#6D5C50] outline-none placeholder:text-[#9A9188]"
+              />
+            </label>
 
-            <div className="mt-4 flex flex-wrap gap-2">
-              {dueSummaryLabel ? (
-                <span className="inline-flex items-center gap-2 rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm font-medium text-[#1E2D2F]">
-                  <CalendarDays size={14} className="text-[#9F7B63]" />
-                  {dueSummaryLabel}
-                </span>
-              ) : null}
-              {effectiveDraft.recurringRule ? (
-                <span className="inline-flex items-center gap-2 rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm font-medium text-[#1E2D2F]">
-                  <RefreshCw size={14} className="text-[#9F7B63]" />
-                  {renderRecurrenceLabel(effectiveDraft.recurringRule)}
-                </span>
-              ) : null}
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDueDialog(true);
+                  setShowPriorityMenu(false);
+                  setShowProjectMenu(false);
+                  setShowSectionMenu(false);
+                }}
+                className="inline-flex items-center gap-2 rounded-[12px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                <CalendarDays size={14} className="text-[#4E9A57]" />
+                <span>{dueSummaryLabel}</span>
+                {effectiveDraft.dueAt !== null ? (
+                  <span
+                    role="button"
+                    tabIndex={-1}
+                    onClick={event => {
+                      event.stopPropagation();
+                      setDueOverrideAt(null);
+                      setDueOverrideAllDay(false);
+                    }}
+                    className="rounded-full p-0.5 text-[#8A8076] transition hover:bg-[#F1ECE7] hover:text-[#1E2D2F]"
+                  >
+                    <X size={12} />
+                  </span>
+                ) : null}
+              </button>
 
-              <label className="inline-flex items-center gap-2 rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-white">
-                <Flag size={14} className="text-[#9F7B63]" />
-                <select
-                  value={priorityOverride ?? QUICK_ADD_AUTO_VALUE}
-                  onChange={event => setPriorityOverride(event.target.value === QUICK_ADD_AUTO_VALUE ? undefined : event.target.value as Priority)}
-                  className="bg-transparent pr-1 text-sm font-medium outline-none"
+              <div ref={priorityMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPriorityMenu(current => !current);
+                    setShowProjectMenu(false);
+                    setShowSectionMenu(false);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-[12px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
                 >
-                  <option value={QUICK_ADD_AUTO_VALUE}>{prioritySummaryLabel}</option>
-                  <option value="P1">Priority P1</option>
-                  <option value="P2">Priority P2</option>
-                  <option value="P3">Priority P3</option>
-                  <option value="P4">Priority P4</option>
-                </select>
-              </label>
+                  <Flag size={14} className="text-[#6D5C50]" />
+                  <span>{prioritySummaryLabel}</span>
+                  <ChevronDown size={14} className="text-[#8A8076]" />
+                </button>
+                {showPriorityMenu ? (
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-40 rounded-[18px] border border-[#E1D5CA] bg-white p-2 shadow-xl">
+                    {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+                      <button
+                        key={priority}
+                        type="button"
+                        onClick={() => {
+                          setPriorityOverride(priority);
+                          setShowPriorityMenu(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
+                          effectivePriority === priority ? 'bg-[#FFF1EB] text-[#B64B28]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                        }`}
+                      >
+                        <span>{priority}</span>
+                        {effectivePriority === priority ? <Check size={14} /> : null}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPriorityOverride(undefined);
+                        setShowPriorityMenu(false);
+                      }}
+                      className="mt-1 flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    >
+                      <span>Use parser</span>
+                      {priorityOverride === undefined ? <Check size={14} /> : null}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
 
               <button
                 type="button"
                 onClick={() => setShowReminderEditor(current => !current)}
-                className={`inline-flex items-center gap-2 rounded-[16px] border px-3 py-2 text-sm font-medium transition ${
+                className={`inline-flex items-center gap-2 rounded-[12px] border px-3 py-2 text-sm font-medium transition ${
                   showReminderEditor || effectiveDraft.reminders.length
                     ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                    : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                    : 'border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
                 }`}
               >
-                <Bell size={14} className={showReminderEditor || effectiveDraft.reminders.length ? 'text-[#B64B28]' : 'text-[#9F7B63]'} />
-                {reminderSummaryLabel}
+                <Bell size={14} className={showReminderEditor || effectiveDraft.reminders.length ? 'text-[#B64B28]' : 'text-[#6D5C50]'} />
+                <span>{reminderSummaryLabel}</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setShowAdvancedFields(current => !current)}
-                className={`inline-flex items-center gap-2 rounded-[16px] border px-3 py-2 text-sm font-medium transition ${
+                onClick={() => {
+                  setShowAdvancedFields(current => !current);
+                  setShowProjectMenu(false);
+                  setShowPriorityMenu(false);
+                  setShowSectionMenu(false);
+                }}
+                className={`inline-flex items-center gap-2 rounded-[12px] border px-3 py-2 text-sm font-medium transition ${
                   showAdvancedFields || hasManualMetadataOverrides
                     ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                    : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                    : 'border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
                 }`}
               >
-                <MoreHorizontal size={14} className={showAdvancedFields || hasManualMetadataOverrides ? 'text-[#B64B28]' : 'text-[#9F7B63]'} />
-                More
+                <MoreHorizontal size={14} className={showAdvancedFields || hasManualMetadataOverrides ? 'text-[#B64B28]' : 'text-[#6D5C50]'} />
+                <span>More</span>
               </button>
             </div>
 
@@ -7613,7 +7762,7 @@ function QuickAddDialog({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-[#1E2D2F]">More options</p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">Override parsed section and repeat settings only when you need to.</p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">Use deadline, section, or repeat settings only when you need them.</p>
                   </div>
                   {hasManualMetadataOverrides ? (
                     <button
@@ -7624,6 +7773,11 @@ function QuickAddDialog({
                         setPriorityOverride(undefined);
                         setRecurrenceOverride(undefined);
                         setReminderEditorsOverride(undefined);
+                        setDueOverrideAt(undefined);
+                        setDueOverrideAllDay(undefined);
+                        setDeadlineEnabledOverride(undefined);
+                        setDeadlineAllDayOverride(undefined);
+                        setDeadlineInputOverride(undefined);
                       }}
                       className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
                     >
@@ -7632,46 +7786,172 @@ function QuickAddDialog({
                   ) : null}
                 </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  <Field label="Section">
-                    <select
-                      value={sectionOverrideId === undefined ? QUICK_ADD_AUTO_VALUE : sectionOverrideId ?? QUICK_ADD_NONE_VALUE}
-                      onChange={event => {
-                        const nextValue = event.target.value;
-                        if (nextValue === QUICK_ADD_AUTO_VALUE) {
-                          setSectionOverrideId(undefined);
-                          return;
-                        }
-                        setSectionOverrideId(nextValue === QUICK_ADD_NONE_VALUE ? null : nextValue);
-                      }}
-                      disabled={!effectiveProjectId && sectionOverrideId !== undefined}
-                      className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <option value={QUICK_ADD_AUTO_VALUE}>
-                        {`Parser / context: ${describeQuickAddSection(payload, previewDraft)}`}
-                      </option>
-                      <option value={QUICK_ADD_NONE_VALUE}>No section</option>
-                      {quickAddSectionOptions.map(section => (
-                        <option key={section.id} value={section.id}>
-                          {section.name}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-[18px] border border-[#E1D5CA] bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-[#1E2D2F]">Deadline</p>
+                        <p className="mt-1 text-sm text-[#6D5C50]">Track a separate deadline for the task.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextEnabled = !effectiveDeadlineEnabled;
+                          setDeadlineEnabledOverride(nextEnabled);
+                          if (nextEnabled && !effectiveDeadlineInput) {
+                            setDeadlineInputOverride(toInputValue(todayStartMs, true));
+                            setDeadlineAllDayOverride(true);
+                          }
+                        }}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          effectiveDeadlineEnabled
+                            ? 'bg-[#EE6A3C] text-white hover:bg-[#d75e33]'
+                            : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                        }`}
+                      >
+                        {effectiveDeadlineEnabled ? 'Enabled' : 'Add deadline'}
+                      </button>
+                    </div>
+                    {effectiveDeadlineEnabled ? (
+                      <div className="mt-4 grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
+                        <label className="inline-flex items-center gap-2 text-sm text-[#6D5C50]">
+                          <input
+                            type="checkbox"
+                            checked={effectiveDeadlineAllDay}
+                            onChange={event => setDeadlineAllDayOverride(event.target.checked)}
+                            className="h-4 w-4 rounded border-[#D7C5B7] text-[#EE6A3C] focus:ring-[#EE6A3C]"
+                          />
+                          All day
+                        </label>
+                        <input
+                          type={effectiveDeadlineAllDay ? 'date' : 'datetime-local'}
+                          value={effectiveDeadlineInput}
+                          onChange={event => setDeadlineInputOverride(event.target.value)}
+                          className="w-full rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
 
-                  <RecurrenceField
-                    label="Repeat schedule"
-                    value={effectiveRecurrenceRule}
-                    onChange={rule => setRecurrenceOverride(rule)}
-                    autoLabel={recurrenceOverride === undefined ? undefined : `Parser / context: ${previewDraft.recurringRule ? renderRecurrenceLabel(previewDraft.recurringRule) : 'No repeat'}`}
-                    onReset={recurrenceOverride !== undefined ? () => setRecurrenceOverride(undefined) : undefined}
-                    description="Set a repeat rule explicitly without relying only on the parser."
-                  />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div ref={sectionMenuRef} className="relative rounded-[18px] border border-[#E1D5CA] bg-white p-4">
+                      <p className="text-sm font-semibold text-[#1E2D2F]">Section</p>
+                      <p className="mt-1 text-sm text-[#6D5C50]">Place the task directly into a section.</p>
+                      <button
+                        type="button"
+                        disabled={!effectiveProjectId}
+                        onClick={() => {
+                          setShowSectionMenu(current => !current);
+                          setShowProjectMenu(false);
+                          setShowPriorityMenu(false);
+                        }}
+                        className="mt-3 inline-flex w-full items-center justify-between rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <span>{describeQuickAddSection(payload, effectiveDraft)}</span>
+                        <ChevronDown size={14} className="text-[#8A8076]" />
+                      </button>
+                      {!effectiveProjectId ? <p className="mt-2 text-xs text-[#8A8076]">Pick a project first.</p> : null}
+                      {showSectionMenu && effectiveProjectId ? (
+                        <div className="absolute left-4 right-4 top-[calc(100%+8px)] z-20 rounded-[18px] border border-[#E1D5CA] bg-white p-2 shadow-xl">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSectionOverrideId(null);
+                              setShowSectionMenu(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
+                              effectiveSectionId === null ? 'bg-[#FFF1EB] text-[#B64B28]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                            }`}
+                          >
+                            <span>No section</span>
+                            {effectiveSectionId === null ? <Check size={14} /> : null}
+                          </button>
+                          {quickAddSectionOptions.map(section => (
+                            <button
+                              key={section.id}
+                              type="button"
+                              onClick={() => {
+                                setSectionOverrideId(section.id);
+                                setShowSectionMenu(false);
+                              }}
+                              className={`mt-1 flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
+                                effectiveSectionId === section.id ? 'bg-[#FFF1EB] text-[#B64B28]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                              }`}
+                            >
+                              <span>{section.name}</span>
+                              {effectiveSectionId === section.id ? <Check size={14} /> : null}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-[18px] border border-[#E1D5CA] bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[#1E2D2F]">Repeat schedule</p>
+                          <p className="mt-1 text-sm text-[#6D5C50]">Set a repeat rule without relying only on the parser.</p>
+                        </div>
+                        {recurrenceOverride !== undefined ? (
+                          <button
+                            type="button"
+                            onClick={() => setRecurrenceOverride(undefined)}
+                            className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                          >
+                            Use parser
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {[
+                          { label: 'No repeat', preset: 'NONE' as RecurrencePreset },
+                          { label: 'Daily', preset: 'DAILY' as RecurrencePreset },
+                          { label: 'Weekdays', preset: 'WEEKDAYS' as RecurrencePreset },
+                          { label: 'Weekly', preset: 'WEEKLY' as RecurrencePreset },
+                          { label: 'Monthly', preset: 'MONTHLY' as RecurrencePreset },
+                          { label: 'Yearly', preset: 'YEARLY' as RecurrencePreset },
+                          { label: 'Custom', preset: 'CUSTOM' as RecurrencePreset },
+                        ].map(option => (
+                          <button
+                            key={option.preset}
+                            type="button"
+                            onClick={() => {
+                              if (option.preset === 'NONE') {
+                                setRecurrenceOverride(null);
+                                return;
+                              }
+                              if (option.preset === 'CUSTOM') {
+                                setRecurrenceOverride(effectiveRecurrenceRule && recurrencePreset === 'CUSTOM' ? effectiveRecurrenceRule : 'FREQ=DAILY');
+                                return;
+                              }
+                              setRecurrenceOverride(getRuleForRecurrencePreset(option.preset));
+                            }}
+                            className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                              recurrencePreset === option.preset
+                                ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]'
+                                : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                      {recurrencePreset === 'CUSTOM' ? (
+                        <input
+                          value={effectiveRecurrenceRule ?? ''}
+                          onChange={event => setRecurrenceOverride(event.target.value.trim() || null)}
+                          placeholder="FREQ=WEEKLY;INTERVAL=2"
+                          className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               </section>
             ) : null}
 
-            <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            {bulkLines.length > 1 ? (
+              <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -7707,7 +7987,8 @@ function QuickAddDialog({
                   ))}
                 </div>
               )}
-            </section>
+              </section>
+            ) : null}
           </section>
 
           {showBulkChoices ? (
@@ -7744,32 +8025,74 @@ function QuickAddDialog({
             </section>
           ) : null}
 
-          <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            <label className="inline-flex items-center gap-2 self-start rounded-[16px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]">
-              <Folder size={14} className="text-[#9F7B63]" />
-              <select
-                value={projectOverrideId === undefined ? QUICK_ADD_AUTO_VALUE : projectOverrideId ?? QUICK_ADD_INBOX_VALUE}
-                onChange={event => {
-                  const nextValue = event.target.value;
-                  if (nextValue === QUICK_ADD_AUTO_VALUE) {
-                    setProjectOverrideId(undefined);
-                    setSectionOverrideId(undefined);
-                    return;
-                  }
-                  setProjectOverrideId(nextValue === QUICK_ADD_INBOX_VALUE ? null : nextValue);
-                  setSectionOverrideId(null);
+          <div className="flex flex-col gap-3 border-t border-[#E7DDD4] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div ref={projectMenuRef} className="relative self-start">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProjectMenu(current => !current);
+                  setShowPriorityMenu(false);
+                  setShowSectionMenu(false);
                 }}
-                className="bg-transparent pr-1 text-sm font-medium outline-none"
+                className="inline-flex items-center gap-2 rounded-[12px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
               >
-                <option value={QUICK_ADD_AUTO_VALUE}>{describeQuickAddProject(payload, previewDraft)}</option>
-                <option value={QUICK_ADD_INBOX_VALUE}>Inbox</option>
-                {getActiveProjects(payload, true).map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <Folder size={14} className="text-[#6D5C50]" />
+                <span>{describeQuickAddProject(payload, effectiveDraft)}</span>
+                <ChevronDown size={14} className="text-[#8A8076]" />
+              </button>
+              {showProjectMenu ? (
+                <div className="absolute left-0 top-[calc(100%+10px)] z-20 w-[320px] rounded-[20px] border border-[#E1D5CA] bg-white p-3 shadow-xl">
+                  <input
+                    ref={projectQueryRef}
+                    value={projectQuery}
+                    onChange={event => setProjectQuery(event.target.value)}
+                    placeholder="Type a project name"
+                    className="w-full rounded-[14px] border border-[#D7C5B7] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#EE6A3C]"
+                  />
+                  <div className="mt-3 max-h-64 space-y-1 overflow-y-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProjectOverrideId(null);
+                        setSectionOverrideId(null);
+                        setShowProjectMenu(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
+                        effectiveProjectId === null ? 'bg-[#FBF7F3] text-[#1E2D2F]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                      }`}
+                    >
+                      <span>Inbox</span>
+                      {effectiveProjectId === null ? <Check size={14} className="text-[#EE6A3C]" /> : null}
+                    </button>
+                    <div className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">
+                      My Projects
+                    </div>
+                    {filteredProjects.map(project => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => {
+                          setProjectOverrideId(project.id);
+                          setSectionOverrideId(null);
+                          setShowProjectMenu(false);
+                        }}
+                        className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
+                          effectiveProjectId === project.id ? 'bg-[#FBF7F3] text-[#1E2D2F]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                        }`}
+                      >
+                        <span>{project.name}</span>
+                        {effectiveProjectId === project.id ? <Check size={14} className="text-[#EE6A3C]" /> : null}
+                      </button>
+                    ))}
+                    {!filteredProjects.length ? (
+                      <div className="rounded-[14px] border border-dashed border-[#E1D5CA] px-3 py-4 text-sm text-[#6D5C50]">
+                        No matching projects.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
             <div className="flex flex-wrap justify-end gap-3">
               <button
@@ -7798,8 +8121,45 @@ function QuickAddDialog({
           </div>
         </form>
       </div>
+
+      {showDueDialog ? (
+        <RescheduleDialog
+          title="Reschedule task"
+          description={`Choose a new date for "${effectiveDraft.title || 'this task'}".`}
+          tasks={[quickAddPreviewTask]}
+          onClose={() => setShowDueDialog(false)}
+          onRescheduleTasks={(_, dueAt) => applyQuickAddDueAt(dueAt, dueAt !== null ? startOfDay(dueAt).getTime() === dueAt : false)}
+          onPostponeTasks={() => applyQuickAddPostpone()}
+        />
+      ) : null}
     </div>
   );
+}
+
+function buildQuickAddPreviewTask(draft: TaskDraft): Task {
+  const now = Date.now();
+  return {
+    id: '__quick-add-preview__',
+    title: draft.title.trim() || 'Untitled task',
+    description: draft.description,
+    projectId: draft.projectId,
+    sectionId: draft.sectionId,
+    priority: draft.priority,
+    dueAt: draft.dueAt,
+    allDay: draft.allDay,
+    deadlineAt: draft.deadlineAt,
+    deadlineAllDay: draft.deadlineAllDay,
+    recurringRule: draft.recurringRule,
+    deadlineRecurringRule: draft.deadlineRecurringRule,
+    status: 'OPEN',
+    completedAt: null,
+    parentTaskId: draft.parentTaskId,
+    locationId: null,
+    locationTriggerType: null,
+    order: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 function RescheduleDialog({
@@ -7909,8 +8269,8 @@ function RescheduleDialog({
             </div>
           </div>
           <div className="mt-4 grid grid-cols-7 gap-1.5 text-center text-xs font-medium uppercase tracking-[0.16em] text-[#9B8576]">
-            {weekdayLabels.map(label => (
-              <span key={label}>{label}</span>
+            {weekdayLabels.map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
             ))}
           </div>
           <div className="mt-3 grid grid-cols-7 gap-1.5">
@@ -8623,27 +8983,38 @@ function ReminderListEditor({
             >
               <div className="grid gap-3 md:grid-cols-[minmax(0,0.55fr)_minmax(0,0.45fr)_auto] md:items-end">
                 <Field label="Reminder type">
-                  <select
-                    value={reminder.mode}
-                    onChange={event => {
-                      const nextMode = event.target.value as ReminderEditorDraft['mode'];
-                      onChange(reminders.map(item => item.id === reminder.id
-                        ? {
-                          ...item,
-                          mode: nextMode,
-                          absoluteValue: nextMode === 'ABSOLUTE' && !item.absoluteValue
-                            ? createReminderEditor(null).absoluteValue
-                            : item.absoluteValue,
-                          offsetMinutes: nextMode === 'OFFSET' ? item.offsetMinutes || 30 : item.offsetMinutes,
-                        }
-                        : item
-                      ));
-                    }}
-                    className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-                  >
-                    <option value="ABSOLUTE">At a specific time</option>
-                    <option value="OFFSET">Before the due date</option>
-                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { mode: 'ABSOLUTE' as const, label: 'At a specific time' },
+                      { mode: 'OFFSET' as const, label: 'Before the due date' },
+                    ].map(option => (
+                      <button
+                        key={option.mode}
+                        type="button"
+                        onClick={() => {
+                          const nextMode = option.mode;
+                          onChange(reminders.map(item => item.id === reminder.id
+                            ? {
+                              ...item,
+                              mode: nextMode,
+                              absoluteValue: nextMode === 'ABSOLUTE' && !item.absoluteValue
+                                ? createReminderEditor(null).absoluteValue
+                                : item.absoluteValue,
+                              offsetMinutes: nextMode === 'OFFSET' ? item.offsetMinutes || 30 : item.offsetMinutes,
+                            }
+                            : item
+                          ));
+                        }}
+                        className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
+                          reminder.mode === option.mode
+                            ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]'
+                            : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
                 </Field>
 
                 {reminder.mode === 'ABSOLUTE' ? (
