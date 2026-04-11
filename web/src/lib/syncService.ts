@@ -6,7 +6,7 @@ import { db } from './db';
 const SCOPES = 'openid email https://www.googleapis.com/auth/drive.appdata';
 const GIS_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const SYNC_FILE_NAME = 'emberlist_sync.json';
-const AUTH_TIMEOUT_MS = 60_000;
+export const GOOGLE_AUTH_TIMEOUT_MS = 180_000;
 
 type DriveFileListResponse = {
     files?: Array<{ id?: string | null; modifiedTime?: string | null }>;
@@ -351,7 +351,7 @@ export class DriveSyncService {
         return new Promise<string>((resolve, reject) => {
             const timeoutId = window.setTimeout(() => {
                 reject(new Error('Google sign-in timed out.'));
-            }, AUTH_TIMEOUT_MS);
+            }, GOOGLE_AUTH_TIMEOUT_MS);
 
             this.tokenClient!.callback = (response: TokenResponse) => {
                 window.clearTimeout(timeoutId);

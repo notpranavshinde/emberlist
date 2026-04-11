@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SyncPayload } from '../types/sync';
 import { createEmptySyncPayload } from './syncPayload';
 import { db } from './db';
-import { DriveSyncService, resolveGoogleAuthPrompt, resolveGoogleLoginHint } from './syncService';
+import { DriveSyncService, GOOGLE_AUTH_TIMEOUT_MS, resolveGoogleAuthPrompt, resolveGoogleLoginHint } from './syncService';
 
 type TestableDriveSyncService = {
   performSync: (options?: { interactiveAuth?: boolean }) => Promise<SyncPayload>;
@@ -268,5 +268,41 @@ describe('DriveSyncService', () => {
 
     expect(requestAccessToken).toHaveBeenCalledWith('', 'pranav@example.com');
     expect(fetchSessionProfile).toHaveBeenCalledWith(false);
+  });
+
+  it('keeps first-run Google sign-in open for the full auth timeout window', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('window', globalThis);
+    const service = new DriveSyncService('client-id');
+    const tokenClient = {
+      callback: undefined as ((response: { access_token?: string; error?: string }) => void) | undefined,
+      error_callback: undefined as ((error: { type: string }) => void) | undefined,
+      requestAccessToken: vi.fn(),
+    };
+
+    (service as unknown as {
+      tokenClient: typeof tokenClient;
+      requestAccessToken: (prompt: '' | 'consent', loginHint?: string) => Promise<string>;
+    }).tokenClient = tokenClient;
+
+    let settled = false;
+    const requestPromise = (service as unknown as {
+      tokenClient: typeof tokenClient;
+      requestAccessToken: (prompt: '' | 'consent', loginHint?: string) => Promise<string>;
+    }).requestAccessToken('consent').finally(() => {
+      settled = true;
+    });
+    const handledRequestPromise = requestPromise.catch((error: unknown) => error);
+
+    await vi.advanceTimersByTimeAsync(GOOGLE_AUTH_TIMEOUT_MS - 1);
+    expect(settled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    const error = await handledRequestPromise;
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Google sign-in timed out.');
+
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 });
