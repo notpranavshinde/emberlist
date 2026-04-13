@@ -30,7 +30,8 @@ export type FirstRunOnboardingStep =
   | "setup"
   | "project"
   | "quick_add"
-  | "today";
+  | "today"
+  | "sync";
 
 export type FirstRunOnboardingState = {
   step: FirstRunOnboardingStep;

@@ -89,5 +89,9 @@ describe("onboarding setup", () => {
       ...projectStep,
       step: "today",
     });
+    expect(advanceOnboardingStep(projectStep, "sync")).toEqual({
+      ...projectStep,
+      step: "sync",
+    });
   });
 });

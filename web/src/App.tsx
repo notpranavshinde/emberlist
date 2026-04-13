@@ -1815,11 +1815,16 @@ function AppFrame({
   const location = useLocation();
   const navigate = useNavigate();
   const isPublicRoute = isPublicMarketingPath(location.pathname);
+  const shouldOfferSyncOnboarding =
+    workspaceShellProps.cloudConfigured && !workspaceShellProps.cloudSession;
 
   useEffect(() => {
     if (isPublicRoute || !firstRunOnboarding?.projectId) return;
 
-    if (firstRunOnboarding.step === "project" || firstRunOnboarding.step === "quick_add") {
+    if (
+      firstRunOnboarding.step === "project" ||
+      firstRunOnboarding.step === "quick_add"
+    ) {
       const projectPath = `/project/${firstRunOnboarding.projectId}`;
       if (location.pathname !== projectPath) {
         navigate(projectPath, { replace: true });
@@ -1827,10 +1832,26 @@ function AppFrame({
       return;
     }
 
-    if (firstRunOnboarding.step === "today" && location.pathname !== "/today") {
+    if (
+      (firstRunOnboarding.step === "today" ||
+        firstRunOnboarding.step === "sync") &&
+      location.pathname !== "/today"
+    ) {
       navigate("/today", { replace: true });
     }
   }, [firstRunOnboarding, isPublicRoute, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!firstRunOnboarding || firstRunOnboarding.step !== "sync") return;
+    if (!workspaceShellProps.cloudConfigured || workspaceShellProps.cloudSession) {
+      onSkipOnboarding();
+    }
+  }, [
+    firstRunOnboarding,
+    onSkipOnboarding,
+    workspaceShellProps.cloudConfigured,
+    workspaceShellProps.cloudSession,
+  ]);
 
   useEffect(() => {
     if (isPublicRoute || firstRunOnboarding?.step !== "quick_add") return;
@@ -1875,6 +1896,8 @@ function AppFrame({
         <OnboardingCoachmark
           step={firstRunOnboarding.step}
           quickAddExample={firstRunOnboarding.quickAddExample}
+          cloudConfigured={workspaceShellProps.cloudConfigured}
+          cloudSession={workspaceShellProps.cloudSession}
           onNext={() => {
             if (firstRunOnboarding.step === "project") {
               onAdvanceOnboarding(
@@ -1883,7 +1906,17 @@ function AppFrame({
               return;
             }
             if (firstRunOnboarding.step === "today") {
-              onSkipOnboarding();
+              if (shouldOfferSyncOnboarding) {
+                onAdvanceOnboarding(
+                  advanceOnboardingStep(firstRunOnboarding, "sync"),
+                );
+              } else {
+                onSkipOnboarding();
+              }
+              return;
+            }
+            if (firstRunOnboarding.step === "sync") {
+              onConnectGoogleWelcome();
             }
           }}
           onSkip={onSkipOnboarding}
@@ -2522,6 +2555,7 @@ function WorkspaceShell({
           </div>
 
           <div
+            data-onboarding-target="sidebar-cloud-sync"
             className={`mt-4 rounded-[18px] border border-[#ece7e3] bg-white px-3 py-3 ${isSidebarCollapsed ? "hidden" : ""}`}
           >
             <div className="flex items-center justify-between gap-3">
@@ -10633,16 +10667,25 @@ function OnboardingSetupDialog({
 function OnboardingCoachmark({
   step,
   quickAddExample,
+  cloudConfigured,
+  cloudSession,
   onNext,
   onSkip,
 }: {
   step: Exclude<FirstRunOnboardingState["step"], "setup">;
   quickAddExample: string | null;
+  cloudConfigured: boolean;
+  cloudSession: CloudSession | null;
   onNext: () => void;
   onSkip: () => void;
 }) {
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
-  const stepConfig = getOnboardingCoachmarkContent(step, quickAddExample);
+  const stepConfig = getOnboardingCoachmarkContent(
+    step,
+    quickAddExample,
+    cloudConfigured,
+    cloudSession,
+  );
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -10747,7 +10790,7 @@ function OnboardingCoachmark({
         style={cardStyle}
       >
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#B1775C]">
-          Step {stepConfig.stepIndex} of 3
+          Step {stepConfig.stepIndex} of {stepConfig.totalSteps}
         </p>
         <h3 className="mt-2 text-lg font-semibold text-[#1E2D2F]">
           {stepConfig.title}
@@ -11982,18 +12025,23 @@ function parseInputValue(value: string, allDay: boolean): number | null {
 function getOnboardingCoachmarkContent(
   step: Exclude<FirstRunOnboardingState["step"], "setup">,
   quickAddExample: string | null,
+  cloudConfigured: boolean,
+  cloudSession: CloudSession | null,
 ): {
   stepIndex: number;
+  totalSteps: number;
   title: string;
   description: string;
   targetSelector: string;
   primaryLabel: string | null;
   example: string | null;
 } {
+  const includeSyncStep = cloudConfigured && !cloudSession;
   switch (step) {
     case "project":
       return {
         stepIndex: 1,
+        totalSteps: includeSyncStep ? 4 : 3,
         title: "This is your starter project",
         description:
           "Projects hold related tasks and sections. Start here to get oriented before you begin capturing your own work.",
@@ -12004,6 +12052,7 @@ function getOnboardingCoachmarkContent(
     case "quick_add":
       return {
         stepIndex: 2,
+        totalSteps: includeSyncStep ? 4 : 3,
         title: "Try Quick Add once",
         description:
           "Use plain language here. Dates, priorities, projects, and repeat rules are all understood directly from what you type.",
@@ -12014,11 +12063,24 @@ function getOnboardingCoachmarkContent(
     case "today":
       return {
         stepIndex: 3,
+        totalSteps: includeSyncStep ? 4 : 3,
         title: "This is what needs attention now",
         description:
           "Anything due now or overdue lands here. This is where you will spend most of your time once tasks start moving.",
         targetSelector: '[data-onboarding-target="today-due"]',
-        primaryLabel: "Finish",
+        primaryLabel:
+          cloudConfigured && !cloudSession ? "Next" : "Finish",
+        example: null,
+      };
+    case "sync":
+      return {
+        stepIndex: 4,
+        totalSteps: 4,
+        title: "Connect Google Drive when you want sync",
+        description:
+          "Emberlist works locally without an account. Connect Google Drive only when you want this workspace available across browsers and devices.",
+        targetSelector: '[data-onboarding-target="sidebar-cloud-sync"]',
+        primaryLabel: "Connect Google Drive",
         example: null,
       };
   }
@@ -12036,6 +12098,7 @@ function readStoredOnboardingState(): FirstRunOnboardingState | null {
       "project",
       "quick_add",
       "today",
+      "sync",
     ]);
     const validPresets = new Set<OnboardingPresetId>([
       "personal",
