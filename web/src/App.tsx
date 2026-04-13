@@ -1531,6 +1531,7 @@ function WorkspaceShell({
   const [isResetCloudDialogOpen, setIsResetCloudDialogOpen] = useState(false);
   const [isRestoreBrowserBackupDialogOpen, setIsRestoreBrowserBackupDialogOpen] = useState(false);
   const [focusedTaskActionMode, setFocusedTaskActionMode] = useState<FocusedTaskActionMode | null>(null);
+  const [focusedTaskActionRect, setFocusedTaskActionRect] = useState<DOMRect | null>(null);
   const [focusedTaskActionTaskIds, setFocusedTaskActionTaskIds] = useState<string[]>([]);
   const todayViewData = useMemo(
     () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
@@ -1596,6 +1597,7 @@ function WorkspaceShell({
 
   function closeFocusedTaskActionDialog(taskIdToFocus: string | null = focusedTaskActionTaskIds[0] ?? null) {
     setFocusedTaskActionMode(null);
+    setFocusedTaskActionRect(null);
     setFocusedTaskActionTaskIds([]);
     if (taskIdToFocus) {
       window.setTimeout(() => focusTaskRow(taskIdToFocus), 40);
@@ -1603,9 +1605,14 @@ function WorkspaceShell({
   }
 
   function openFocusedTaskAction(mode: FocusedTaskActionMode) {
-    const focusedTaskId = getFocusedTaskRowId();
+    if (typeof document === 'undefined') return;
+    const activeElement = document.activeElement;
+    if (!(activeElement instanceof HTMLElement)) return;
+    const row = activeElement.closest<HTMLElement>('[data-task-row="true"]');
+    const focusedTaskId = row?.dataset.taskId ?? null;
     if (!focusedTaskId) return;
     setFocusedTaskActionTaskIds([focusedTaskId]);
+    setFocusedTaskActionRect(row?.getBoundingClientRect() ?? null);
     setFocusedTaskActionMode(mode);
   }
 
@@ -2234,6 +2241,7 @@ function WorkspaceShell({
           title="Reschedule task"
           description={`Choose a new date for ${focusedTaskActionLabel}.`}
           tasks={focusedTaskActionTasks}
+          anchorRect={focusedTaskActionRect}
           onClose={() => closeFocusedTaskActionDialog()}
           onRescheduleTasks={onRescheduleTasks}
           onPostponeTasks={onPostponeTasks}
@@ -6569,6 +6577,7 @@ function ChoiceDialog({
   onClose,
   dialogClassName,
   childrenClassName,
+  anchorRect,
 }: {
   title: string;
   description: string;
@@ -6577,6 +6586,7 @@ function ChoiceDialog({
   onClose: () => void;
   dialogClassName?: string;
   childrenClassName?: string;
+  anchorRect?: DOMRect | null;
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
@@ -6606,9 +6616,15 @@ function ChoiceDialog({
   }, []);
 
   return (
-    <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6">
+    <div data-overlay-dialog="true" className={`fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6 ${anchorRect ? 'items-start justify-start !bg-transparent' : ''}`}>
       <div
         ref={dialogRef}
+        style={anchorRect ? {
+          position: 'absolute',
+          top: Math.min(anchorRect.bottom + 8, window.innerHeight - 400),
+          left: Math.min(anchorRect.left, window.innerWidth - 680), // Approx width calculation
+          maxHeight: 'min(82vh, 760px)'
+        } : undefined}
         className={`flex max-h-[min(82vh,760px)] w-full ${dialogClassName ?? 'max-w-lg'} flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl`}
       >
         <div className="flex items-start justify-between gap-3">
@@ -7540,6 +7556,7 @@ function RescheduleDialog({
   title,
   description,
   tasks,
+  anchorRect,
   onClose,
   onRescheduleTasks,
   onPostponeTasks,
@@ -7547,6 +7564,7 @@ function RescheduleDialog({
   title: string;
   description: string;
   tasks: Task[];
+  anchorRect?: DOMRect | null;
   onClose: () => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
@@ -7594,6 +7612,7 @@ function RescheduleDialog({
       title={title}
       description={description}
       onClose={onClose}
+      anchorRect={anchorRect}
       dialogClassName="max-w-[640px]"
       childrenClassName="overflow-x-hidden pr-0"
     >
@@ -8857,14 +8876,6 @@ function hasFocusedTaskRow(): boolean {
   if (typeof document === 'undefined') return false;
   const activeElement = document.activeElement;
   return activeElement instanceof HTMLElement && activeElement.closest('[data-task-row="true"]') !== null;
-}
-
-function getFocusedTaskRowId(): string | null {
-  if (typeof document === 'undefined') return null;
-  const activeElement = document.activeElement;
-  if (!(activeElement instanceof HTMLElement)) return null;
-  const row = activeElement.closest<HTMLElement>('[data-task-row="true"]');
-  return row?.dataset.taskId ?? null;
 }
 
 function isTaskSelectionModeActive(): boolean {
