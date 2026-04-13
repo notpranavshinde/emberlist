@@ -2379,6 +2379,7 @@ function WorkspaceShell({
           title="Change priority"
           description={`Update the priority for ${focusedTaskActionLabel}.`}
           onClose={() => closeFocusedTaskActionDialog()}
+          anchorRect={focusedTaskActionRect}
         >
           <div className="flex flex-wrap gap-2">
             {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
@@ -2766,6 +2767,7 @@ function TodayPage({
   const [rowActionState, setRowActionState] = useState<{
     mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
     taskId: string;
+    anchorRect?: DOMRect | null;
   } | null>(null);
   const visibleTasks = useMemo(
     () => (showCompletedToday ? [...data.overdue, ...data.today, ...data.completedToday] : [...data.overdue, ...data.today]),
@@ -3199,6 +3201,7 @@ function UpcomingPage({
   const [rowActionState, setRowActionState] = useState<{
     mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
     taskId: string;
+    anchorRect?: DOMRect | null;
   } | null>(null);
   const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(null);
   const selectedIds = useMemo(
@@ -3645,6 +3648,7 @@ function SearchPage({
   const [rowActionState, setRowActionState] = useState<{
     mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
     taskId: string;
+    anchorRect?: DOMRect | null;
   } | null>(null);
   const deferredQuery = useDeferredValue(query);
   const filters = useMemo(() => {
@@ -4120,6 +4124,7 @@ function InboxPage({
   const [rowActionState, setRowActionState] = useState<{
     mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
     taskId: string;
+    anchorRect?: DOMRect | null;
   } | null>(null);
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
@@ -8201,8 +8206,8 @@ function TaskRowActions({
 }: {
   payload: SyncPayload;
   task: Task;
-  actionState: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string } | null;
-  onSetActionState: (state: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string } | null) => void;
+  actionState: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string; anchorRect?: DOMRect | null } | null;
+  onSetActionState: (state: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string; anchorRect?: DOMRect | null } | null) => void;
   onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onOpenTask: (taskId: string) => void;
@@ -8250,12 +8255,14 @@ function TaskRowActions({
 
   function openRescheduleDialog(event: ReactMouseEvent<HTMLButtonElement>) {
     stopRowActionEvent(event);
-    onSetActionState({ mode: 'reschedule', taskId: task.id });
+    const row = event.currentTarget.closest<HTMLElement>('[data-task-row="true"]');
+    onSetActionState({ mode: 'reschedule', taskId: task.id, anchorRect: row?.getBoundingClientRect() ?? null });
   }
 
   function openPriorityDialog(event: ReactMouseEvent<HTMLButtonElement>) {
     stopRowActionEvent(event);
-    onSetActionState({ mode: 'priority', taskId: task.id });
+    const row = event.currentTarget.closest<HTMLElement>('[data-task-row="true"]');
+    onSetActionState({ mode: 'priority', taskId: task.id, anchorRect: row?.getBoundingClientRect() ?? null });
   }
 
   async function handleCreateRelative(position: 'before' | 'after') {
@@ -8380,6 +8387,7 @@ function TaskRowActions({
           description={`Pick a new date for "${task.title}".`}
           onClose={() => onSetActionState(null)}
           tasks={[task]}
+          anchorRect={actionState?.anchorRect}
           onRescheduleTasks={onRescheduleTasks}
           onPostponeTasks={onPostponeTasks}
         />
@@ -8390,6 +8398,7 @@ function TaskRowActions({
           title="Change priority"
           description={`Update the priority for "${task.title}".`}
           onClose={() => onSetActionState(null)}
+          anchorRect={actionState?.anchorRect}
         >
           <div className="flex flex-wrap gap-2">
             {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
