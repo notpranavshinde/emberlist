@@ -9246,7 +9246,7 @@ function QuickAddDialog({
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
               >
                 <Folder size={14} className="text-[#6D5C50]" />
-                <span>{describeQuickAddProject(payload, effectiveDraft)}</span>
+                <span>{describeQuickAddLocation(payload, effectiveDraft)}</span>
                 <ChevronDown size={14} className="text-[#8A8076]" />
               </button>
               {showProjectMenu ? (
@@ -9281,25 +9281,56 @@ function QuickAddDialog({
                       My Projects
                     </div>
                     {filteredProjects.map((project) => (
-                      <button
-                        key={project.id}
-                        type="button"
-                        onClick={() => {
-                          setProjectOverrideId(project.id);
-                          setSectionOverrideId(null);
-                          setShowProjectMenu(false);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                          effectiveProjectId === project.id
-                            ? "bg-[#FBF7F3] text-[#1E2D2F]"
-                            : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
-                        }`}
-                      >
-                        <span>{project.name}</span>
-                        {effectiveProjectId === project.id ? (
-                          <Check size={14} className="text-[#EE6A3C]" />
-                        ) : null}
-                      </button>
+                      <div key={project.id} className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProjectOverrideId(project.id);
+                            setSectionOverrideId(null);
+                            setShowProjectMenu(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
+                            effectiveProjectId === project.id &&
+                            effectiveSectionId === null
+                              ? "bg-[#FBF7F3] text-[#1E2D2F]"
+                              : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                          }`}
+                        >
+                          <span>{project.name}</span>
+                          {effectiveProjectId === project.id &&
+                          effectiveSectionId === null ? (
+                            <Check size={14} className="text-[#EE6A3C]" />
+                          ) : null}
+                        </button>
+                        {effectiveProjectId === project.id
+                          ? getProjectSections(payload, project.id).map(
+                              (section) => (
+                                <button
+                                  key={section.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setProjectOverrideId(project.id);
+                                    setSectionOverrideId(section.id);
+                                    setShowProjectMenu(false);
+                                  }}
+                                  className={`ml-4 flex w-[calc(100%-1rem)] items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm transition ${
+                                    effectiveSectionId === section.id
+                                      ? "bg-[#FFF1EB] text-[#B64B28]"
+                                      : "text-[#6D5C50] hover:bg-[#FBF7F3]"
+                                  }`}
+                                >
+                                  <span>{section.name}</span>
+                                  {effectiveSectionId === section.id ? (
+                                    <Check
+                                      size={14}
+                                      className="text-[#EE6A3C]"
+                                    />
+                                  ) : null}
+                                </button>
+                              ),
+                            )
+                          : null}
+                      </div>
                     ))}
                     {!filteredProjects.length ? (
                       <div className="rounded-[14px] border border-dashed border-[#E1D5CA] px-3 py-4 text-sm text-[#6D5C50]">
@@ -11286,6 +11317,18 @@ function describeQuickAddProject(
     return `Create "${draft.projectName}"`;
   }
   return "Inbox";
+}
+
+function describeQuickAddLocation(
+  payload: SyncPayload,
+  draft: TaskDraft,
+): string {
+  const projectLabel = describeQuickAddProject(payload, draft);
+  const sectionLabel =
+    draft.sectionId || draft.sectionName
+      ? describeQuickAddSection(payload, draft)
+      : null;
+  return sectionLabel ? `${projectLabel} / ${sectionLabel}` : projectLabel;
 }
 
 function describeQuickAddSection(
