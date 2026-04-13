@@ -1,5 +1,13 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, ChangeEvent, ComponentType, DragEvent, FormEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  CSSProperties,
+  ChangeEvent,
+  ComponentType,
+  DragEvent,
+  FormEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from "react";
 import {
   Calendar,
   CalendarDays,
@@ -25,7 +33,7 @@ import {
   SunMedium,
   Sunrise,
   X,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   HashRouter,
   NavLink,
@@ -35,30 +43,62 @@ import {
   useLocation,
   useNavigate,
   useParams,
-} from 'react-router-dom';
-import { addDays, addMonths, eachDayOfInterval, endOfDay, format, isSameDay, isToday, isTomorrow, isYesterday, startOfDay, startOfMonth, startOfWeek, subMonths } from 'date-fns';
-import { RecoveryScreen } from './components/RecoveryScreen';
-import { resolveBannerAutoDismissMs, shouldDismissBannerOnNavigation } from './lib/banner';
+} from "react-router-dom";
+import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfDay,
+  format,
+  isSameDay,
+  isToday,
+  isTomorrow,
+  isYesterday,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from "date-fns";
+import { RecoveryScreen } from "./components/RecoveryScreen";
+import {
+  resolveBannerAutoDismissMs,
+  shouldDismissBannerOnNavigation,
+} from "./lib/banner";
 import {
   AUTO_SYNC_DEBOUNCE_MS,
   shouldRunActivationSync,
   shouldRunConnectivityRegainSync,
   shouldScheduleDebouncedSync,
-} from './lib/autoSync';
-import { appendActivityEntry, buildTaskTimeline, type ActivityEntry } from './lib/activity';
-import { extractBulkQuickAddLines, shouldPromptBulkQuickAdd } from './lib/bulkQuickAdd';
-import { db } from './lib/db';
-import { reconcileLocalPersistPayload } from './lib/localSync';
+} from "./lib/autoSync";
+import {
+  appendActivityEntry,
+  buildTaskTimeline,
+  type ActivityEntry,
+} from "./lib/activity";
+import {
+  extractBulkQuickAddLines,
+  shouldPromptBulkQuickAdd,
+} from "./lib/bulkQuickAdd";
+import { db } from "./lib/db";
+import { reconcileLocalPersistPayload } from "./lib/localSync";
 import {
   buildDraftFromParsed,
   buildTaskDetailDraftFromInput,
   createMergedBulkDraft,
   mergeBulkDraftWithDefaults,
   type QuickAddContext,
-} from './lib/quickAddDrafts';
-import { getQuickAddEscapeAction, shouldCloseQuickAddAfterCreate, type QuickAddSubmitMode } from './lib/quickAddFlow';
-import { parseQuickAdd } from './lib/quickParser';
-import { buildBulkSubtaskDrafts, buildCombinedSubtaskDraft, buildSubtaskDraft } from './lib/subtaskDrafts';
+} from "./lib/quickAddDrafts";
+import {
+  getQuickAddEscapeAction,
+  shouldCloseQuickAddAfterCreate,
+  type QuickAddSubmitMode,
+} from "./lib/quickAddFlow";
+import { parseQuickAdd } from "./lib/quickParser";
+import {
+  buildBulkSubtaskDrafts,
+  buildCombinedSubtaskDraft,
+  buildSubtaskDraft,
+} from "./lib/subtaskDrafts";
 import {
   buildReminderEditors,
   createReminderEditor,
@@ -68,10 +108,10 @@ import {
   serializeReminderEditors,
   type ReminderEditorDraft,
   type RecurrencePreset,
-} from './lib/taskEditing';
-import { normalizeImportedPayload } from './lib/syncPayload';
-import { DriveSyncService, type CloudSession } from './lib/syncService';
-import { SyncEngine } from './lib/syncEngine';
+} from "./lib/taskEditing";
+import { normalizeImportedPayload } from "./lib/syncPayload";
+import { DriveSyncService, type CloudSession } from "./lib/syncService";
+import { SyncEngine } from "./lib/syncEngine";
 import {
   formatClock,
   formatDateTimeValue,
@@ -79,8 +119,8 @@ import {
   getGlobalWebDisplayPreferences,
   setGlobalWebDisplayPreferences,
   type WeekStartsOn,
-} from './lib/webPreferences';
-import { resolveGoShortcut, shortcutSections } from './lib/webShortcuts';
+} from "./lib/webPreferences";
+import { resolveGoShortcut, shortcutSections } from "./lib/webShortcuts";
 import {
   archiveTask,
   canReparentTaskAsSubtask,
@@ -126,63 +166,73 @@ import {
   updateProject,
   updateSection,
   updateTaskFromDraft,
-} from './lib/workspace';
-import type { Priority, Project, Section, SyncPayload, Task } from './types/sync';
+} from "./lib/workspace";
+import type {
+  Priority,
+  Project,
+  Section,
+  SyncPayload,
+  Task,
+} from "./types/sync";
 
 const syncEngine = new SyncEngine();
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? '';
-const FIRST_RUN_WELCOME_DISMISSED_KEY = 'emberlist.firstRunWelcomeDismissed';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
+const FIRST_RUN_WELCOME_DISMISSED_KEY = "emberlist.firstRunWelcomeDismissed";
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
-  { label: 'All', value: 'ALL' },
-  { label: 'Overdue', value: 'OVERDUE' },
-  { label: 'Today', value: 'TODAY' },
-  { label: 'This week', value: 'THIS_WEEK' },
-  { label: 'High priority', value: 'HIGH_PRIORITY' },
-  { label: 'Inbox', value: 'INBOX' },
-  { label: 'No due', value: 'NO_DUE' },
-  { label: 'Has deadline', value: 'HAS_DEADLINE' },
-  { label: 'Recurring', value: 'RECURRING' },
-  { label: 'Has reminder', value: 'HAS_REMINDER' },
+  { label: "All", value: "ALL" },
+  { label: "Overdue", value: "OVERDUE" },
+  { label: "Today", value: "TODAY" },
+  { label: "This week", value: "THIS_WEEK" },
+  { label: "High priority", value: "HIGH_PRIORITY" },
+  { label: "Inbox", value: "INBOX" },
+  { label: "No due", value: "NO_DUE" },
+  { label: "Has deadline", value: "HAS_DEADLINE" },
+  { label: "Recurring", value: "RECURRING" },
+  { label: "Has reminder", value: "HAS_REMINDER" },
 ];
 
-type BootState = 'loading' | 'ready' | 'error';
+type BootState = "loading" | "ready" | "error";
 type Banner = {
   id: number;
-  tone: 'success' | 'error' | 'info';
+  tone: "success" | "error" | "info";
   message: string;
   actionLabel?: string;
   onAction?: (() => void | Promise<void>) | null;
   persistOnNavigation?: boolean;
   autoDismissMs?: number;
 };
-type CloudStatusTone = 'ready' | 'idle' | 'warning' | 'muted';
-type FocusedTaskActionMode = 'reschedule' | 'move' | 'priority' | 'delete';
+type CloudStatusTone = "ready" | "idle" | "warning" | "muted";
+type FocusedTaskActionMode = "reschedule" | "move" | "priority" | "delete";
 
 let activeDraggedTaskId: string | null = null;
 
 function normalizeInternalHref(href: string) {
-  return href.startsWith('#') ? href.slice(1) : href;
+  return href.startsWith("#") ? href.slice(1) : href;
 }
 
 function isPublicMarketingPath(pathname: string) {
-  return pathname === '/privacy' || pathname === '/terms';
+  return pathname === "/privacy" || pathname === "/terms";
 }
 
 function isWorkspaceEmpty(payload: SyncPayload | null): boolean {
   if (!payload) return false;
-  const hasLiveProjects = payload.projects.some(project => !project.deletedAt);
-  const hasLiveSections = payload.sections.some(section => !section.deletedAt);
-  const hasLiveTasks = payload.tasks.some(task => !task.deletedAt);
+  const hasLiveProjects = payload.projects.some(
+    (project) => !project.deletedAt,
+  );
+  const hasLiveSections = payload.sections.some(
+    (section) => !section.deletedAt,
+  );
+  const hasLiveTasks = payload.tasks.some((task) => !task.deletedAt);
   return !hasLiveProjects && !hasLiveSections && !hasLiveTasks;
 }
 
 function normalizeCloudSyncErrorMessage(message: string): string {
-  if (message.includes('insufficientPermissions')) {
-    return 'Google sign-in finished, but Drive access was not granted. Try again and check the final box that allows Emberlist to access its own configuration data in Google Drive.';
+  if (message.includes("insufficientPermissions")) {
+    return "Google sign-in finished, but Drive access was not granted. Try again and check the final box that allows Emberlist to access its own configuration data in Google Drive.";
   }
 
-  if (message.includes('popup_closed')) {
-    return 'Google sign-in was closed before it finished. Try again and keep the Google window open until you return to Emberlist.';
+  if (message.includes("popup_closed")) {
+    return "Google sign-in was closed before it finished. Try again and keep the Google window open until you return to Emberlist.";
   }
 
   return message;
@@ -190,48 +240,61 @@ function normalizeCloudSyncErrorMessage(message: string): string {
 
 function App() {
   const [payload, setPayload] = useState<SyncPayload | null>(null);
-  const [bootState, setBootState] = useState<BootState>('loading');
+  const [bootState, setBootState] = useState<BootState>("loading");
   const [bootError, setBootError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
   const [hasPendingLocalChanges, setHasPendingLocalChanges] = useState(false);
   const [isResettingCache, setIsResettingCache] = useState(false);
   const [isResettingCloud, setIsResettingCloud] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-  const [quickAddOverride, setQuickAddOverride] = useState<Partial<QuickAddContext> | null>(null);
+  const [quickAddOverride, setQuickAddOverride] =
+    useState<Partial<QuickAddContext> | null>(null);
   const [showCompletedToday, setShowCompletedToday] = useState(() =>
-    readStoredBoolean('emberlist.showCompletedToday', true)
+    readStoredBoolean("emberlist.showCompletedToday", true),
   );
   const [showSelectionButtons, setShowSelectionButtons] = useState(() =>
-    readStoredBoolean('emberlist.showSelectionButtons', false)
+    readStoredBoolean("emberlist.showSelectionButtons", false),
   );
   const [weekStartsOn, setWeekStartsOn] = useState<WeekStartsOn>(() =>
-    readStoredWeekStartsOn('emberlist.weekStartsOn', getDefaultWebDisplayPreferences().weekStartsOn)
+    readStoredWeekStartsOn(
+      "emberlist.weekStartsOn",
+      getDefaultWebDisplayPreferences().weekStartsOn,
+    ),
   );
   const [use24HourTime, setUse24HourTime] = useState(() =>
-    readStoredBoolean('emberlist.use24HourTime', getDefaultWebDisplayPreferences().use24HourTime)
+    readStoredBoolean(
+      "emberlist.use24HourTime",
+      getDefaultWebDisplayPreferences().use24HourTime,
+    ),
   );
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(() =>
-    readStoredBoolean('emberlist.autoSyncEnabled', true)
+    readStoredBoolean("emberlist.autoSyncEnabled", true),
   );
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(() =>
-    readStoredBoolean('emberlist.autoBackupEnabled', true)
+    readStoredBoolean("emberlist.autoBackupEnabled", true),
   );
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() =>
-    readStoredNumber('emberlist.lastCloudSyncAt')
+    readStoredNumber("emberlist.lastCloudSyncAt"),
   );
-  const [lastLocalBackupAt, setLastLocalBackupAt] = useState<number | null>(() =>
-    readStoredNumber('emberlist.lastLocalBackupAt')
+  const [lastLocalBackupAt, setLastLocalBackupAt] = useState<number | null>(
+    () => readStoredNumber("emberlist.lastLocalBackupAt"),
   );
-  const [cloudSession, setCloudSession] = useState<CloudSession | null>(() => readStoredCloudSession());
+  const [cloudSession, setCloudSession] = useState<CloudSession | null>(() =>
+    readStoredCloudSession(),
+  );
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
-  const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>(() => readStoredActivityEntries());
-  const [hasDismissedFirstRunWelcome, setHasDismissedFirstRunWelcome] = useState(() =>
-    readStoredBoolean(FIRST_RUN_WELCOME_DISMISSED_KEY, false)
+  const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>(() =>
+    readStoredActivityEntries(),
   );
+  const [hasDismissedFirstRunWelcome, setHasDismissedFirstRunWelcome] =
+    useState(() => readStoredBoolean(FIRST_RUN_WELCOME_DISMISSED_KEY, false));
   const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
-  const [isCloudConnectDialogOpen, setIsCloudConnectDialogOpen] = useState(false);
+  const [isCloudConnectDialogOpen, setIsCloudConnectDialogOpen] =
+    useState(false);
 
   const payloadRef = useRef<SyncPayload | null>(null);
   const cloudSessionRef = useRef<CloudSession | null>(cloudSession);
@@ -252,16 +315,29 @@ function App() {
     hasCloudSession: Boolean(cloudSession),
   });
   const bannerIdRef = useRef(0);
-  const undoActivityMapRef = useRef(new Map<string, { previousPayload: SyncPayload; undoMessage: string; taskIds: string[]; title: string }>());
+  const undoActivityMapRef = useRef(
+    new Map<
+      string,
+      {
+        previousPayload: SyncPayload;
+        undoMessage: string;
+        taskIds: string[];
+        title: string;
+      }
+    >(),
+  );
   const syncService = useMemo(
     () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
-    []
+    [],
   );
 
   function showBanner(
-    tone: Banner['tone'],
+    tone: Banner["tone"],
     message: string,
-    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+    options?: Pick<
+      Banner,
+      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
+    >,
   ) {
     bannerIdRef.current += 1;
     setBanner({
@@ -312,36 +388,54 @@ function App() {
   }, [lastCloudSyncAt]);
 
   useEffect(() => {
-    window.localStorage.setItem('emberlist.showCompletedToday', JSON.stringify(showCompletedToday));
+    window.localStorage.setItem(
+      "emberlist.showCompletedToday",
+      JSON.stringify(showCompletedToday),
+    );
   }, [showCompletedToday]);
 
   useEffect(() => {
-    window.localStorage.setItem('emberlist.showSelectionButtons', JSON.stringify(showSelectionButtons));
+    window.localStorage.setItem(
+      "emberlist.showSelectionButtons",
+      JSON.stringify(showSelectionButtons),
+    );
   }, [showSelectionButtons]);
 
   useEffect(() => {
-    window.localStorage.setItem('emberlist.weekStartsOn', String(weekStartsOn));
+    window.localStorage.setItem("emberlist.weekStartsOn", String(weekStartsOn));
     setGlobalWebDisplayPreferences({ weekStartsOn, use24HourTime });
   }, [use24HourTime, weekStartsOn]);
 
   useEffect(() => {
-    window.localStorage.setItem('emberlist.use24HourTime', JSON.stringify(use24HourTime));
+    window.localStorage.setItem(
+      "emberlist.use24HourTime",
+      JSON.stringify(use24HourTime),
+    );
   }, [use24HourTime]);
 
   useEffect(() => {
-    window.localStorage.setItem('emberlist.autoSyncEnabled', JSON.stringify(autoSyncEnabled));
+    window.localStorage.setItem(
+      "emberlist.autoSyncEnabled",
+      JSON.stringify(autoSyncEnabled),
+    );
   }, [autoSyncEnabled]);
 
   useEffect(() => {
-    window.localStorage.setItem('emberlist.autoBackupEnabled', JSON.stringify(autoBackupEnabled));
+    window.localStorage.setItem(
+      "emberlist.autoBackupEnabled",
+      JSON.stringify(autoBackupEnabled),
+    );
   }, [autoBackupEnabled]);
 
   useEffect(() => {
     if (lastCloudSyncAt === null) {
-      window.localStorage.removeItem('emberlist.lastCloudSyncAt');
+      window.localStorage.removeItem("emberlist.lastCloudSyncAt");
       return;
     }
-    window.localStorage.setItem('emberlist.lastCloudSyncAt', String(lastCloudSyncAt));
+    window.localStorage.setItem(
+      "emberlist.lastCloudSyncAt",
+      String(lastCloudSyncAt),
+    );
   }, [lastCloudSyncAt]);
 
   useEffect(() => {
@@ -350,10 +444,13 @@ function App() {
 
   useEffect(() => {
     if (lastLocalBackupAt === null) {
-      window.localStorage.removeItem('emberlist.lastLocalBackupAt');
+      window.localStorage.removeItem("emberlist.lastLocalBackupAt");
       return;
     }
-    window.localStorage.setItem('emberlist.lastLocalBackupAt', String(lastLocalBackupAt));
+    window.localStorage.setItem(
+      "emberlist.lastLocalBackupAt",
+      String(lastLocalBackupAt),
+    );
   }, [lastLocalBackupAt]);
 
   useEffect(() => {
@@ -361,21 +458,24 @@ function App() {
   }, [activityEntries]);
 
   useEffect(() => {
-    window.localStorage.setItem(FIRST_RUN_WELCOME_DISMISSED_KEY, JSON.stringify(hasDismissedFirstRunWelcome));
+    window.localStorage.setItem(
+      FIRST_RUN_WELCOME_DISMISSED_KEY,
+      JSON.stringify(hasDismissedFirstRunWelcome),
+    );
   }, [hasDismissedFirstRunWelcome]);
 
   useEffect(() => {
     const autoDismissMs = resolveBannerAutoDismissMs(banner);
     if (!banner || autoDismissMs === null) return;
     const timeoutId = window.setTimeout(() => {
-      setBanner(current => (current?.id === banner.id ? null : current));
+      setBanner((current) => (current?.id === banner.id ? null : current));
     }, autoDismissMs);
     return () => window.clearTimeout(timeoutId);
   }, [banner]);
 
   const loadData = useMemo(
     () => async () => {
-      setBootState('loading');
+      setBootState("loading");
       setBootError(null);
       try {
         const data = await db.getPayload();
@@ -383,21 +483,25 @@ function App() {
         const recurringMaintenance = describeRecurringMaintenance(repaired);
         if (recurringMaintenance) {
           await persistPayload(repaired.payload, true);
-          showBanner('info', `${recurringMaintenance}.`);
+          showBanner("info", `${recurringMaintenance}.`);
         } else {
           payloadRef.current = data;
           setPayload(data);
         }
-        setBootState('ready');
+        setBootState("ready");
       } catch (error) {
-        console.error('Failed to load local workspace', error);
+        console.error("Failed to load local workspace", error);
         payloadRef.current = null;
         setPayload(null);
-        setBootError(error instanceof Error ? error.message : 'Failed to load local workspace.');
-        setBootState('error');
+        setBootError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load local workspace.",
+        );
+        setBootState("error");
       }
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -418,7 +522,11 @@ function App() {
     }
   }
 
-  function recordActivity(taskIds: string[], title: string, detail?: string | null): string {
+  function recordActivity(
+    taskIds: string[],
+    title: string,
+    detail?: string | null,
+  ): string {
     const entry: ActivityEntry = {
       id: crypto.randomUUID(),
       createdAt: Date.now(),
@@ -426,14 +534,20 @@ function App() {
       title,
       detail: detail ?? null,
     };
-    setActivityEntries(current => appendActivityEntry(current, entry));
+    setActivityEntries((current) => appendActivityEntry(current, entry));
     return entry.id;
   }
 
-  function saveBrowserBackupSnapshot(nextPayload: SyncPayload, automatic: boolean) {
-    if (typeof window === 'undefined') return;
+  function saveBrowserBackupSnapshot(
+    nextPayload: SyncPayload,
+    automatic: boolean,
+  ) {
+    if (typeof window === "undefined") return;
     if (automatic && !autoBackupEnabledRef.current) return;
-    window.localStorage.setItem('emberlist.browserBackup', JSON.stringify(nextPayload));
+    window.localStorage.setItem(
+      "emberlist.browserBackup",
+      JSON.stringify(nextPayload),
+    );
     setLastLocalBackupAt(Date.now());
   }
 
@@ -450,16 +564,22 @@ function App() {
   }) {
     const parts: string[] = [];
     if (result.repairedCount > 0) {
-      parts.push(`recovered ${result.repairedCount} recurring task${result.repairedCount === 1 ? '' : 's'}`);
+      parts.push(
+        `recovered ${result.repairedCount} recurring task${result.repairedCount === 1 ? "" : "s"}`,
+      );
     }
     if (result.removedDuplicateCount > 0) {
-      parts.push(`removed ${result.removedDuplicateCount} duplicate recurring task${result.removedDuplicateCount === 1 ? '' : 's'}`);
+      parts.push(
+        `removed ${result.removedDuplicateCount} duplicate recurring task${result.removedDuplicateCount === 1 ? "" : "s"}`,
+      );
     }
     if (!parts.length) {
       return null;
     }
     const [first, ...rest] = parts;
-    return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(' and ');
+    return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(
+      " and ",
+    );
   }
 
   async function handleUndoActivity(activityId: string) {
@@ -467,17 +587,21 @@ function App() {
     if (!undoRecord) return;
     undoActivityMapRef.current.delete(activityId);
     await persistPayload(undoRecord.previousPayload, true);
-    recordActivity(undoRecord.taskIds, 'Undid recent change', undoRecord.undoMessage);
-    showBanner('info', undoRecord.undoMessage);
+    recordActivity(
+      undoRecord.taskIds,
+      "Undid recent change",
+      undoRecord.undoMessage,
+    );
+    showBanner("info", undoRecord.undoMessage);
   }
 
   function downloadPayloadBackup(nextPayload: SyncPayload) {
     const json = JSON.stringify(nextPayload, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
+    const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
+    const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `emberlist-backup-${format(new Date(), 'yyyyMMdd-HHmmss')}.json`;
+    anchor.download = `emberlist-backup-${format(new Date(), "yyyyMMdd-HHmmss")}.json`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -493,9 +617,10 @@ function App() {
   }) {
     if (!syncService) {
       if (!automatic) {
-        const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+        const message =
+          "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
         setLastSyncError(message);
-        showBanner('error', message);
+        showBanner("error", message);
       }
       return;
     }
@@ -523,30 +648,40 @@ function App() {
       const mergedPayload = await syncService.sync({ interactiveAuth });
       const repaired = repairRecurringTasks(mergedPayload);
       const recurringMaintenance = describeRecurringMaintenance(repaired);
-      await persistPayload(repaired.payload, getRecurringMaintenanceChangeCount(repaired) > 0);
+      await persistPayload(
+        repaired.payload,
+        getRecurringMaintenanceChangeCount(repaired) > 0,
+      );
       setLastCloudSyncAt(Date.now());
       setCloudSession(syncService.getSession());
-      setHasPendingLocalChanges(getRecurringMaintenanceChangeCount(repaired) > 0);
+      setHasPendingLocalChanges(
+        getRecurringMaintenanceChangeCount(repaired) > 0,
+      );
       backoffAttemptRef.current = 0;
       backoffUntilRef.current = null;
       if (!automatic) {
         showBanner(
-          'success',
+          "success",
           recurringMaintenance
             ? `Cloud sync completed. ${recurringMaintenance}.`
-            : 'Cloud sync completed.'
+            : "Cloud sync completed.",
         );
       } else if (recurringMaintenance) {
-        showBanner('info', `${recurringMaintenance} after sync.`);
+        showBanner("info", `${recurringMaintenance} after sync.`);
       }
     } catch (error) {
-      console.error('Cloud sync failed', error);
-      const message = normalizeCloudSyncErrorMessage(error instanceof Error ? error.message : 'Cloud sync failed.');
+      console.error("Cloud sync failed", error);
+      const message = normalizeCloudSyncErrorMessage(
+        error instanceof Error ? error.message : "Cloud sync failed.",
+      );
       setLastSyncError(message);
       if (!automatic) {
-        showBanner('error', message);
+        showBanner("error", message);
       } else {
-        const delayMs = Math.min(5 * 60_000, 30_000 * 2 ** backoffAttemptRef.current);
+        const delayMs = Math.min(
+          5 * 60_000,
+          30_000 * 2 ** backoffAttemptRef.current,
+        );
         backoffAttemptRef.current += 1;
         backoffUntilRef.current = Date.now() + delayMs;
         backoffTimerRef.current = window.setTimeout(() => {
@@ -565,7 +700,10 @@ function App() {
     }
   }
 
-  async function persistPayload(nextPayload: SyncPayload, markDirty: boolean = false) {
+  async function persistPayload(
+    nextPayload: SyncPayload,
+    markDirty: boolean = false,
+  ) {
     const storedPayload = await db.getPayload();
     const reconciled = reconcileLocalPersistPayload(storedPayload, nextPayload);
     await db.savePayload(reconciled.payload);
@@ -599,11 +737,11 @@ function App() {
   function showUndoBanner(
     message: string,
     previousPayload: SyncPayload,
-    undoMessage: string = 'Change undone.',
-    activityId?: string
+    undoMessage: string = "Change undone.",
+    activityId?: string,
   ) {
-    showBanner('success', message, {
-      actionLabel: 'Undo',
+    showBanner("success", message, {
+      actionLabel: "Undo",
       persistOnNavigation: true,
       autoDismissMs: 8_000,
       onAction: async () => {
@@ -612,7 +750,7 @@ function App() {
           return;
         }
         await persistPayload(previousPayload, true);
-        showBanner('info', undoMessage);
+        showBanner("info", undoMessage);
       },
     });
   }
@@ -627,7 +765,7 @@ function App() {
         title: string;
         detail?: string | null;
       };
-    }
+    },
   ): Promise<SyncPayload | null> {
     const current = payloadRef.current;
     if (!current) return null;
@@ -635,10 +773,14 @@ function App() {
     await persistPayload(nextPayload, true);
     let activityId: string | undefined;
     if (options.activity) {
-      activityId = recordActivity(options.activity.taskIds, options.activity.title, options.activity.detail);
+      activityId = recordActivity(
+        options.activity.taskIds,
+        options.activity.title,
+        options.activity.detail,
+      );
       undoActivityMapRef.current.set(activityId, {
         previousPayload: current,
-        undoMessage: options.undoMessage ?? 'Change undone.',
+        undoMessage: options.undoMessage ?? "Change undone.",
         taskIds: options.activity.taskIds,
         title: options.activity.title,
       });
@@ -651,12 +793,19 @@ function App() {
     setIsResettingCache(true);
     try {
       await db.reset();
-      showBanner('info', 'Local web cache cleared. A fresh workspace was created.');
+      showBanner(
+        "info",
+        "Local web cache cleared. A fresh workspace was created.",
+      );
       await loadData();
     } catch (error) {
-      console.error('Failed to reset local web cache', error);
-      setBootError(error instanceof Error ? error.message : 'Failed to reset local web cache.');
-      setBootState('error');
+      console.error("Failed to reset local web cache", error);
+      setBootError(
+        error instanceof Error
+          ? error.message
+          : "Failed to reset local web cache.",
+      );
+      setBootState("error");
     } finally {
       setIsResettingCache(false);
     }
@@ -664,34 +813,44 @@ function App() {
 
   async function handleImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
-    event.target.value = '';
+    event.target.value = "";
     if (!file) return;
 
     try {
-      const remotePayload = normalizeImportedPayload(JSON.parse(await file.text()), 'Imported JSON file');
+      const remotePayload = normalizeImportedPayload(
+        JSON.parse(await file.text()),
+        "Imported JSON file",
+      );
       const localPayload = payloadRef.current ?? (await db.getPayload());
-      const mergedPayload = syncEngine.mergePayloads(localPayload, remotePayload);
+      const mergedPayload = syncEngine.mergePayloads(
+        localPayload,
+        remotePayload,
+      );
       const repaired = repairRecurringTasks(mergedPayload);
       await persistPayload(repaired.payload, true);
       const recurringMaintenance = describeRecurringMaintenance(repaired);
-      setBootState('ready');
+      setBootState("ready");
       showBanner(
-        'success',
+        "success",
         recurringMaintenance
           ? `Imported JSON was merged. ${recurringMaintenance}.`
-          : 'Imported JSON was merged into your local workspace.'
+          : "Imported JSON was merged into your local workspace.",
       );
     } catch (error) {
-      console.error('Failed to import JSON', error);
-      showBanner('error', error instanceof Error ? error.message : 'Failed to import JSON.');
+      console.error("Failed to import JSON", error);
+      showBanner(
+        "error",
+        error instanceof Error ? error.message : "Failed to import JSON.",
+      );
     }
   }
 
   async function handleCloudSync() {
     if (!syncService) {
-      const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+      const message =
+        "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
       setLastSyncError(message);
-      showBanner('error', message);
+      showBanner("error", message);
       return;
     }
 
@@ -703,7 +862,7 @@ function App() {
     }
 
     await runCloudSync({ interactiveAuth: true, automatic: false });
-    setBootState('ready');
+    setBootState("ready");
   }
 
   async function handleConnectCloudSync() {
@@ -711,14 +870,15 @@ function App() {
     setIsWelcomeDialogOpen(false);
     setIsCloudConnectDialogOpen(false);
     await runCloudSync({ interactiveAuth: true, automatic: false });
-    setBootState('ready');
+    setBootState("ready");
   }
 
   async function handleResetCloudSync() {
     if (!syncService) {
-      const message = 'Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.';
+      const message =
+        "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
       setLastSyncError(message);
-      showBanner('error', message);
+      showBanner("error", message);
       return;
     }
 
@@ -727,10 +887,16 @@ function App() {
       await syncService.resetRemoteSyncFile();
       setLastCloudSyncAt(null);
       setLastSyncError(null);
-      showBanner('success', 'Cloud sync storage was reset. Sync again from the side with the data you want to keep.');
+      showBanner(
+        "success",
+        "Cloud sync storage was reset. Sync again from the side with the data you want to keep.",
+      );
     } catch (error) {
-      console.error('Failed to reset cloud sync', error);
-      showBanner('error', error instanceof Error ? error.message : 'Failed to reset cloud sync.');
+      console.error("Failed to reset cloud sync", error);
+      showBanner(
+        "error",
+        error instanceof Error ? error.message : "Failed to reset cloud sync.",
+      );
     } finally {
       setIsResettingCloud(false);
     }
@@ -743,9 +909,17 @@ function App() {
       await syncService.disconnect();
       setCloudSession(null);
       setLastSyncError(null);
-      showBanner('info', 'Signed out of Google Drive for this browser session.');
+      showBanner(
+        "info",
+        "Signed out of Google Drive for this browser session.",
+      );
     } catch (error) {
-      showBanner('error', error instanceof Error ? error.message : 'Failed to disconnect Google Drive.');
+      showBanner(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Failed to disconnect Google Drive.",
+      );
     }
   }
 
@@ -754,33 +928,38 @@ function App() {
     if (!trimmed) return null;
     const projectId = crypto.randomUUID();
     await applyUndoablePayloadUpdate(
-      current => createProject(current, trimmed, projectId),
+      (current) => createProject(current, trimmed, projectId),
       {
         message: `Project "${trimmed}" created.`,
         undoMessage: `Removed project "${trimmed}".`,
-      }
+      },
     );
     return projectId;
   }
 
-  async function handleUpdateProject(projectId: string, updater: (project: Project) => Project) {
+  async function handleUpdateProject(
+    projectId: string,
+    updater: (project: Project) => Project,
+  ) {
     await applyUndoablePayloadUpdate(
-      current => updateProject(current, projectId, updater),
+      (current) => updateProject(current, projectId, updater),
       {
-        message: 'Project updated.',
-        undoMessage: 'Reverted project changes.',
-      }
+        message: "Project updated.",
+        undoMessage: "Reverted project changes.",
+      },
     );
   }
 
   async function handleDeleteProject(projectId: string) {
-    const projectName = payloadRef.current?.projects.find(project => project.id === projectId)?.name ?? 'Project';
+    const projectName =
+      payloadRef.current?.projects.find((project) => project.id === projectId)
+        ?.name ?? "Project";
     await applyUndoablePayloadUpdate(
-      current => deleteProject(current, projectId),
+      (current) => deleteProject(current, projectId),
       {
         message: `Deleted "${projectName}".`,
         undoMessage: `Restored "${projectName}".`,
-      }
+      },
     );
   }
 
@@ -788,215 +967,267 @@ function App() {
     const trimmed = name.trim();
     if (!trimmed) return;
     await applyUndoablePayloadUpdate(
-      current => createSection(current, projectId, trimmed),
+      (current) => createSection(current, projectId, trimmed),
       {
         message: `Section "${trimmed}" created.`,
         undoMessage: `Removed section "${trimmed}".`,
-      }
+      },
     );
   }
 
-  async function handleUpdateSection(sectionId: string, updater: (section: Section) => Section) {
+  async function handleUpdateSection(
+    sectionId: string,
+    updater: (section: Section) => Section,
+  ) {
     await applyUndoablePayloadUpdate(
-      current => updateSection(current, sectionId, updater),
+      (current) => updateSection(current, sectionId, updater),
       {
-        message: 'Section updated.',
-        undoMessage: 'Reverted section changes.',
-      }
+        message: "Section updated.",
+        undoMessage: "Reverted section changes.",
+      },
     );
   }
 
   async function handleDeleteSection(sectionId: string) {
-    const sectionName = payloadRef.current?.sections.find(section => section.id === sectionId)?.name ?? 'Section';
+    const sectionName =
+      payloadRef.current?.sections.find((section) => section.id === sectionId)
+        ?.name ?? "Section";
     await applyUndoablePayloadUpdate(
-      current => deleteSection(current, sectionId),
+      (current) => deleteSection(current, sectionId),
       {
         message: `Deleted section "${sectionName}".`,
         undoMessage: `Restored section "${sectionName}".`,
-      }
+      },
     );
   }
 
   async function handleToggleTask(taskId: string) {
-    const task = payloadRef.current?.tasks.find(currentTask => currentTask.id === taskId && !currentTask.deletedAt);
+    const task = payloadRef.current?.tasks.find(
+      (currentTask) => currentTask.id === taskId && !currentTask.deletedAt,
+    );
     if (!task) return;
-    const completed = task.status === 'COMPLETED';
+    const completed = task.status === "COMPLETED";
     await applyUndoablePayloadUpdate(
-      current => toggleTaskCompletion(current, taskId),
+      (current) => toggleTaskCompletion(current, taskId),
       {
-        message: completed ? `Reopened "${task.title}".` : `Completed "${task.title}".`,
-        undoMessage: completed ? `Marked "${task.title}" complete again.` : `Reopened "${task.title}".`,
+        message: completed
+          ? `Reopened "${task.title}".`
+          : `Completed "${task.title}".`,
+        undoMessage: completed
+          ? `Marked "${task.title}" complete again.`
+          : `Reopened "${task.title}".`,
         activity: {
           taskIds: [taskId],
-          title: completed ? 'Reopened task' : 'Completed task',
+          title: completed ? "Reopened task" : "Completed task",
           detail: task.title,
         },
-      }
+      },
     );
   }
 
   async function handleArchiveTask(taskId: string) {
-    const task = payloadRef.current?.tasks.find(currentTask => currentTask.id === taskId && !currentTask.deletedAt);
+    const task = payloadRef.current?.tasks.find(
+      (currentTask) => currentTask.id === taskId && !currentTask.deletedAt,
+    );
     if (!task) return;
-    const archived = task.status === 'ARCHIVED';
+    const archived = task.status === "ARCHIVED";
     await applyUndoablePayloadUpdate(
-      current => archiveTask(current, taskId),
+      (current) => archiveTask(current, taskId),
       {
-        message: archived ? `Unarchived "${task.title}".` : `Archived "${task.title}".`,
-        undoMessage: archived ? `Archived "${task.title}" again.` : `Unarchived "${task.title}".`,
+        message: archived
+          ? `Unarchived "${task.title}".`
+          : `Archived "${task.title}".`,
+        undoMessage: archived
+          ? `Archived "${task.title}" again.`
+          : `Unarchived "${task.title}".`,
         activity: {
           taskIds: [taskId],
-          title: archived ? 'Unarchived task' : 'Archived task',
+          title: archived ? "Unarchived task" : "Archived task",
           detail: task.title,
         },
-      }
+      },
     );
   }
 
   async function handleDeleteTask(taskId: string) {
-    const task = payloadRef.current?.tasks.find(currentTask => currentTask.id === taskId && !currentTask.deletedAt);
-    if (!task) return;
-    await applyUndoablePayloadUpdate(
-      current => deleteTask(current, taskId),
-      {
-        message: `Deleted "${task.title}".`,
-        undoMessage: `Restored "${task.title}".`,
-        activity: {
-          taskIds: [taskId],
-          title: 'Deleted task',
-          detail: task.title,
-        },
-      }
+    const task = payloadRef.current?.tasks.find(
+      (currentTask) => currentTask.id === taskId && !currentTask.deletedAt,
     );
+    if (!task) return;
+    await applyUndoablePayloadUpdate((current) => deleteTask(current, taskId), {
+      message: `Deleted "${task.title}".`,
+      undoMessage: `Restored "${task.title}".`,
+      activity: {
+        taskIds: [taskId],
+        title: "Deleted task",
+        detail: task.title,
+      },
+    });
   }
 
-  async function handleRescheduleTasks(taskIds: string[], dueAt: number | null) {
+  async function handleRescheduleTasks(
+    taskIds: string[],
+    dueAt: number | null,
+  ) {
     if (!taskIds.length) return;
     await applyUndoablePayloadUpdate(
-      current => rescheduleTasksToDate(current, taskIds, dueAt),
+      (current) => rescheduleTasksToDate(current, taskIds, dueAt),
       {
-        message: dueAt === null
-          ? `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to no date.`
-          : `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} rescheduled.`,
-        undoMessage: dueAt === null ? 'Restored due dates.' : 'Reverted task dates.',
+        message:
+          dueAt === null
+            ? `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} moved to no date.`
+            : `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} rescheduled.`,
+        undoMessage:
+          dueAt === null ? "Restored due dates." : "Reverted task dates.",
         activity: {
           taskIds,
-          title: dueAt === null
-            ? taskIds.length === 1 ? 'Cleared task date' : 'Cleared task dates'
-            : taskIds.length === 1 ? 'Rescheduled task' : 'Rescheduled tasks',
-          detail: dueAt === null
-            ? `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to no date.`
-            : `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to a new date.`,
+          title:
+            dueAt === null
+              ? taskIds.length === 1
+                ? "Cleared task date"
+                : "Cleared task dates"
+              : taskIds.length === 1
+                ? "Rescheduled task"
+                : "Rescheduled tasks",
+          detail:
+            dueAt === null
+              ? `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} moved to no date.`
+              : `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} moved to a new date.`,
         },
-      }
+      },
     );
   }
 
   async function handlePostponeTasks(taskIds: string[]) {
     if (!taskIds.length) return;
     await applyUndoablePayloadUpdate(
-      current => postponeTasks(current, taskIds),
+      (current) => postponeTasks(current, taskIds),
       {
-        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} postponed.`,
-        undoMessage: 'Reverted postponed tasks.',
+        message: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} postponed.`,
+        undoMessage: "Reverted postponed tasks.",
         activity: {
           taskIds,
-          title: taskIds.length === 1 ? 'Postponed task' : 'Postponed tasks',
-          detail: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to the next occurrence.`,
+          title: taskIds.length === 1 ? "Postponed task" : "Postponed tasks",
+          detail: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} moved to the next occurrence.`,
         },
-      }
+      },
     );
   }
 
-  async function handleMoveTasksToProject(taskIds: string[], projectId: string | null) {
+  async function handleMoveTasksToProject(
+    taskIds: string[],
+    projectId: string | null,
+  ) {
     if (!taskIds.length) return;
     const targetName = projectId
-      ? payloadRef.current?.projects.find(project => project.id === projectId && !project.deletedAt)?.name ?? 'project'
-      : 'Inbox';
+      ? (payloadRef.current?.projects.find(
+          (project) => project.id === projectId && !project.deletedAt,
+        )?.name ?? "project")
+      : "Inbox";
     await applyUndoablePayloadUpdate(
-      current => moveTasksToProject(current, taskIds, projectId),
+      (current) => moveTasksToProject(current, taskIds, projectId),
       {
-        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`,
-        undoMessage: 'Reverted task moves.',
+        message: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} moved to ${targetName}.`,
+        undoMessage: "Reverted task moves.",
         activity: {
           taskIds,
-          title: taskIds.length === 1 ? 'Moved task' : 'Moved tasks',
+          title: taskIds.length === 1 ? "Moved task" : "Moved tasks",
           detail: `Moved into ${targetName}.`,
         },
-      }
+      },
     );
   }
 
-  async function handleMoveTasksToSection(taskIds: string[], sectionId: string | null) {
+  async function handleMoveTasksToSection(
+    taskIds: string[],
+    sectionId: string | null,
+  ) {
     if (!taskIds.length) return;
     const targetName = sectionId
-      ? payloadRef.current?.sections.find(section => section.id === sectionId && !section.deletedAt)?.name ?? 'section'
-      : 'Loose tasks';
+      ? (payloadRef.current?.sections.find(
+          (section) => section.id === sectionId && !section.deletedAt,
+        )?.name ?? "section")
+      : "Loose tasks";
     await applyUndoablePayloadUpdate(
-      current => moveTasksToSection(current, taskIds, sectionId),
+      (current) => moveTasksToSection(current, taskIds, sectionId),
       {
-        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} moved to ${targetName}.`,
-        undoMessage: 'Reverted section moves.',
+        message: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} moved to ${targetName}.`,
+        undoMessage: "Reverted section moves.",
         activity: {
           taskIds,
-          title: taskIds.length === 1 ? 'Moved task within project' : 'Moved tasks within project',
+          title:
+            taskIds.length === 1
+              ? "Moved task within project"
+              : "Moved tasks within project",
           detail: `Placed into ${targetName}.`,
         },
-      }
+      },
     );
   }
 
   async function handleSetTasksPriority(taskIds: string[], priority: Priority) {
     if (!taskIds.length) return;
     await applyUndoablePayloadUpdate(
-      current => setPriorityForTasks(current, taskIds, priority),
+      (current) => setPriorityForTasks(current, taskIds, priority),
       {
-        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} set to ${priority}.`,
-        undoMessage: 'Reverted task priorities.',
+        message: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} set to ${priority}.`,
+        undoMessage: "Reverted task priorities.",
         activity: {
           taskIds,
-          title: taskIds.length === 1 ? 'Changed priority' : 'Changed priorities',
+          title:
+            taskIds.length === 1 ? "Changed priority" : "Changed priorities",
           detail: `Updated to ${priority}.`,
         },
-      }
+      },
     );
   }
 
   async function handleDeleteTasks(taskIds: string[]) {
     if (!taskIds.length) return;
     await applyUndoablePayloadUpdate(
-      current => deleteTasks(current, taskIds),
+      (current) => deleteTasks(current, taskIds),
       {
-        message: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} deleted.`,
-        undoMessage: 'Restored deleted tasks.',
+        message: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} deleted.`,
+        undoMessage: "Restored deleted tasks.",
         activity: {
           taskIds,
-          title: taskIds.length === 1 ? 'Deleted task' : 'Deleted tasks',
-          detail: `${taskIds.length} task${taskIds.length === 1 ? '' : 's'} removed.`,
+          title: taskIds.length === 1 ? "Deleted task" : "Deleted tasks",
+          detail: `${taskIds.length} task${taskIds.length === 1 ? "" : "s"} removed.`,
         },
-      }
+      },
     );
   }
 
-  async function handleReparentTaskAsSubtask(draggedTaskId: string, parentTaskId: string) {
+  async function handleReparentTaskAsSubtask(
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) {
     const current = payloadRef.current;
-    if (!current || !canReparentTaskAsSubtask(current, draggedTaskId, parentTaskId)) return;
+    if (
+      !current ||
+      !canReparentTaskAsSubtask(current, draggedTaskId, parentTaskId)
+    )
+      return;
 
-    const draggedTask = current.tasks.find(task => task.id === draggedTaskId && !task.deletedAt);
-    const parentTask = current.tasks.find(task => task.id === parentTaskId && !task.deletedAt);
+    const draggedTask = current.tasks.find(
+      (task) => task.id === draggedTaskId && !task.deletedAt,
+    );
+    const parentTask = current.tasks.find(
+      (task) => task.id === parentTaskId && !task.deletedAt,
+    );
     if (!draggedTask || !parentTask) return;
 
     await applyUndoablePayloadUpdate(
-      payload => reparentTaskAsSubtask(payload, draggedTaskId, parentTaskId),
+      (payload) => reparentTaskAsSubtask(payload, draggedTaskId, parentTaskId),
       {
         message: `Moved "${draggedTask.title}" under "${parentTask.title}".`,
         undoMessage: `Moved "${draggedTask.title}" back.`,
         activity: {
           taskIds: [draggedTaskId, parentTaskId],
-          title: 'Nested task',
+          title: "Nested task",
           detail: `${draggedTask.title} now sits under ${parentTask.title}.`,
         },
-      }
+      },
     );
   }
 
@@ -1004,12 +1235,16 @@ function App() {
     const current = payloadRef.current;
     if (!current) return;
 
-    const task = current.tasks.find(candidate => candidate.id === taskId && !candidate.deletedAt);
+    const task = current.tasks.find(
+      (candidate) => candidate.id === taskId && !candidate.deletedAt,
+    );
     if (!task?.parentTaskId) return;
 
-    const parentTask = current.tasks.find(candidate => candidate.id === task.parentTaskId && !candidate.deletedAt);
+    const parentTask = current.tasks.find(
+      (candidate) => candidate.id === task.parentTaskId && !candidate.deletedAt,
+    );
     await applyUndoablePayloadUpdate(
-      payload => promoteSubtask(payload, taskId),
+      (payload) => promoteSubtask(payload, taskId),
       {
         message: parentTask
           ? `Moved "${task.title}" out from "${parentTask.title}".`
@@ -1017,36 +1252,41 @@ function App() {
         undoMessage: `Moved "${task.title}" back.`,
         activity: {
           taskIds: [taskId, ...(parentTask ? [parentTask.id] : [])],
-          title: 'Promoted subtask',
-          detail: parentTask ? `${task.title} moved out from ${parentTask.title}.` : task.title,
+          title: "Promoted subtask",
+          detail: parentTask
+            ? `${task.title} moved out from ${parentTask.title}.`
+            : task.title,
         },
-      }
+      },
     );
   }
 
   async function handleCreateTask(
     draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string }
+    options?: { silent?: boolean; successMessage?: string },
   ): Promise<string | null> {
     if (!draft.title.trim()) {
-      showBanner('error', 'Task title is required.');
+      showBanner("error", "Task title is required.");
       return null;
     }
 
     const current = payloadRef.current;
     if (!current) return null;
 
-    const existingIds = new Set(current.tasks.map(task => task.id));
+    const existingIds = new Set(current.tasks.map((task) => task.id));
     const nextPayload = createTask(current, draft);
-    const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
+    const createdTask =
+      nextPayload.tasks.find((task) => !existingIds.has(task.id)) ?? null;
     await persistPayload(nextPayload, true);
-    const activityId = createdTask ? recordActivity([createdTask.id], 'Created task', createdTask.title) : undefined;
+    const activityId = createdTask
+      ? recordActivity([createdTask.id], "Created task", createdTask.title)
+      : undefined;
     if (createdTask) {
       undoActivityMapRef.current.set(activityId!, {
         previousPayload: current,
         undoMessage: `Removed "${draft.title.trim()}".`,
         taskIds: [createdTask.id],
-        title: 'Created task',
+        title: "Created task",
       });
     }
     if (!options?.silent) {
@@ -1054,7 +1294,7 @@ function App() {
         options?.successMessage ?? `Task "${draft.title.trim()}" created.`,
         current,
         `Removed "${draft.title.trim()}".`,
-        activityId
+        activityId,
       );
     }
     return createdTask?.id ?? null;
@@ -1062,29 +1302,37 @@ function App() {
 
   async function handleCreateTaskRelative(
     anchorTaskId: string,
-    position: 'before' | 'after',
+    position: "before" | "after",
     draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string }
+    options?: { silent?: boolean; successMessage?: string },
   ): Promise<string | null> {
     if (!draft.title.trim()) {
-      showBanner('error', 'Task title is required.');
+      showBanner("error", "Task title is required.");
       return null;
     }
 
     const current = payloadRef.current;
     if (!current) return null;
 
-    const existingIds = new Set(current.tasks.map(task => task.id));
-    const nextPayload = createTaskRelative(current, draft, anchorTaskId, position);
-    const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
+    const existingIds = new Set(current.tasks.map((task) => task.id));
+    const nextPayload = createTaskRelative(
+      current,
+      draft,
+      anchorTaskId,
+      position,
+    );
+    const createdTask =
+      nextPayload.tasks.find((task) => !existingIds.has(task.id)) ?? null;
     await persistPayload(nextPayload, true);
-    const activityId = createdTask ? recordActivity([createdTask.id], 'Created task', createdTask.title) : undefined;
+    const activityId = createdTask
+      ? recordActivity([createdTask.id], "Created task", createdTask.title)
+      : undefined;
     if (createdTask) {
       undoActivityMapRef.current.set(activityId!, {
         previousPayload: current,
         undoMessage: `Removed "${createdTask.title}".`,
         taskIds: [createdTask.id],
-        title: 'Created task',
+        title: "Created task",
       });
     }
     if (!options?.silent && createdTask) {
@@ -1092,7 +1340,7 @@ function App() {
         options?.successMessage ?? `Task "${createdTask.title}" created.`,
         current,
         `Removed "${createdTask.title}".`,
-        activityId
+        activityId,
       );
     }
     return createdTask?.id ?? null;
@@ -1100,48 +1348,58 @@ function App() {
 
   async function handleSaveTask(taskId: string, draft: TaskDraft) {
     const nextPayload = await applyUndoablePayloadUpdate(
-      current => updateTaskFromDraft(current, taskId, draft),
+      (current) => updateTaskFromDraft(current, taskId, draft),
       {
-        message: 'Task saved.',
-        undoMessage: 'Reverted task edits.',
+        message: "Task saved.",
+        undoMessage: "Reverted task edits.",
         activity: {
           taskIds: [taskId],
-          title: 'Saved from task detail',
+          title: "Saved from task detail",
           detail: draft.title.trim(),
         },
-      }
+      },
     );
-    const savedTask = nextPayload?.tasks.find(task => task.id === taskId);
+    const savedTask = nextPayload?.tasks.find((task) => task.id === taskId);
     if (savedTask) {
-      setBanner(current => current && current.onAction
-        ? { ...current, message: `Saved "${savedTask.title}".` }
-        : current
+      setBanner((current) =>
+        current && current.onAction
+          ? { ...current, message: `Saved "${savedTask.title}".` }
+          : current,
       );
     }
   }
 
   async function handleDuplicateTask(taskId: string): Promise<string | null> {
     const current = payloadRef.current;
-    const sourceTask = current?.tasks.find(task => task.id === taskId && !task.deletedAt) ?? null;
+    const sourceTask =
+      current?.tasks.find((task) => task.id === taskId && !task.deletedAt) ??
+      null;
     if (!current || !sourceTask) return null;
 
-    const existingIds = new Set(current.tasks.map(task => task.id));
+    const existingIds = new Set(current.tasks.map((task) => task.id));
     const nextPayload = duplicateTask(current, taskId);
-    const duplicatedTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
+    const duplicatedTask =
+      nextPayload.tasks.find((task) => !existingIds.has(task.id)) ?? null;
     await persistPayload(nextPayload, true);
-    const activityId = duplicatedTask ? recordActivity([duplicatedTask.id], 'Duplicated task', duplicatedTask.title) : undefined;
+    const activityId = duplicatedTask
+      ? recordActivity(
+          [duplicatedTask.id],
+          "Duplicated task",
+          duplicatedTask.title,
+        )
+      : undefined;
     if (duplicatedTask) {
       undoActivityMapRef.current.set(activityId!, {
         previousPayload: current,
         undoMessage: `Removed "${duplicatedTask.title}".`,
         taskIds: [duplicatedTask.id],
-        title: 'Duplicated task',
+        title: "Duplicated task",
       });
       showUndoBanner(
         `Duplicated "${sourceTask.title}".`,
         current,
         `Removed "${duplicatedTask.title}".`,
-        activityId
+        activityId,
       );
     }
     return duplicatedTask?.id ?? null;
@@ -1151,50 +1409,67 @@ function App() {
     const current = payloadRef.current;
     if (!current) return;
     downloadPayloadBackup(current);
-    showBanner('success', 'Downloaded a JSON backup of this workspace.');
+    showBanner("success", "Downloaded a JSON backup of this workspace.");
   }
 
   function handleSaveBrowserBackupNow() {
     const current = payloadRef.current;
     if (!current) return;
     saveBrowserBackupSnapshot(current, false);
-    showBanner('success', 'Saved a browser backup snapshot.');
+    showBanner("success", "Saved a browser backup snapshot.");
   }
 
   async function handleRestoreBrowserBackup() {
-    const raw = window.localStorage.getItem('emberlist.browserBackup');
+    const raw = window.localStorage.getItem("emberlist.browserBackup");
     if (!raw) {
-      showBanner('error', 'No browser backup snapshot is stored on this device yet.');
+      showBanner(
+        "error",
+        "No browser backup snapshot is stored on this device yet.",
+      );
       return;
     }
 
     try {
-      const backupPayload = normalizeImportedPayload(JSON.parse(raw), 'Browser backup snapshot');
+      const backupPayload = normalizeImportedPayload(
+        JSON.parse(raw),
+        "Browser backup snapshot",
+      );
       const current = payloadRef.current ?? (await db.getPayload());
       const mergedPayload = syncEngine.mergePayloads(current, backupPayload);
       const repaired = repairRecurringTasks(mergedPayload);
       await persistPayload(repaired.payload, true);
       const recurringMaintenance = describeRecurringMaintenance(repaired);
       showBanner(
-        'success',
+        "success",
         recurringMaintenance
           ? `Restored the stored browser backup snapshot. ${recurringMaintenance}.`
-          : 'Restored the stored browser backup snapshot.'
+          : "Restored the stored browser backup snapshot.",
       );
     } catch (error) {
-      console.error('Failed to restore browser backup snapshot', error);
-      showBanner('error', error instanceof Error ? error.message : 'Failed to restore the browser backup snapshot.');
+      console.error("Failed to restore browser backup snapshot", error);
+      showBanner(
+        "error",
+        error instanceof Error
+          ? error.message
+          : "Failed to restore the browser backup snapshot.",
+      );
     }
   }
 
   useEffect(() => {
-    if (bootState !== 'ready' || !syncService || !cloudSession || hasAutoSyncedOnLoadRef.current) return;
+    if (
+      bootState !== "ready" ||
+      !syncService ||
+      !cloudSession ||
+      hasAutoSyncedOnLoadRef.current
+    )
+      return;
     hasAutoSyncedOnLoadRef.current = true;
     void runCloudSync({ interactiveAuth: false, automatic: true });
   }, [bootState, cloudSession, syncService]);
 
   useEffect(() => {
-    if (bootState !== 'ready') return;
+    if (bootState !== "ready") return;
     if (cloudSession) {
       setIsWelcomeDialogOpen(false);
       return;
@@ -1212,11 +1487,14 @@ function App() {
     };
     previousAutoSyncStateRef.current = current;
 
-    if (bootState !== 'ready' || !syncService) {
+    if (bootState !== "ready" || !syncService) {
       return;
     }
 
-    if (shouldRunActivationSync(previous, current) && hasAutoSyncedOnLoadRef.current) {
+    if (
+      shouldRunActivationSync(previous, current) &&
+      hasAutoSyncedOnLoadRef.current
+    ) {
       void runCloudSync({ interactiveAuth: false, automatic: true });
       return;
     }
@@ -1230,10 +1508,14 @@ function App() {
 
   useEffect(() => {
     const handleOnline = () => {
-      const shouldSync = shouldRunConnectivityRegainSync(isOnlineRef.current, true, {
-        autoSyncEnabled: autoSyncEnabledRef.current,
-        hasCloudSession: Boolean(cloudSessionRef.current),
-      });
+      const shouldSync = shouldRunConnectivityRegainSync(
+        isOnlineRef.current,
+        true,
+        {
+          autoSyncEnabled: autoSyncEnabledRef.current,
+          hasCloudSession: Boolean(cloudSessionRef.current),
+        },
+      );
       setIsOnline(true);
       if (shouldSync) {
         void runCloudSync({ interactiveAuth: false, automatic: true });
@@ -1241,11 +1523,11 @@ function App() {
     };
     const handleOffline = () => setIsOnline(false);
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
     };
   }, [cloudSession, syncService]);
 
@@ -1254,16 +1536,16 @@ function App() {
       void runCloudSync({ interactiveAuth: false, automatic: true });
     };
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === "visible") {
         void runCloudSync({ interactiveAuth: false, automatic: true });
       }
     };
 
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [cloudSession, syncService]);
 
@@ -1271,7 +1553,7 @@ function App() {
     if (!syncService || !cloudSession) return;
 
     const intervalId = window.setInterval(() => {
-      if (document.visibilityState !== 'visible' || !navigator.onLine) return;
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
       void runCloudSync({ interactiveAuth: false, automatic: true });
     }, 5 * 60_000);
 
@@ -1285,14 +1567,14 @@ function App() {
     };
   }, []);
 
-  if (bootState === 'loading') {
+  if (bootState === "loading") {
     return <LoadingScreen label="Loading your workspace..." />;
   }
 
-  if (bootState === 'error') {
+  if (bootState === "error") {
     return (
       <RecoveryScreen
-        message={bootError ?? 'Failed to load local workspace.'}
+        message={bootError ?? "Failed to load local workspace."}
         onRetry={() => void loadData()}
         onResetLocalCache={() => void handleResetLocalCache()}
         isResetting={isResettingCache}
@@ -1323,38 +1605,62 @@ function App() {
         onResetLocalCache={() => void handleResetLocalCache()}
         onImport={handleImport}
         onCreateTask={handleCreateTask}
-        onCreateTaskRelative={(anchorTaskId, position, draft, options) => handleCreateTaskRelative(anchorTaskId, position, draft, options)}
-        onToggleTask={taskId => void handleToggleTask(taskId)}
-        onArchiveTask={taskId => void handleArchiveTask(taskId)}
-        onDeleteTask={taskId => void handleDeleteTask(taskId)}
-        onRescheduleTasks={(taskIds, dueAt) => void handleRescheduleTasks(taskIds, dueAt)}
-        onPostponeTasks={taskIds => void handlePostponeTasks(taskIds)}
-        onMoveTasksToProject={(taskIds, projectId) => void handleMoveTasksToProject(taskIds, projectId)}
-        onMoveTasksToSection={(taskIds, sectionId) => void handleMoveTasksToSection(taskIds, sectionId)}
-        onSetTasksPriority={(taskIds, priority) => void handleSetTasksPriority(taskIds, priority)}
-        onDeleteTasks={taskIds => void handleDeleteTasks(taskIds)}
-        onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
-        onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
+        onCreateTaskRelative={(anchorTaskId, position, draft, options) =>
+          handleCreateTaskRelative(anchorTaskId, position, draft, options)
+        }
+        onToggleTask={(taskId) => void handleToggleTask(taskId)}
+        onArchiveTask={(taskId) => void handleArchiveTask(taskId)}
+        onDeleteTask={(taskId) => void handleDeleteTask(taskId)}
+        onRescheduleTasks={(taskIds, dueAt) =>
+          void handleRescheduleTasks(taskIds, dueAt)
+        }
+        onPostponeTasks={(taskIds) => void handlePostponeTasks(taskIds)}
+        onMoveTasksToProject={(taskIds, projectId) =>
+          void handleMoveTasksToProject(taskIds, projectId)
+        }
+        onMoveTasksToSection={(taskIds, sectionId) =>
+          void handleMoveTasksToSection(taskIds, sectionId)
+        }
+        onSetTasksPriority={(taskIds, priority) =>
+          void handleSetTasksPriority(taskIds, priority)
+        }
+        onDeleteTasks={(taskIds) => void handleDeleteTasks(taskIds)}
+        onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) =>
+          void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)
+        }
+        onPromoteSubtask={(taskId) => void handlePromoteSubtask(taskId)}
         onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
-        onDuplicateTask={taskId => handleDuplicateTask(taskId)}
+        onDuplicateTask={(taskId) => handleDuplicateTask(taskId)}
         onCreateProject={handleCreateProject}
-        onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
-        onDeleteProject={projectId => void handleDeleteProject(projectId)}
-        onCreateSection={(projectId, name) => void handleCreateSection(projectId, name)}
-        onUpdateSection={(sectionId, updater) => void handleUpdateSection(sectionId, updater)}
-        onDeleteSection={sectionId => void handleDeleteSection(sectionId)}
+        onUpdateProject={(projectId, updater) =>
+          void handleUpdateProject(projectId, updater)
+        }
+        onDeleteProject={(projectId) => void handleDeleteProject(projectId)}
+        onCreateSection={(projectId, name) =>
+          void handleCreateSection(projectId, name)
+        }
+        onUpdateSection={(sectionId, updater) =>
+          void handleUpdateSection(sectionId, updater)
+        }
+        onDeleteSection={(sectionId) => void handleDeleteSection(sectionId)}
         showCompletedToday={showCompletedToday}
-        onToggleShowCompletedToday={() => setShowCompletedToday(value => !value)}
+        onToggleShowCompletedToday={() =>
+          setShowCompletedToday((value) => !value)
+        }
         showSelectionButtons={showSelectionButtons}
-        onToggleShowSelectionButtons={() => setShowSelectionButtons(value => !value)}
+        onToggleShowSelectionButtons={() =>
+          setShowSelectionButtons((value) => !value)
+        }
         weekStartsOn={weekStartsOn}
-        onWeekStartsOnChange={value => setWeekStartsOn(value)}
+        onWeekStartsOnChange={(value) => setWeekStartsOn(value)}
         use24HourTime={use24HourTime}
-        onToggleUse24HourTime={() => setUse24HourTime(value => !value)}
+        onToggleUse24HourTime={() => setUse24HourTime((value) => !value)}
         autoSyncEnabled={autoSyncEnabled}
-        onToggleAutoSyncEnabled={() => setAutoSyncEnabled(value => !value)}
+        onToggleAutoSyncEnabled={() => setAutoSyncEnabled((value) => !value)}
         autoBackupEnabled={autoBackupEnabled}
-        onToggleAutoBackupEnabled={() => setAutoBackupEnabled(value => !value)}
+        onToggleAutoBackupEnabled={() =>
+          setAutoBackupEnabled((value) => !value)
+        }
         cloudConfigured={Boolean(syncService)}
         cloudSession={cloudSession}
         lastSyncError={lastSyncError}
@@ -1371,7 +1677,7 @@ function App() {
         onDisconnectCloud={() => void handleDisconnectCloud()}
         isQuickAddOpen={isQuickAddOpen}
         quickAddOverride={quickAddOverride}
-        onOpenQuickAdd={overrides => {
+        onOpenQuickAdd={(overrides) => {
           setQuickAddOverride(overrides ?? null);
           setIsQuickAddOpen(true);
         }}
@@ -1380,8 +1686,10 @@ function App() {
           setQuickAddOverride(null);
         }}
         activityEntries={activityEntries}
-        onUndoActivity={activityId => void handleUndoActivity(activityId)}
-        canUndoActivity={activityId => undoActivityMapRef.current.has(activityId)}
+        onUndoActivity={(activityId) => void handleUndoActivity(activityId)}
+        canUndoActivity={(activityId) =>
+          undoActivityMapRef.current.has(activityId)
+        }
         isWelcomeDialogOpen={isWelcomeDialogOpen}
         onCloseWelcomeDialog={() => {
           setIsWelcomeDialogOpen(false);
@@ -1460,16 +1768,27 @@ type WorkspaceShellProps = {
   banner: Banner | null;
   onDismissBanner: () => void;
   onShowBanner: (
-    tone: Banner['tone'],
+    tone: Banner["tone"],
     message: string,
-    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+    options?: Pick<
+      Banner,
+      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
+    >,
   ) => void;
   onCloudSync: () => void;
   onResetCloudSync: () => void;
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
-  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTask: (
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -1479,15 +1798,24 @@ type WorkspaceShellProps = {
   onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onPromoteSubtask: (taskId: string) => void;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
   onCreateProject: (name: string) => Promise<string | null>;
-  onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
+  onUpdateProject: (
+    projectId: string,
+    updater: (project: Project) => Project,
+  ) => void;
   onDeleteProject: (projectId: string) => void;
   onCreateSection: (projectId: string, name: string) => void;
-  onUpdateSection: (sectionId: string, updater: (section: Section) => Section) => void;
+  onUpdateSection: (
+    sectionId: string,
+    updater: (section: Section) => Section,
+  ) => void;
   onDeleteSection: (sectionId: string) => void;
   showCompletedToday: boolean;
   onToggleShowCompletedToday: () => void;
@@ -1599,22 +1927,31 @@ function WorkspaceShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
-  const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] = useState(false);
-  const [createProjectValue, setCreateProjectValue] = useState('');
+  const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] =
+    useState(false);
+  const [createProjectValue, setCreateProjectValue] = useState("");
   const [isResetCloudDialogOpen, setIsResetCloudDialogOpen] = useState(false);
-  const [isRestoreBrowserBackupDialogOpen, setIsRestoreBrowserBackupDialogOpen] = useState(false);
-  const [focusedTaskActionMode, setFocusedTaskActionMode] = useState<FocusedTaskActionMode | null>(null);
-  const [focusedTaskActionRect, setFocusedTaskActionRect] = useState<DOMRect | null>(null);
-  const [focusedTaskActionTaskIds, setFocusedTaskActionTaskIds] = useState<string[]>([]);
+  const [
+    isRestoreBrowserBackupDialogOpen,
+    setIsRestoreBrowserBackupDialogOpen,
+  ] = useState(false);
+  const [focusedTaskActionMode, setFocusedTaskActionMode] =
+    useState<FocusedTaskActionMode | null>(null);
+  const [focusedTaskActionRect, setFocusedTaskActionRect] =
+    useState<DOMRect | null>(null);
+  const [focusedTaskActionTaskIds, setFocusedTaskActionTaskIds] = useState<
+    string[]
+  >([]);
   const todayViewData = useMemo(
-    () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
-    [payload, todayStartMs]
+    () =>
+      getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
+    [payload, todayStartMs],
   );
   const isPublicPage = isPublicMarketingPath(location.pathname);
   const title = getRouteTitle(location.pathname, payload);
   const projects = getActiveProjects(payload);
-  const favoriteProjects = projects.filter(project => project.favorite);
-  const regularProjects = projects.filter(project => !project.favorite);
+  const favoriteProjects = projects.filter((project) => project.favorite);
+  const regularProjects = projects.filter((project) => !project.favorite);
   const cloudStatus = getCloudStatus({
     cloudConfigured,
     cloudSession,
@@ -1626,8 +1963,11 @@ function WorkspaceShell({
   });
   const workspaceIdentity = getWorkspaceIdentity(cloudSession);
   const quickAddContext = useMemo(
-    () => ({ ...getQuickAddContext(location.pathname, payload), ...(quickAddOverride ?? {}) }),
-    [location.pathname, payload, quickAddOverride]
+    () => ({
+      ...getQuickAddContext(location.pathname, payload),
+      ...(quickAddOverride ?? {}),
+    }),
+    [location.pathname, payload, quickAddOverride],
   );
 
   useEffect(() => {
@@ -1649,7 +1989,10 @@ function WorkspaceShell({
     try {
       await banner.onAction();
     } catch (error) {
-      onShowBanner('error', error instanceof Error ? error.message : 'Undo failed.');
+      onShowBanner(
+        "error",
+        error instanceof Error ? error.message : "Undo failed.",
+      );
     } finally {
       setIsBannerActionRunning(false);
     }
@@ -1658,17 +2001,21 @@ function WorkspaceShell({
   bannerActionRef.current = handleBannerAction;
 
   const focusedTaskActionTasks = useMemo(
-    () => focusedTaskActionTaskIds
-      .map(taskId => getTaskById(payload, taskId))
-      .filter((task): task is Task => task !== undefined),
-    [focusedTaskActionTaskIds, payload]
+    () =>
+      focusedTaskActionTaskIds
+        .map((taskId) => getTaskById(payload, taskId))
+        .filter((task): task is Task => task !== undefined),
+    [focusedTaskActionTaskIds, payload],
   );
   const focusedTaskActionCount = focusedTaskActionTasks.length;
-  const focusedTaskActionLabel = focusedTaskActionCount === 1
-    ? `"${focusedTaskActionTasks[0]?.title ?? 'task'}"`
-    : `${focusedTaskActionCount} tasks`;
+  const focusedTaskActionLabel =
+    focusedTaskActionCount === 1
+      ? `"${focusedTaskActionTasks[0]?.title ?? "task"}"`
+      : `${focusedTaskActionCount} tasks`;
 
-  function closeFocusedTaskActionDialog(taskIdToFocus: string | null = focusedTaskActionTaskIds[0] ?? null) {
+  function closeFocusedTaskActionDialog(
+    taskIdToFocus: string | null = focusedTaskActionTaskIds[0] ?? null,
+  ) {
     setFocusedTaskActionMode(null);
     setFocusedTaskActionRect(null);
     setFocusedTaskActionTaskIds([]);
@@ -1678,7 +2025,7 @@ function WorkspaceShell({
   }
 
   function openFocusedTaskAction(mode: FocusedTaskActionMode) {
-    if (typeof document === 'undefined') return;
+    if (typeof document === "undefined") return;
     const activeElement = document.activeElement;
     if (!(activeElement instanceof HTMLElement)) return;
     const row = activeElement.closest<HTMLElement>('[data-task-row="true"]');
@@ -1717,7 +2064,7 @@ function WorkspaceShell({
     setIsRestoreBrowserBackupDialogOpen(true);
   }
 
-  function requestCreateProject(initialValue = '') {
+  function requestCreateProject(initialValue = "") {
     setCreateProjectValue(initialValue);
     setIsCreateProjectDialogOpen(true);
   }
@@ -1727,7 +2074,7 @@ function WorkspaceShell({
     if (!trimmedName) return;
     const projectId = await onCreateProject(trimmedName);
     setIsCreateProjectDialogOpen(false);
-    setCreateProjectValue('');
+    setCreateProjectValue("");
     if (projectId) {
       navigate(`/project/${projectId}`);
     }
@@ -1751,7 +2098,7 @@ function WorkspaceShell({
       if (pendingGoPrefixRef.current) {
         const destination = resolveGoShortcut(lowerKey);
         clearGoPrefix();
-        if (destination === '__project_switcher__') {
+        if (destination === "__project_switcher__") {
           event.preventDefault();
           setIsProjectSwitcherOpen(true);
           return;
@@ -1763,31 +2110,35 @@ function WorkspaceShell({
         return;
       }
 
-      if (hasOpenOverlayDialog() && key !== 'Escape') {
+      if (hasOpenOverlayDialog() && key !== "Escape") {
         return;
       }
 
-      if ((event.metaKey || event.ctrlKey) && event.shiftKey && lowerKey === 's') {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        event.shiftKey &&
+        lowerKey === "s"
+      ) {
         event.preventDefault();
-        navigate('/settings');
+        navigate("/settings");
         return;
       }
 
       if (typing) {
-        if ((event.metaKey || event.ctrlKey) && lowerKey === 'k') {
+        if ((event.metaKey || event.ctrlKey) && lowerKey === "k") {
           event.preventDefault();
-          navigate('/search', { state: { focusSearchToken: Date.now() } });
+          navigate("/search", { state: { focusSearchToken: Date.now() } });
         }
         return;
       }
 
-      if (key === '?') {
+      if (key === "?") {
         event.preventDefault();
         setIsShortcutDialogOpen(true);
         return;
       }
 
-      if (key === 'Escape') {
+      if (key === "Escape") {
         if (isShortcutDialogOpen) {
           event.preventDefault();
           setIsShortcutDialogOpen(false);
@@ -1795,25 +2146,36 @@ function WorkspaceShell({
         return;
       }
 
-      if ((event.metaKey || event.ctrlKey) && lowerKey === 'k') {
+      if ((event.metaKey || event.ctrlKey) && lowerKey === "k") {
         event.preventDefault();
-        navigate('/search', { state: { focusSearchToken: Date.now() } });
+        navigate("/search", { state: { focusSearchToken: Date.now() } });
         return;
       }
 
-      if (!hasModifier && !hasFocusedTaskRow() && (lowerKey === 'j' || key === 'ArrowDown')) {
+      if (
+        !hasModifier &&
+        !hasFocusedTaskRow() &&
+        (lowerKey === "j" || key === "ArrowDown")
+      ) {
         event.preventDefault();
-        focusEdgeTaskRow('start');
+        focusEdgeTaskRow("start");
         return;
       }
 
-      if (!hasModifier && !hasFocusedTaskRow() && (lowerKey === 'k' || key === 'ArrowUp')) {
+      if (
+        !hasModifier &&
+        !hasFocusedTaskRow() &&
+        (lowerKey === "k" || key === "ArrowUp")
+      ) {
         event.preventDefault();
-        focusEdgeTaskRow('end');
+        focusEdgeTaskRow("end");
         return;
       }
 
-      if (((event.metaKey || event.ctrlKey) && lowerKey === 'z') || (!hasModifier && lowerKey === 'z')) {
+      if (
+        ((event.metaKey || event.ctrlKey) && lowerKey === "z") ||
+        (!hasModifier && lowerKey === "z")
+      ) {
         if (banner?.onAction && banner.actionLabel) {
           event.preventDefault();
           void bannerActionRef.current();
@@ -1821,25 +2183,28 @@ function WorkspaceShell({
         return;
       }
 
-      if (!hasModifier && lowerKey === 'q') {
+      if (!hasModifier && lowerKey === "q") {
         event.preventDefault();
         onOpenQuickAdd();
         return;
       }
 
-      if ((!hasModifier && event.shiftKey && lowerKey === 's') || (!hasModifier && lowerKey === 'm')) {
+      if (
+        (!hasModifier && event.shiftKey && lowerKey === "s") ||
+        (!hasModifier && lowerKey === "m")
+      ) {
         event.preventDefault();
-        setIsSidebarCollapsed(value => !value);
+        setIsSidebarCollapsed((value) => !value);
         return;
       }
 
-      if (!hasModifier && lowerKey === 'h') {
+      if (!hasModifier && lowerKey === "h") {
         event.preventDefault();
-        navigate('/today');
+        navigate("/today");
         return;
       }
 
-      if (!hasModifier && lowerKey === 'g') {
+      if (!hasModifier && lowerKey === "g") {
         event.preventDefault();
         pendingGoPrefixRef.current = true;
         if (goSequenceTimeoutRef.current !== null) {
@@ -1853,40 +2218,46 @@ function WorkspaceShell({
       }
 
       if (!hasModifier && hasFocusedTaskRow() && !isTaskSelectionModeActive()) {
-        if (lowerKey === 't') {
+        if (lowerKey === "t") {
           event.preventDefault();
-          openFocusedTaskAction('reschedule');
+          openFocusedTaskAction("reschedule");
           return;
         }
-        if (lowerKey === 'v') {
+        if (lowerKey === "v") {
           event.preventDefault();
-          openFocusedTaskAction('move');
+          openFocusedTaskAction("move");
           return;
         }
-        if (lowerKey === 'p') {
+        if (lowerKey === "p") {
           event.preventDefault();
-          openFocusedTaskAction('priority');
+          openFocusedTaskAction("priority");
           return;
         }
-        if (key === 'Delete' || key === 'Backspace') {
+        if (key === "Delete" || key === "Backspace") {
           event.preventDefault();
-          openFocusedTaskAction('delete');
+          openFocusedTaskAction("delete");
         }
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown);
       clearGoPrefix();
     };
-  }, [banner, isBannerActionRunning, isShortcutDialogOpen, navigate, onOpenQuickAdd]);
+  }, [
+    banner,
+    isBannerActionRunning,
+    isShortcutDialogOpen,
+    navigate,
+    onOpenQuickAdd,
+  ]);
 
   if (isPublicPage) {
-    if (location.pathname === '/privacy') {
+    if (location.pathname === "/privacy") {
       return <PrivacyPolicyPage />;
     }
-    if (location.pathname === '/terms') {
+    if (location.pathname === "/terms") {
       return <TermsOfServicePage />;
     }
     return <MarketingHomePage />;
@@ -1895,13 +2266,17 @@ function WorkspaceShell({
   return (
     <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
       <div className="flex min-h-screen flex-col md:flex-row">
-        <aside className={`hidden shrink-0 border-r border-[#ece7e3] bg-[#fdfcfb] px-3 py-3 transition-[width] duration-200 md:flex md:flex-col ${isSidebarCollapsed ? 'w-[92px]' : 'w-[300px]'}`}>
+        <aside
+          className={`hidden shrink-0 border-r border-[#ece7e3] bg-[#fdfcfb] px-3 py-3 transition-[width] duration-200 md:flex md:flex-col ${isSidebarCollapsed ? "w-[92px]" : "w-[300px]"}`}
+        >
           <div className="flex items-center justify-between rounded-[16px] px-2 py-2">
             <div className="flex items-center gap-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#4ea0d8] text-sm font-semibold text-white">
                 {workspaceIdentity.initial}
               </div>
-              <div className={`flex items-center gap-1 text-sm font-semibold text-[#2b2b2b] ${isSidebarCollapsed ? 'hidden' : ''}`}>
+              <div
+                className={`flex items-center gap-1 text-sm font-semibold text-[#2b2b2b] ${isSidebarCollapsed ? "hidden" : ""}`}
+              >
                 <span>{workspaceIdentity.label}</span>
               </div>
             </div>
@@ -1909,26 +2284,55 @@ function WorkspaceShell({
 
           <button
             onClick={() => onOpenQuickAdd()}
-            className={`mt-3 flex rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed] ${isSidebarCollapsed ? 'justify-center' : 'items-center gap-2'}`}
+            className={`mt-3 flex rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed] ${isSidebarCollapsed ? "justify-center" : "items-center gap-2"}`}
             title="Add task (Q)"
           >
             <Plus size={16} />
-            <span className={isSidebarCollapsed ? 'hidden' : ''}>Add task</span>
+            <span className={isSidebarCollapsed ? "hidden" : ""}>Add task</span>
           </button>
 
           <nav className="mt-3 space-y-0.5">
-            <RailLink to="/search" icon={Search} label="Search" collapsed={isSidebarCollapsed} />
-            <RailLink to="/inbox" icon={ListTodo} label="Inbox" count={getInboxTasks(payload).length} collapsed={isSidebarCollapsed} />
-            <RailLink to="/today" icon={Home} label="Today" count={todayViewData.overdue.length + todayViewData.today.length} collapsed={isSidebarCollapsed} />
-            <RailLink to="/upcoming" icon={Calendar} label="Upcoming" collapsed={isSidebarCollapsed} />
-            <RailLink to="/settings" icon={Settings} label="Settings" collapsed={isSidebarCollapsed} />
+            <RailLink
+              to="/search"
+              icon={Search}
+              label="Search"
+              collapsed={isSidebarCollapsed}
+            />
+            <RailLink
+              to="/inbox"
+              icon={ListTodo}
+              label="Inbox"
+              count={getInboxTasks(payload).length}
+              collapsed={isSidebarCollapsed}
+            />
+            <RailLink
+              to="/today"
+              icon={Home}
+              label="Today"
+              count={todayViewData.overdue.length + todayViewData.today.length}
+              collapsed={isSidebarCollapsed}
+            />
+            <RailLink
+              to="/upcoming"
+              icon={Calendar}
+              label="Upcoming"
+              collapsed={isSidebarCollapsed}
+            />
+            <RailLink
+              to="/settings"
+              icon={Settings}
+              label="Settings"
+              collapsed={isSidebarCollapsed}
+            />
           </nav>
 
           {favoriteProjects.length ? (
-            <div className={`mt-8 ${isSidebarCollapsed ? 'hidden' : ''}`}>
-              <p className="px-3 text-xs font-semibold text-[#7e7a76]">Favorites</p>
+            <div className={`mt-8 ${isSidebarCollapsed ? "hidden" : ""}`}>
+              <p className="px-3 text-xs font-semibold text-[#7e7a76]">
+                Favorites
+              </p>
               <div className="mt-2 space-y-0.5">
-                {favoriteProjects.map(project => (
+                {favoriteProjects.map((project) => (
                   <RailLink
                     key={project.id}
                     to={`/project/${project.id}`}
@@ -1943,9 +2347,13 @@ function WorkspaceShell({
             </div>
           ) : null}
 
-          <div className={`mt-8 flex items-center justify-between px-3 ${isSidebarCollapsed ? 'hidden' : ''}`}>
+          <div
+            className={`mt-8 flex items-center justify-between px-3 ${isSidebarCollapsed ? "hidden" : ""}`}
+          >
             <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-[#5f5b57]">My Projects</p>
+              <p className="text-sm font-semibold text-[#5f5b57]">
+                My Projects
+              </p>
             </div>
             <button
               type="button"
@@ -1957,8 +2365,10 @@ function WorkspaceShell({
               <Plus size={14} />
             </button>
           </div>
-          <div className={`mt-2 flex-1 space-y-0.5 overflow-y-auto ${isSidebarCollapsed ? 'hidden' : ''}`}>
-            {regularProjects.map(project => (
+          <div
+            className={`mt-2 flex-1 space-y-0.5 overflow-y-auto ${isSidebarCollapsed ? "hidden" : ""}`}
+          >
+            {regularProjects.map((project) => (
               <RailLink
                 key={project.id}
                 to={`/project/${project.id}`}
@@ -1971,33 +2381,48 @@ function WorkspaceShell({
             ))}
           </div>
 
-          <div className={`mt-4 rounded-[18px] border border-[#ece7e3] bg-white px-3 py-3 ${isSidebarCollapsed ? 'hidden' : ''}`}>
+          <div
+            className={`mt-4 rounded-[18px] border border-[#ece7e3] bg-white px-3 py-3 ${isSidebarCollapsed ? "hidden" : ""}`}
+          >
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-[#2b2b2b]">Cloud sync</p>
               <StatusPill label={cloudStatus.label} tone={cloudStatus.tone} />
             </div>
             <p className="mt-2 text-xs leading-5 text-[#7a746d]">
-              {cloudSession?.email ?? 'Connect Google Drive to keep this workspace synced across browsers and devices.'}
+              {cloudSession?.email ??
+                "Connect Google Drive to keep this workspace synced across browsers and devices."}
             </p>
             <button
               onClick={onCloudSync}
               disabled={isSyncing || !cloudConfigured}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#dc4c3e] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
-              <span>{isSyncing ? 'Syncing...' : cloudSession ? 'Sync' : 'Connect Google Drive'}</span>
+              {isSyncing ? (
+                <RefreshCw size={16} className="animate-spin" />
+              ) : (
+                <Cloud size={16} />
+              )}
+              <span>
+                {isSyncing
+                  ? "Syncing..."
+                  : cloudSession
+                    ? "Sync"
+                    : "Connect Google Drive"}
+              </span>
             </button>
             {cloudSession ? (
               <button
                 onClick={onDisconnectCloud}
-                className="mt-2 w-full rounded-full border border-[#ece7e3] bg-[#faf8f6] px-4 py-2.5 text-sm font-semibold text-[#2b2b2b] transition hover:bg-white"
+                className="mt-2 w-full rounded-lg border border-[#ece7e3] bg-[#faf8f6] px-4 py-2.5 text-sm font-semibold text-[#2b2b2b] transition hover:bg-white"
               >
                 Disconnect
               </button>
             ) : null}
           </div>
 
-          <div className={`mt-3 flex items-center justify-center gap-3 px-2 pb-1 text-[11px] text-[#b3aaa2] ${isSidebarCollapsed ? 'hidden' : ''}`}>
+          <div
+            className={`mt-3 flex items-center justify-center gap-3 px-2 pb-1 text-[11px] text-[#b3aaa2] ${isSidebarCollapsed ? "hidden" : ""}`}
+          >
             <NavLink to="/privacy" className="transition hover:text-[#7d6d62]">
               Privacy
             </NavLink>
@@ -2012,21 +2437,29 @@ function WorkspaceShell({
           <header className="sticky top-0 z-20 border-b border-[#ece7e3] bg-[#faf8f6]/95 px-4 py-4 backdrop-blur md:px-8">
             <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">Emberlist</p>
-                <h2 className="text-2xl font-semibold text-[#202020]">{title}</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">
+                  Emberlist
+                </p>
+                <h2 className="text-2xl font-semibold text-[#202020]">
+                  {title}
+                </h2>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={onCloudSync}
                   disabled={isSyncing}
-                  className={`flex items-center gap-2 rounded-full border border-[#ece7e3] bg-white px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70 ${isSidebarCollapsed ? '' : 'md:hidden'}`}
+                  className={`flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-white px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70 ${isSidebarCollapsed ? "" : "md:hidden"}`}
                 >
-                  {isSyncing ? <RefreshCw size={16} className="animate-spin" /> : <Cloud size={16} />}
-                  <span>{isSyncing ? 'Syncing...' : 'Sync'}</span>
+                  {isSyncing ? (
+                    <RefreshCw size={16} className="animate-spin" />
+                  ) : (
+                    <Cloud size={16} />
+                  )}
+                  <span>{isSyncing ? "Syncing..." : "Sync"}</span>
                 </button>
                 <button
                   onClick={() => onOpenQuickAdd()}
-                  className="flex items-center gap-2 rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
+                  className="flex items-center gap-2 rounded-lg bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
                 >
                   <Plus size={16} />
                   <span className="sm:hidden">Add</span>
@@ -2035,7 +2468,9 @@ function WorkspaceShell({
               </div>
             </div>
             {banner ? (
-              <div className={`mx-auto mt-4 flex w-full max-w-[1240px] items-start justify-between gap-3 rounded-[16px] px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}>
+              <div
+                className={`mx-auto mt-4 flex w-full max-w-[1240px] items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}
+              >
                 <p>{banner.message}</p>
                 <div className="flex items-center gap-2">
                   {banner.actionLabel && banner.onAction ? (
@@ -2043,12 +2478,18 @@ function WorkspaceShell({
                       type="button"
                       onClick={() => void handleBannerAction()}
                       disabled={isBannerActionRunning}
-                      className="rounded-full border border-black/10 bg-white/70 px-3 py-1 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-md border border-black/10 bg-white/70 px-3 py-1 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {isBannerActionRunning ? `${banner.actionLabel}...` : banner.actionLabel}
+                      {isBannerActionRunning
+                        ? `${banner.actionLabel}...`
+                        : banner.actionLabel}
                     </button>
                   ) : null}
-                  <button onClick={onDismissBanner} className="rounded-full p-1 transition hover:bg-black/5" aria-label="Dismiss status message">
+                  <button
+                    onClick={onDismissBanner}
+                    className="rounded-lg p-1 transition hover:bg-black/5"
+                    aria-label="Dismiss status message"
+                  >
                     <X size={16} />
                   </button>
                 </div>
@@ -2058,199 +2499,204 @@ function WorkspaceShell({
 
           <main className="flex-1 scroll-pb-32 px-4 pb-[calc(8.75rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10">
             <div className="mx-auto w-full max-w-[1240px]">
-            <Routes>
-              <Route path="/" element={<Navigate to="/today" replace />} />
-              <Route
-                path="/today"
-                element={
-                  <TodayPage
-                    payload={payload}
-                    showCompletedToday={showCompletedToday}
-                    showSelectionButtons={showSelectionButtons}
-                    onCreateTaskRelative={onCreateTaskRelative}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onRescheduleTasks={onRescheduleTasks}
-                    onPostponeTasks={onPostponeTasks}
-                    onMoveTasksToProject={onMoveTasksToProject}
-                    onMoveTasksToSection={onMoveTasksToSection}
-                    onSetTasksPriority={onSetTasksPriority}
-                    onDeleteTasks={onDeleteTasks}
-                    onPromoteSubtask={onPromoteSubtask}
-                    onSaveTask={onSaveTask}
-                    onDuplicateTask={onDuplicateTask}
-                  />
-                }
-              />
-              <Route
-                path="/upcoming"
-                element={
-                  <UpcomingPage
-                    payload={payload}
-                    showSelectionButtons={showSelectionButtons}
-                    onCreateTaskRelative={onCreateTaskRelative}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onRescheduleTasks={onRescheduleTasks}
-                    onPostponeTasks={onPostponeTasks}
-                    onMoveTasksToProject={onMoveTasksToProject}
-                    onMoveTasksToSection={onMoveTasksToSection}
-                    onSetTasksPriority={onSetTasksPriority}
-                    onDeleteTasks={onDeleteTasks}
-                    onPromoteSubtask={onPromoteSubtask}
-                    onSaveTask={onSaveTask}
-                    onDuplicateTask={onDuplicateTask}
-                  />
-                }
-              />
-              <Route
-                path="/search"
-                element={
-                  <SearchPage
-                    payload={payload}
-                    showSelectionButtons={showSelectionButtons}
-                    onCreateTaskRelative={onCreateTaskRelative}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onRescheduleTasks={onRescheduleTasks}
-                    onPostponeTasks={onPostponeTasks}
-                    onMoveTasksToProject={onMoveTasksToProject}
-                    onMoveTasksToSection={onMoveTasksToSection}
-                    onSetTasksPriority={onSetTasksPriority}
-                    onDeleteTasks={onDeleteTasks}
-                    onPromoteSubtask={onPromoteSubtask}
-                    onSaveTask={onSaveTask}
-                    onDuplicateTask={onDuplicateTask}
-                  />
-                }
-              />
-              <Route
-                path="/search/no-due"
-                element={
-                  <SearchPage
-                    payload={payload}
-                    showSelectionButtons={showSelectionButtons}
-                    onCreateTaskRelative={onCreateTaskRelative}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onRescheduleTasks={onRescheduleTasks}
-                    onPostponeTasks={onPostponeTasks}
-                    onMoveTasksToProject={onMoveTasksToProject}
-                    onMoveTasksToSection={onMoveTasksToSection}
-                    onSetTasksPriority={onSetTasksPriority}
-                    onDeleteTasks={onDeleteTasks}
-                    onPromoteSubtask={onPromoteSubtask}
-                    onSaveTask={onSaveTask}
-                    onDuplicateTask={onDuplicateTask}
-                    forcedFilter="NO_DUE"
-                  />
-                }
-              />
-              <Route path="/browse" element={<Navigate to="/today" replace />} />
-              <Route
-                path="/inbox"
-                element={
-                  <InboxPage
-                    payload={payload}
-                    showSelectionButtons={showSelectionButtons}
-                    onCreateTaskRelative={onCreateTaskRelative}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onRescheduleTasks={onRescheduleTasks}
-                    onPostponeTasks={onPostponeTasks}
-                    onMoveTasksToProject={onMoveTasksToProject}
-                    onMoveTasksToSection={onMoveTasksToSection}
-                    onSetTasksPriority={onSetTasksPriority}
-                    onDeleteTasks={onDeleteTasks}
-                    onPromoteSubtask={onPromoteSubtask}
-                    onSaveTask={onSaveTask}
-                    onDuplicateTask={onDuplicateTask}
-                  />
-                }
-              />
-              <Route
-                path="/project/:projectId"
-                element={
-                  <ProjectPage
-                    payload={payload}
-                    showSelectionButtons={showSelectionButtons}
-                    onCreateTaskRelative={onCreateTaskRelative}
-                    onSaveTask={onSaveTask}
-                    onCreateSection={onCreateSection}
-                    onUpdateProject={onUpdateProject}
-                    onDeleteProject={onDeleteProject}
-                    onUpdateSection={onUpdateSection}
-                    onDeleteSection={onDeleteSection}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onRescheduleTasks={onRescheduleTasks}
-                    onPostponeTasks={onPostponeTasks}
-                    onMoveTasksToProject={onMoveTasksToProject}
-                    onMoveTasksToSection={onMoveTasksToSection}
-                    onSetTasksPriority={onSetTasksPriority}
-                    onDeleteTasks={onDeleteTasks}
-                    onPromoteSubtask={onPromoteSubtask}
-                    onDuplicateTask={onDuplicateTask}
-                    onOpenQuickAdd={onOpenQuickAdd}
-                  />
-                }
-              />
-              <Route
-                path="/task/:taskId"
-                element={
-                  <TaskDetailPage
-                    payload={payload}
-                    onCreateTask={onCreateTask}
-                    onSaveTask={onSaveTask}
-                    onShowBanner={onShowBanner}
-                    onArchiveTask={onArchiveTask}
-                    onDeleteTask={onDeleteTask}
-                    onToggleTask={onToggleTask}
-                    onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                    onPromoteSubtask={onPromoteSubtask}
-                    activityEntries={activityEntries}
-                    onUndoActivity={onUndoActivity}
-                    canUndoActivity={canUndoActivity}
-                  />
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <SettingsPage
-                    cloudConfigured={cloudConfigured}
-                    cloudSession={cloudSession}
-                    lastSyncError={lastSyncError}
-                    hasPendingLocalChanges={hasPendingLocalChanges}
-                    isOnline={isOnline}
-                    showCompletedToday={showCompletedToday}
-                    onToggleShowCompletedToday={onToggleShowCompletedToday}
-                    showSelectionButtons={showSelectionButtons}
-                    onToggleShowSelectionButtons={onToggleShowSelectionButtons}
-                    weekStartsOn={weekStartsOn}
-                    onWeekStartsOnChange={onWeekStartsOnChange}
-                    use24HourTime={use24HourTime}
-                    onToggleUse24HourTime={onToggleUse24HourTime}
-                    autoSyncEnabled={autoSyncEnabled}
-                    onToggleAutoSyncEnabled={onToggleAutoSyncEnabled}
-                    autoBackupEnabled={autoBackupEnabled}
-                    onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
-                    onDisconnectCloud={onDisconnectCloud}
-                    onResetCloudSync={requestResetCloudSync}
-                    onResetLocalCache={onResetLocalCache}
-                    onImport={onImport}
-                    onExportJson={onExportJson}
-                    onSaveBrowserBackupNow={onSaveBrowserBackupNow}
-                    onRestoreBrowserBackup={requestRestoreBrowserBackup}
-                    isSyncing={isSyncing}
-                    isResettingCloud={isResettingCloud}
-                    isResettingCache={isResettingCache}
-                    lastCloudSyncAt={lastCloudSyncAt}
-                    lastLocalBackupAt={lastLocalBackupAt}
-                  />
-                }
-              />
-            </Routes>
+              <Routes>
+                <Route path="/" element={<Navigate to="/today" replace />} />
+                <Route
+                  path="/today"
+                  element={
+                    <TodayPage
+                      payload={payload}
+                      showCompletedToday={showCompletedToday}
+                      showSelectionButtons={showSelectionButtons}
+                      onCreateTaskRelative={onCreateTaskRelative}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onSaveTask={onSaveTask}
+                      onDuplicateTask={onDuplicateTask}
+                    />
+                  }
+                />
+                <Route
+                  path="/upcoming"
+                  element={
+                    <UpcomingPage
+                      payload={payload}
+                      showSelectionButtons={showSelectionButtons}
+                      onCreateTaskRelative={onCreateTaskRelative}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onSaveTask={onSaveTask}
+                      onDuplicateTask={onDuplicateTask}
+                    />
+                  }
+                />
+                <Route
+                  path="/search"
+                  element={
+                    <SearchPage
+                      payload={payload}
+                      showSelectionButtons={showSelectionButtons}
+                      onCreateTaskRelative={onCreateTaskRelative}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onSaveTask={onSaveTask}
+                      onDuplicateTask={onDuplicateTask}
+                    />
+                  }
+                />
+                <Route
+                  path="/search/no-due"
+                  element={
+                    <SearchPage
+                      payload={payload}
+                      showSelectionButtons={showSelectionButtons}
+                      onCreateTaskRelative={onCreateTaskRelative}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onSaveTask={onSaveTask}
+                      onDuplicateTask={onDuplicateTask}
+                      forcedFilter="NO_DUE"
+                    />
+                  }
+                />
+                <Route
+                  path="/browse"
+                  element={<Navigate to="/today" replace />}
+                />
+                <Route
+                  path="/inbox"
+                  element={
+                    <InboxPage
+                      payload={payload}
+                      showSelectionButtons={showSelectionButtons}
+                      onCreateTaskRelative={onCreateTaskRelative}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onSaveTask={onSaveTask}
+                      onDuplicateTask={onDuplicateTask}
+                    />
+                  }
+                />
+                <Route
+                  path="/project/:projectId"
+                  element={
+                    <ProjectPage
+                      payload={payload}
+                      showSelectionButtons={showSelectionButtons}
+                      onCreateTaskRelative={onCreateTaskRelative}
+                      onSaveTask={onSaveTask}
+                      onCreateSection={onCreateSection}
+                      onUpdateProject={onUpdateProject}
+                      onDeleteProject={onDeleteProject}
+                      onUpdateSection={onUpdateSection}
+                      onDeleteSection={onDeleteSection}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onDuplicateTask={onDuplicateTask}
+                      onOpenQuickAdd={onOpenQuickAdd}
+                    />
+                  }
+                />
+                <Route
+                  path="/task/:taskId"
+                  element={
+                    <TaskDetailPage
+                      payload={payload}
+                      onCreateTask={onCreateTask}
+                      onSaveTask={onSaveTask}
+                      onShowBanner={onShowBanner}
+                      onArchiveTask={onArchiveTask}
+                      onDeleteTask={onDeleteTask}
+                      onToggleTask={onToggleTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onPromoteSubtask={onPromoteSubtask}
+                      activityEntries={activityEntries}
+                      onUndoActivity={onUndoActivity}
+                      canUndoActivity={canUndoActivity}
+                    />
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <SettingsPage
+                      cloudConfigured={cloudConfigured}
+                      cloudSession={cloudSession}
+                      lastSyncError={lastSyncError}
+                      hasPendingLocalChanges={hasPendingLocalChanges}
+                      isOnline={isOnline}
+                      showCompletedToday={showCompletedToday}
+                      onToggleShowCompletedToday={onToggleShowCompletedToday}
+                      showSelectionButtons={showSelectionButtons}
+                      onToggleShowSelectionButtons={
+                        onToggleShowSelectionButtons
+                      }
+                      weekStartsOn={weekStartsOn}
+                      onWeekStartsOnChange={onWeekStartsOnChange}
+                      use24HourTime={use24HourTime}
+                      onToggleUse24HourTime={onToggleUse24HourTime}
+                      autoSyncEnabled={autoSyncEnabled}
+                      onToggleAutoSyncEnabled={onToggleAutoSyncEnabled}
+                      autoBackupEnabled={autoBackupEnabled}
+                      onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
+                      onDisconnectCloud={onDisconnectCloud}
+                      onResetCloudSync={requestResetCloudSync}
+                      onResetLocalCache={onResetLocalCache}
+                      onImport={onImport}
+                      onExportJson={onExportJson}
+                      onSaveBrowserBackupNow={onSaveBrowserBackupNow}
+                      onRestoreBrowserBackup={requestRestoreBrowserBackup}
+                      isSyncing={isSyncing}
+                      isResettingCloud={isResettingCloud}
+                      isResettingCache={isResettingCache}
+                      lastCloudSyncAt={lastCloudSyncAt}
+                      lastLocalBackupAt={lastLocalBackupAt}
+                    />
+                  }
+                />
+              </Routes>
             </div>
           </main>
         </div>
@@ -2277,14 +2723,16 @@ function WorkspaceShell({
       ) : null}
 
       {isShortcutDialogOpen ? (
-        <KeyboardShortcutsDialog onClose={() => setIsShortcutDialogOpen(false)} />
+        <KeyboardShortcutsDialog
+          onClose={() => setIsShortcutDialogOpen(false)}
+        />
       ) : null}
 
       {isProjectSwitcherOpen ? (
         <ProjectSwitcherDialog
           payload={payload}
           onClose={() => setIsProjectSwitcherOpen(false)}
-          onOpenProject={projectId => navigate(`/project/${projectId}`)}
+          onOpenProject={(projectId) => navigate(`/project/${projectId}`)}
           onCreateProject={onCreateProject}
         />
       ) : null}
@@ -2298,9 +2746,9 @@ function WorkspaceShell({
           onChange={setCreateProjectValue}
           onClose={() => {
             setIsCreateProjectDialogOpen(false);
-            setCreateProjectValue('');
+            setCreateProjectValue("");
           }}
-          onSubmit={value => void submitCreateProject(value)}
+          onSubmit={(value) => void submitCreateProject(value)}
           submitLabel="Create project"
         />
       ) : null}
@@ -2309,7 +2757,7 @@ function WorkspaceShell({
         <ConfirmDialog
           title="Reset cloud sync"
           description="Delete all Emberlist cloud sync files in Google Drive app data? Your local web data will stay intact."
-          confirmLabel={isResettingCloud ? 'Resetting...' : 'Reset cloud sync'}
+          confirmLabel={isResettingCloud ? "Resetting..." : "Reset cloud sync"}
           tone="destructive"
           disabled={isResettingCloud}
           onClose={() => setIsResetCloudDialogOpen(false)}
@@ -2333,7 +2781,7 @@ function WorkspaceShell({
         />
       ) : null}
 
-      {focusedTaskActionMode === 'reschedule' ? (
+      {focusedTaskActionMode === "reschedule" ? (
         <RescheduleDialog
           title="Reschedule task"
           description={`Choose a new date for ${focusedTaskActionLabel}.`}
@@ -2345,7 +2793,7 @@ function WorkspaceShell({
         />
       ) : null}
 
-      {focusedTaskActionMode === 'move' ? (
+      {focusedTaskActionMode === "move" ? (
         <ChoiceDialog
           title="Move task"
           description={`Move ${focusedTaskActionLabel} into a project or back to Inbox.`}
@@ -2360,7 +2808,7 @@ function WorkspaceShell({
             >
               Inbox
             </button>
-            {projects.map(project => (
+            {projects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -2374,21 +2822,21 @@ function WorkspaceShell({
         </ChoiceDialog>
       ) : null}
 
-      {focusedTaskActionMode === 'priority' ? (
+      {focusedTaskActionMode === "priority" ? (
         <ChoiceDialog
           title="Change priority"
           description={`Update the priority for ${focusedTaskActionLabel}.`}
           onClose={() => closeFocusedTaskActionDialog()}
           anchorRect={focusedTaskActionRect}
         >
-          <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+          <div className="flex flex-wrap gap-2 text-sm justify-center">
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority) => (
               <button
                 key={priority}
-                data-dialog-autofocus={priority === 'P1' ? 'true' : undefined}
+                data-dialog-autofocus={priority === "P1" ? "true" : undefined}
                 type="button"
                 onClick={() => submitFocusedTaskPriority(priority)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-lg border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-1.5 font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -2397,12 +2845,12 @@ function WorkspaceShell({
         </ChoiceDialog>
       ) : null}
 
-      {focusedTaskActionMode === 'delete' ? (
+      {focusedTaskActionMode === "delete" ? (
         <ChoiceDialog
           title="Delete task"
           description={`Delete ${focusedTaskActionLabel}? This syncs as a tombstone.`}
           onClose={() => closeFocusedTaskActionDialog()}
-          footer={(
+          footer={
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -2419,15 +2867,15 @@ function WorkspaceShell({
                 Delete task
               </button>
             </div>
-          )}
+          }
         />
       ) : null}
     </div>
   );
 }
 
-const LEGAL_LAST_UPDATED = 'April 11, 2026';
-const SUPPORT_EMAIL = 'codexemberlistwebdev@gmail.com';
+const LEGAL_LAST_UPDATED = "April 11, 2026";
+const SUPPORT_EMAIL = "codexemberlistwebdev@gmail.com";
 
 function PublicSiteLayout({
   eyebrow,
@@ -2449,8 +2897,12 @@ function PublicSiteLayout({
               E
             </div>
             <div>
-              <p className="text-base font-semibold text-[#1e2d2f]">Emberlist</p>
-              <p className="text-xs text-[#7a746d]">Offline-first tasks with Google Drive sync</p>
+              <p className="text-base font-semibold text-[#1e2d2f]">
+                Emberlist
+              </p>
+              <p className="text-xs text-[#7a746d]">
+                Offline-first tasks with Google Drive sync
+              </p>
             </div>
           </NavLink>
           <div className="flex items-center gap-2">
@@ -2479,9 +2931,15 @@ function PublicSiteLayout({
       <main className="px-5 py-10 md:px-8 md:py-14">
         <div className="mx-auto w-full max-w-[1120px]">
           <div className="max-w-[760px]">
-            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b1775c]">{eyebrow}</p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#1e2d2f] md:text-5xl">{title}</h1>
-            <p className="mt-4 text-lg leading-8 text-[#6d5c50]">{description}</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b1775c]">
+              {eyebrow}
+            </p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#1e2d2f] md:text-5xl">
+              {title}
+            </h1>
+            <p className="mt-4 text-lg leading-8 text-[#6d5c50]">
+              {description}
+            </p>
           </div>
           <div className="mt-10">{children}</div>
         </div>
@@ -2500,7 +2958,9 @@ function PublicSection({
   return (
     <section className="rounded-[28px] border border-[#e1d5ca] bg-white p-6 shadow-sm">
       <h2 className="text-xl font-semibold text-[#1e2d2f]">{title}</h2>
-      <div className="mt-4 space-y-4 text-sm leading-7 text-[#4d4a45]">{children}</div>
+      <div className="mt-4 space-y-4 text-sm leading-7 text-[#4d4a45]">
+        {children}
+      </div>
     </section>
   );
 }
@@ -2515,12 +2975,14 @@ function MarketingHomePage() {
       <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
         <PublicSection title="What Emberlist does">
           <p>
-            Emberlist stores your tasks locally on each device so the app stays usable offline. When you connect Google
-            Drive, Emberlist syncs the workspace through your personal Google Drive app-data area.
+            Emberlist stores your tasks locally on each device so the app stays
+            usable offline. When you connect Google Drive, Emberlist syncs the
+            workspace through your personal Google Drive app-data area.
           </p>
           <p>
-            The app is built for personal task planning: projects, sections, reminders, recurrence, subtasks, quick
-            capture, and keyboard-heavy desktop workflows.
+            The app is built for personal task planning: projects, sections,
+            reminders, recurrence, subtasks, quick capture, and keyboard-heavy
+            desktop workflows.
           </p>
           <div className="flex flex-wrap gap-3 pt-2">
             <NavLink
@@ -2540,31 +3002,59 @@ function MarketingHomePage() {
 
         <PublicSection title="How sync works">
           <ul className="space-y-3">
-            <li>1. Emberlist writes your workspace into local browser or device storage first.</li>
-            <li>2. If you connect Google Drive, Emberlist syncs an app-specific file in your Drive appData folder.</li>
-            <li>3. Emberlist does not browse or manage your normal Drive files.</li>
-            <li>4. You can disconnect Google Drive and continue using the app locally.</li>
+            <li>
+              1. Emberlist writes your workspace into local browser or device
+              storage first.
+            </li>
+            <li>
+              2. If you connect Google Drive, Emberlist syncs an app-specific
+              file in your Drive appData folder.
+            </li>
+            <li>
+              3. Emberlist does not browse or manage your normal Drive files.
+            </li>
+            <li>
+              4. You can disconnect Google Drive and continue using the app
+              locally.
+            </li>
           </ul>
         </PublicSection>
 
         <PublicSection title="Data handling summary">
           <ul className="space-y-3">
-            <li>Google account data used: basic profile identity needed to show which account is connected.</li>
-            <li>Google Drive data used: only Emberlist&apos;s own sync file in the appData folder.</li>
-            <li>Data shared or sold: Emberlist does not sell user task data.</li>
+            <li>
+              Google account data used: basic profile identity needed to show
+              which account is connected.
+            </li>
+            <li>
+              Google Drive data used: only Emberlist&apos;s own sync file in the
+              appData folder.
+            </li>
+            <li>
+              Data shared or sold: Emberlist does not sell user task data.
+            </li>
             <li>Support contact: {SUPPORT_EMAIL}</li>
           </ul>
         </PublicSection>
 
         <PublicSection title="Useful links">
           <div className="flex flex-col gap-3">
-            <NavLink to="/terms" className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]">
+            <NavLink
+              to="/terms"
+              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+            >
               Terms of service
             </NavLink>
-            <NavLink to="/privacy" className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]">
+            <NavLink
+              to="/privacy"
+              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+            >
               Privacy policy
             </NavLink>
-            <NavLink to="/today" className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]">
+            <NavLink
+              to="/today"
+              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+            >
               Open the app
             </NavLink>
           </div>
@@ -2584,23 +3074,28 @@ function PrivacyPolicyPage() {
       <div className="grid gap-5">
         <PublicSection title="What Emberlist collects">
           <p>
-            Emberlist stores the task data you create in the app, including tasks, projects, sections, reminders,
-            recurrence settings, and related task metadata.
+            Emberlist stores the task data you create in the app, including
+            tasks, projects, sections, reminders, recurrence settings, and
+            related task metadata.
           </p>
           <p>
-            If you connect Google Drive sync, Emberlist also reads your Google account email address and basic profile
-            name so the app can show which Google account is currently connected.
+            If you connect Google Drive sync, Emberlist also reads your Google
+            account email address and basic profile name so the app can show
+            which Google account is currently connected.
           </p>
         </PublicSection>
 
         <PublicSection title="How data is stored">
           <p>
-            On the web, Emberlist stores workspace data locally in your browser. On supported clients, it may also store
-            workspace data locally on your device.
+            On the web, Emberlist stores workspace data locally in your browser.
+            On supported clients, it may also store workspace data locally on
+            your device.
           </p>
           <p>
-            If you enable Google Drive sync, Emberlist stores a sync file in your Google Drive appData folder. That
-            folder is reserved for app-specific data and is not used to access your ordinary Drive files.
+            If you enable Google Drive sync, Emberlist stores a sync file in
+            your Google Drive appData folder. That folder is reserved for
+            app-specific data and is not used to access your ordinary Drive
+            files.
           </p>
         </PublicSection>
 
@@ -2609,33 +3104,46 @@ function PrivacyPolicyPage() {
           <ul className="list-disc space-y-2 pl-5">
             <li>create the Emberlist sync file in your appData folder</li>
             <li>read the current sync file</li>
-            <li>update or delete the Emberlist sync file when sync settings change</li>
+            <li>
+              update or delete the Emberlist sync file when sync settings change
+            </li>
           </ul>
-          <p>Emberlist does not use Google Drive access to browse, read, or modify your general Drive documents.</p>
+          <p>
+            Emberlist does not use Google Drive access to browse, read, or
+            modify your general Drive documents.
+          </p>
         </PublicSection>
 
         <PublicSection title="How Emberlist uses your data">
           <ul className="list-disc space-y-2 pl-5">
             <li>to show your tasks and projects inside the app</li>
             <li>to keep your local workspace usable offline</li>
-            <li>to sync your workspace between devices when you enable Google Drive sync</li>
+            <li>
+              to sync your workspace between devices when you enable Google
+              Drive sync
+            </li>
             <li>to show which account is connected for sync</li>
           </ul>
         </PublicSection>
 
         <PublicSection title="Sharing and retention">
           <p>
-            Emberlist does not sell your personal data. Your data is stored locally and, if enabled, inside your own
-            Google Drive appData storage.
+            Emberlist does not sell your personal data. Your data is stored
+            locally and, if enabled, inside your own Google Drive appData
+            storage.
           </p>
           <p>
-            You can disconnect Google Drive sync, reset cloud sync, clear local browser data, or export your workspace
-            from the app. Data retention therefore depends largely on the storage you choose to keep.
+            You can disconnect Google Drive sync, reset cloud sync, clear local
+            browser data, or export your workspace from the app. Data retention
+            therefore depends largely on the storage you choose to keep.
           </p>
         </PublicSection>
 
         <PublicSection title="Contact">
-          <p>Questions about privacy or Google Drive sync can be sent to {SUPPORT_EMAIL}.</p>
+          <p>
+            Questions about privacy or Google Drive sync can be sent to{" "}
+            {SUPPORT_EMAIL}.
+          </p>
         </PublicSection>
       </div>
     </PublicSiteLayout>
@@ -2652,47 +3160,53 @@ function TermsOfServicePage() {
       <div className="grid gap-5">
         <PublicSection title="Use of the service">
           <p>
-            Emberlist is a task-management application. You may use it to create, edit, organize, and sync personal or
-            work task data.
+            Emberlist is a task-management application. You may use it to
+            create, edit, organize, and sync personal or work task data.
           </p>
           <p>
-            You agree not to use Emberlist in a way that breaks the service, interferes with other users, or violates
-            applicable law.
+            You agree not to use Emberlist in a way that breaks the service,
+            interferes with other users, or violates applicable law.
           </p>
         </PublicSection>
 
         <PublicSection title="Accounts and sync">
           <p>
-            Google Drive sync is optional. If you choose to connect Google Drive, you are responsible for the Google
-            account you authorize and for the data stored there.
+            Google Drive sync is optional. If you choose to connect Google
+            Drive, you are responsible for the Google account you authorize and
+            for the data stored there.
           </p>
           <p>
-            You can disconnect sync at any time. Emberlist may continue to store your workspace locally on the device or
-            browser you are using.
+            You can disconnect sync at any time. Emberlist may continue to store
+            your workspace locally on the device or browser you are using.
           </p>
         </PublicSection>
 
         <PublicSection title="Availability and backups">
           <p>
-            Emberlist is provided on an as-is and as-available basis. Features may change, and sync or storage failures
-            can happen.
+            Emberlist is provided on an as-is and as-available basis. Features
+            may change, and sync or storage failures can happen.
           </p>
           <p>
-            You are responsible for keeping backups of data you consider important. Emberlist includes local export and
-            backup controls for that reason.
+            You are responsible for keeping backups of data you consider
+            important. Emberlist includes local export and backup controls for
+            that reason.
           </p>
         </PublicSection>
 
         <PublicSection title="Liability">
           <p>
-            To the maximum extent allowed by law, Emberlist is not liable for indirect, incidental, special, or
-            consequential damages, including loss of data, interruption of work, or other business or personal losses
-            resulting from use of the app.
+            To the maximum extent allowed by law, Emberlist is not liable for
+            indirect, incidental, special, or consequential damages, including
+            loss of data, interruption of work, or other business or personal
+            losses resulting from use of the app.
           </p>
         </PublicSection>
 
         <PublicSection title="Changes and contact">
-          <p>These terms may be updated as Emberlist changes. The page date will be updated when that happens.</p>
+          <p>
+            These terms may be updated as Emberlist changes. The page date will
+            be updated when that happens.
+          </p>
           <p>Questions about these terms can be sent to {SUPPORT_EMAIL}.</p>
         </PublicSection>
       </div>
@@ -2700,24 +3214,29 @@ function TermsOfServicePage() {
   );
 }
 
-function buildFeedbackMailto(subject: string, pathname: string, cloudSession: CloudSession | null) {
-  const userAgent = typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent;
+function buildFeedbackMailto(
+  subject: string,
+  pathname: string,
+  cloudSession: CloudSession | null,
+) {
+  const userAgent =
+    typeof navigator === "undefined" ? "unknown" : navigator.userAgent;
   const body = [
-    'What happened?',
-    '',
-    '',
-    'What did you expect?',
-    '',
-    '',
-    'Route:',
+    "What happened?",
+    "",
+    "",
+    "What did you expect?",
+    "",
+    "",
+    "Route:",
     pathname,
-    '',
-    'Connected account:',
-    cloudSession?.email ?? 'none',
-    '',
-    'Browser:',
+    "",
+    "Connected account:",
+    cloudSession?.email ?? "none",
+    "",
+    "Browser:",
     userAgent,
-  ].join('\n');
+  ].join("\n");
   return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -2741,9 +3260,17 @@ function TodayPage({
   payload: SyncPayload;
   showCompletedToday: boolean;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -2757,32 +3284,54 @@ function TodayPage({
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const data = useMemo(
-    () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
-    [payload, todayStartMs]
+    () =>
+      getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
+    [payload, todayStartMs],
   );
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
-  const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'reschedule-overdue' | 'move' | 'priority' | 'delete'>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [activeDialog, setActiveDialog] = useState<
+    | null
+    | "reschedule-selected"
+    | "reschedule-overdue"
+    | "move"
+    | "priority"
+    | "delete"
+  >(null);
   const [rowActionState, setRowActionState] = useState<{
-    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
     taskId: string;
     anchorRect?: DOMRect | null;
   } | null>(null);
   const visibleTasks = useMemo(
-    () => (showCompletedToday ? [...data.overdue, ...data.today, ...data.completedToday] : [...data.overdue, ...data.today]),
-    [data.completedToday, data.overdue, data.today, showCompletedToday]
+    () =>
+      showCompletedToday
+        ? [...data.overdue, ...data.today, ...data.completedToday]
+        : [...data.overdue, ...data.today],
+    [data.completedToday, data.overdue, data.today, showCompletedToday],
   );
-  const visibleTaskIds = useMemo(() => new Set(visibleTasks.map(task => task.id)), [visibleTasks]);
+  const visibleTaskIds = useMemo(
+    () => new Set(visibleTasks.map((task) => task.id)),
+    [visibleTasks],
+  );
   const selectedIds = useMemo(
-    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
-    [selectedTaskIds, visibleTaskIds]
+    () =>
+      Array.from(selectedTaskIds).filter((taskId) =>
+        visibleTaskIds.has(taskId),
+      ),
+    [selectedTaskIds, visibleTaskIds],
   );
   const selectedTasks = useMemo(
-    () => selectedIds
-      .map(taskId => visibleTasks.find(task => task.id === taskId) ?? null)
-      .filter((task): task is Task => task !== null),
-    [selectedIds, visibleTasks]
+    () =>
+      selectedIds
+        .map(
+          (taskId) => visibleTasks.find((task) => task.id === taskId) ?? null,
+        )
+        .filter((task): task is Task => task !== null),
+    [selectedIds, visibleTasks],
   );
   const selectedCount = selectedIds.length;
 
@@ -2792,7 +3341,7 @@ function TodayPage({
   }
 
   function toggleSelection(taskId: string) {
-    setSelectedTaskIds(current => {
+    setSelectedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(taskId)) {
         next.delete(taskId);
@@ -2807,7 +3356,7 @@ function TodayPage({
     setSelectionMode(true);
   }
 
-  function openDateDialog(mode: 'reschedule-selected' | 'reschedule-overdue') {
+  function openDateDialog(mode: "reschedule-selected" | "reschedule-overdue") {
     setActiveDialog(mode);
   }
 
@@ -2819,37 +3368,52 @@ function TodayPage({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setSelectionMode(true);
-        setSelectedTaskIds(new Set(visibleTasks.map(task => task.id)));
+        setSelectedTaskIds(new Set(visibleTasks.map((task) => task.id)));
         return;
       }
 
       if (selectionMode && !activeDialog) {
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "t"
+        ) {
           event.preventDefault();
-          openDateDialog('reschedule-selected');
+          openDateDialog("reschedule-selected");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "v"
+        ) {
           event.preventDefault();
-          setActiveDialog('move');
+          setActiveDialog("move");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "p"
+        ) {
           event.preventDefault();
-          setActiveDialog('priority');
+          setActiveDialog("priority");
           return;
         }
-        if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (event.key === "Delete" || event.key === "Backspace") {
           event.preventDefault();
-          setActiveDialog('delete');
+          setActiveDialog("delete");
           return;
         }
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         if (activeDialog) {
           event.preventDefault();
           closeDialog();
@@ -2862,8 +3426,8 @@ function TodayPage({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeDialog, selectionMode, visibleTasks]);
 
   function submitMove(projectId: string | null) {
@@ -2888,7 +3452,7 @@ function TodayPage({
   }
 
   function renderTaskRowActions(task: Task) {
-    if (task.status !== 'OPEN') return null;
+    if (task.status !== "OPEN") return null;
     return (
       <TaskRowActions
         payload={payload}
@@ -2897,7 +3461,7 @@ function TodayPage({
         onSetActionState={setRowActionState}
         onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -2910,7 +3474,10 @@ function TodayPage({
   }
 
   return (
-    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
+    <div
+      className="space-y-6"
+      data-task-selection-mode={selectionMode ? "true" : undefined}
+    >
       <HeroCard
         eyebrow="Focus"
         title=""
@@ -2920,13 +3487,16 @@ function TodayPage({
             {showSelectionButtons || selectionMode ? (
               <button
                 type="button"
-                onClick={() => (selectionMode ? clearSelection() : openSelection())}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                  }`}
+                onClick={() =>
+                  selectionMode ? clearSelection() : openSelection()
+                }
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  selectionMode
+                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                }`}
               >
-                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+                {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
@@ -2944,7 +3514,7 @@ function TodayPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => openDateDialog('reschedule-selected')}
+              onClick={() => openDateDialog("reschedule-selected")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
@@ -2952,7 +3522,7 @@ function TodayPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('move')}
+              onClick={() => setActiveDialog("move")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
@@ -2960,7 +3530,7 @@ function TodayPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('priority')}
+              onClick={() => setActiveDialog("priority")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
@@ -2968,7 +3538,7 @@ function TodayPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('delete')}
+              onClick={() => setActiveDialog("delete")}
               className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Delete
@@ -2987,7 +3557,7 @@ function TodayPage({
           emptyMessage="Nothing overdue."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
@@ -2997,7 +3567,7 @@ function TodayPage({
           headerActions={
             <button
               type="button"
-              onClick={() => openDateDialog('reschedule-overdue')}
+              onClick={() => openDateDialog("reschedule-overdue")}
               className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
             >
               Reschedule overdue
@@ -3015,7 +3585,7 @@ function TodayPage({
         emptyMessage="No tasks due today."
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
@@ -3034,7 +3604,7 @@ function TodayPage({
           emptyMessage="Nothing completed yet today."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
           collapsible
           defaultCollapsed
           selectionMode={selectionMode}
@@ -3046,27 +3616,27 @@ function TodayPage({
         />
       ) : null}
 
-      {activeDialog === 'reschedule-selected' ? (
+      {activeDialog === "reschedule-selected" ? (
         <RescheduleDialog
           title="Reschedule tasks"
-          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           tasks={selectedTasks}
           onClose={closeDialog}
           onRescheduleTasks={(taskIds, dueAt) => {
             onRescheduleTasks(taskIds, dueAt);
             clearSelection();
           }}
-          onPostponeTasks={taskIds => {
+          onPostponeTasks={(taskIds) => {
             onPostponeTasks(taskIds);
             clearSelection();
           }}
         />
       ) : null}
 
-      {activeDialog === 'reschedule-overdue' ? (
+      {activeDialog === "reschedule-overdue" ? (
         <RescheduleDialog
           title="Reschedule overdue tasks"
-          description={`Choose a new date for ${data.overdue.length} overdue task${data.overdue.length === 1 ? '' : 's'}.`}
+          description={`Choose a new date for ${data.overdue.length} overdue task${data.overdue.length === 1 ? "" : "s"}.`}
           tasks={data.overdue}
           onClose={closeDialog}
           onRescheduleTasks={onRescheduleTasks}
@@ -3074,10 +3644,10 @@ function TodayPage({
         />
       ) : null}
 
-      {activeDialog === 'move' ? (
+      {activeDialog === "move" ? (
         <ChoiceDialog
           title="Move tasks"
-          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or back to Inbox.`}
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? "" : "s"} into a project or back to Inbox.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
@@ -3088,7 +3658,7 @@ function TodayPage({
             >
               Inbox
             </button>
-            {projects.map(project => (
+            {projects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -3102,14 +3672,14 @@ function TodayPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'priority' ? (
+      {activeDialog === "priority" ? (
         <ChoiceDialog
           title="Change priority"
-          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority) => (
               <button
                 key={priority}
                 type="button"
@@ -3123,12 +3693,12 @@ function TodayPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'delete' ? (
+      {activeDialog === "delete" ? (
         <ChoiceDialog
           title="Delete tasks"
-          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}? This syncs as tombstones.`}
           onClose={closeDialog}
-          footer={(
+          footer={
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -3145,10 +3715,9 @@ function TodayPage({
                 Delete tasks
               </button>
             </div>
-          )}
+          }
         />
       ) : null}
-
     </div>
   );
 }
@@ -3171,9 +3740,17 @@ function UpcomingPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -3187,32 +3764,54 @@ function UpcomingPage({
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const todayData = useMemo(
-    () => getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
-    [payload, todayStartMs]
+    () =>
+      getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
+    [payload, todayStartMs],
   );
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
   const groups = useMemo(() => getUpcomingGroups(payload), [payload]);
-  const completedTasks = useMemo(() => getUpcomingCompletedTasks(payload), [payload]);
-  const visibleTasks = useMemo(() => getUpcomingOpenTasks(payload, todayStartMs), [payload, todayStartMs]);
-  const visibleTaskIds = useMemo(() => new Set(visibleTasks.map(task => task.id)), [visibleTasks]);
+  const completedTasks = useMemo(
+    () => getUpcomingCompletedTasks(payload),
+    [payload],
+  );
+  const visibleTasks = useMemo(
+    () => getUpcomingOpenTasks(payload, todayStartMs),
+    [payload, todayStartMs],
+  );
+  const visibleTaskIds = useMemo(
+    () => new Set(visibleTasks.map((task) => task.id)),
+    [visibleTasks],
+  );
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
-  const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'move' | 'priority' | 'delete'>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [activeDialog, setActiveDialog] = useState<
+    null | "reschedule-selected" | "move" | "priority" | "delete"
+  >(null);
   const [rowActionState, setRowActionState] = useState<{
-    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
     taskId: string;
     anchorRect?: DOMRect | null;
   } | null>(null);
-  const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(null);
+  const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(
+    null,
+  );
   const selectedIds = useMemo(
-    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
-    [selectedTaskIds, visibleTaskIds]
+    () =>
+      Array.from(selectedTaskIds).filter((taskId) =>
+        visibleTaskIds.has(taskId),
+      ),
+    [selectedTaskIds, visibleTaskIds],
   );
   const selectedTasks = useMemo(
-    () => selectedIds
-      .map(taskId => visibleTasks.find(task => task.id === taskId) ?? null)
-      .filter((task): task is Task => task !== null),
-    [selectedIds, visibleTasks]
+    () =>
+      selectedIds
+        .map(
+          (taskId) => visibleTasks.find((task) => task.id === taskId) ?? null,
+        )
+        .filter((task): task is Task => task !== null),
+    [selectedIds, visibleTasks],
   );
   const selectedCount = selectedIds.length;
 
@@ -3222,7 +3821,7 @@ function UpcomingPage({
   }
 
   function toggleSelection(taskId: string) {
-    setSelectedTaskIds(current => {
+    setSelectedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(taskId)) {
         next.delete(taskId);
@@ -3238,7 +3837,7 @@ function UpcomingPage({
   }
 
   function openDateDialog() {
-    setActiveDialog('reschedule-selected');
+    setActiveDialog("reschedule-selected");
   }
 
   function closeDialog() {
@@ -3248,7 +3847,7 @@ function UpcomingPage({
   function readDraggedTaskId(event: DragEvent<HTMLElement>) {
     const directValue = activeDraggedTaskId?.trim();
     if (directValue) return directValue;
-    const transferValue = event.dataTransfer.getData('text/task-id').trim();
+    const transferValue = event.dataTransfer.getData("text/task-id").trim();
     return transferValue || null;
   }
 
@@ -3256,37 +3855,52 @@ function UpcomingPage({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setSelectionMode(true);
-        setSelectedTaskIds(new Set(visibleTasks.map(task => task.id)));
+        setSelectedTaskIds(new Set(visibleTasks.map((task) => task.id)));
         return;
       }
 
       if (selectionMode && !activeDialog) {
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "t"
+        ) {
           event.preventDefault();
           openDateDialog();
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "v"
+        ) {
           event.preventDefault();
-          setActiveDialog('move');
+          setActiveDialog("move");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "p"
+        ) {
           event.preventDefault();
-          setActiveDialog('priority');
+          setActiveDialog("priority");
           return;
         }
-        if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (event.key === "Delete" || event.key === "Backspace") {
           event.preventDefault();
-          setActiveDialog('delete');
+          setActiveDialog("delete");
           return;
         }
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         if (activeDialog) {
           event.preventDefault();
           closeDialog();
@@ -3299,8 +3913,8 @@ function UpcomingPage({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeDialog, selectionMode, visibleTasks]);
 
   function submitMove(projectId: string | null) {
@@ -3325,7 +3939,7 @@ function UpcomingPage({
   }
 
   function renderTaskRowActions(task: Task) {
-    if (task.status !== 'OPEN') return null;
+    if (task.status !== "OPEN") return null;
     return (
       <TaskRowActions
         payload={payload}
@@ -3334,7 +3948,7 @@ function UpcomingPage({
         onSetActionState={setRowActionState}
         onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -3347,23 +3961,29 @@ function UpcomingPage({
   }
 
   return (
-    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
+    <div
+      className="space-y-6"
+      data-task-selection-mode={selectionMode ? "true" : undefined}
+    >
       <HeroCard
         eyebrow="Timeline"
         title="Upcoming"
         description="Look ahead at upcoming deadlines and future work across the workspace. Drag tasks into a date lane when you want to reschedule them quickly."
-        actions={(
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             {showSelectionButtons || selectionMode ? (
               <button
                 type="button"
-                onClick={() => (selectionMode ? clearSelection() : openSelection())}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                  }`}
+                onClick={() =>
+                  selectionMode ? clearSelection() : openSelection()
+                }
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  selectionMode
+                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                }`}
               >
-                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+                {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
@@ -3372,7 +3992,7 @@ function UpcomingPage({
               </span>
             ) : null}
           </div>
-        )}
+        }
       />
 
       {selectionMode ? (
@@ -3389,7 +4009,7 @@ function UpcomingPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('move')}
+              onClick={() => setActiveDialog("move")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
@@ -3397,7 +4017,7 @@ function UpcomingPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('priority')}
+              onClick={() => setActiveDialog("priority")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
@@ -3405,7 +4025,7 @@ function UpcomingPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('delete')}
+              onClick={() => setActiveDialog("delete")}
               className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Delete
@@ -3425,7 +4045,7 @@ function UpcomingPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
@@ -3435,33 +4055,47 @@ function UpcomingPage({
       ) : null}
 
       {groups.length ? (
-        groups.map(group => (
+        groups.map((group) => (
           <div
             key={group.dateKey}
-            onDragOver={event => {
+            onDragOver={(event) => {
               const draggedTaskId = readDraggedTaskId(event);
               if (!draggedTaskId) return;
               event.preventDefault();
               setActiveDropDateKey(group.dateKey);
             }}
-            onDragLeave={event => {
-              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-              setActiveDropDateKey(current => (current === group.dateKey ? null : current));
+            onDragLeave={(event) => {
+              if (
+                event.currentTarget.contains(event.relatedTarget as Node | null)
+              )
+                return;
+              setActiveDropDateKey((current) =>
+                current === group.dateKey ? null : current,
+              );
             }}
-            onDrop={event => {
+            onDrop={(event) => {
               const draggedTaskId = readDraggedTaskId(event);
               setActiveDropDateKey(null);
               if (!draggedTaskId) return;
               event.preventDefault();
-              onRescheduleTasks([draggedTaskId], startOfDay(new Date(group.dateKey)).getTime());
+              onRescheduleTasks(
+                [draggedTaskId],
+                startOfDay(new Date(group.dateKey)).getTime(),
+              );
             }}
             className={`rounded-[24px] transition ${
-              activeDropDateKey === group.dateKey ? 'bg-[#FFF7F2] ring-1 ring-[#EE6A3C]' : ''
+              activeDropDateKey === group.dateKey
+                ? "bg-[#FFF7F2] ring-1 ring-[#EE6A3C]"
+                : ""
             }`}
           >
             <TaskGroup
-              title={format(new Date(group.dateKey), 'EEEE, MMM d')}
-              subtitle={activeDropDateKey === group.dateKey ? 'Drop here to move the task onto this date.' : undefined}
+              title={format(new Date(group.dateKey), "EEEE, MMM d")}
+              subtitle={
+                activeDropDateKey === group.dateKey
+                  ? "Drop here to move the task onto this date."
+                  : undefined
+              }
               payload={payload}
               todayStartMs={todayStartMs}
               tasks={group.tasks}
@@ -3469,17 +4103,17 @@ function UpcomingPage({
               onToggleTask={onToggleTask}
               onReparentTaskAsSubtask={onReparentTaskAsSubtask}
               onPromoteSubtask={onPromoteSubtask}
-              onOpenTask={taskId => navigate(`/task/${taskId}`)}
+              onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
               selectionMode={selectionMode}
               selectedTaskIds={selectedTaskIds}
               onToggleSelection={toggleSelection}
               onStartSelection={openSelection}
               rowActions={renderTaskRowActions}
-              headerActions={(
+              headerActions={
                 <span className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#6D5C50]">
                   Drag tasks here to reschedule
                 </span>
-              )}
+              }
             />
           </div>
         ))
@@ -3501,34 +4135,34 @@ function UpcomingPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
           rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
         />
       ) : null}
 
-      {activeDialog === 'reschedule-selected' ? (
+      {activeDialog === "reschedule-selected" ? (
         <RescheduleDialog
           title="Reschedule tasks"
-          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           tasks={selectedTasks}
           onClose={closeDialog}
           onRescheduleTasks={(taskIds, dueAt) => {
             onRescheduleTasks(taskIds, dueAt);
             clearSelection();
           }}
-          onPostponeTasks={taskIds => {
+          onPostponeTasks={(taskIds) => {
             onPostponeTasks(taskIds);
             clearSelection();
           }}
         />
       ) : null}
 
-      {activeDialog === 'move' ? (
+      {activeDialog === "move" ? (
         <ChoiceDialog
           title="Move tasks"
-          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or back to Inbox.`}
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? "" : "s"} into a project or back to Inbox.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
@@ -3539,7 +4173,7 @@ function UpcomingPage({
             >
               Inbox
             </button>
-            {projects.map(project => (
+            {projects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -3553,14 +4187,14 @@ function UpcomingPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'priority' ? (
+      {activeDialog === "priority" ? (
         <ChoiceDialog
           title="Change priority"
-          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority) => (
               <button
                 key={priority}
                 type="button"
@@ -3574,12 +4208,12 @@ function UpcomingPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'delete' ? (
+      {activeDialog === "delete" ? (
         <ChoiceDialog
           title="Delete tasks"
-          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}? This syncs as tombstones.`}
           onClose={closeDialog}
-          footer={(
+          footer={
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -3596,7 +4230,7 @@ function UpcomingPage({
                 Delete tasks
               </button>
             </div>
-          )}
+          }
         />
       ) : null}
     </div>
@@ -3622,9 +4256,17 @@ function SearchPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -3640,13 +4282,17 @@ function SearchPage({
   const location = useLocation();
   const todayStartMs = useTodayStartMs();
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [userFilters, setUserFilters] = useState<Set<SearchFilter>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
-  const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [activeDialog, setActiveDialog] = useState<
+    null | "reschedule" | "move" | "priority" | "delete"
+  >(null);
   const [rowActionState, setRowActionState] = useState<{
-    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
     taskId: string;
     anchorRect?: DOMRect | null;
   } | null>(null);
@@ -3654,8 +4300,8 @@ function SearchPage({
   const filters = useMemo(() => {
     if (forcedFilter) {
       const next = new Set<SearchFilter>([forcedFilter]);
-      userFilters.forEach(filter => {
-        if (filter !== 'ALL' && filter !== forcedFilter) {
+      userFilters.forEach((filter) => {
+        if (filter !== "ALL" && filter !== forcedFilter) {
           next.add(filter);
         }
       });
@@ -3663,45 +4309,52 @@ function SearchPage({
     }
 
     if (userFilters.size === 0) {
-      return new Set<SearchFilter>(['ALL']);
+      return new Set<SearchFilter>(["ALL"]);
     }
 
     const next = new Set<SearchFilter>();
-    userFilters.forEach(filter => {
-      if (filter !== 'ALL') {
+    userFilters.forEach((filter) => {
+      if (filter !== "ALL") {
         next.add(filter);
       }
     });
-    return next.size ? next : new Set<SearchFilter>(['ALL']);
+    return next.size ? next : new Set<SearchFilter>(["ALL"]);
   }, [forcedFilter, userFilters]);
   const results = useMemo(
     () => searchTasks(payload, deferredQuery, filters),
-    [deferredQuery, filters, payload]
+    [deferredQuery, filters, payload],
   );
   const completedResults = useMemo(
     () => searchCompletedTasks(payload, deferredQuery, filters),
-    [deferredQuery, filters, payload]
+    [deferredQuery, filters, payload],
   );
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
-  const visibleTaskIds = useMemo(() => new Set(results.map(task => task.id)), [results]);
+  const visibleTaskIds = useMemo(
+    () => new Set(results.map((task) => task.id)),
+    [results],
+  );
   const selectedIds = useMemo(
-    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
-    [selectedTaskIds, visibleTaskIds]
+    () =>
+      Array.from(selectedTaskIds).filter((taskId) =>
+        visibleTaskIds.has(taskId),
+      ),
+    [selectedTaskIds, visibleTaskIds],
   );
   const selectedTasks = useMemo(
-    () => selectedIds
-      .map(taskId => results.find(task => task.id === taskId) ?? null)
-      .filter((task): task is Task => task !== null),
-    [results, selectedIds]
+    () =>
+      selectedIds
+        .map((taskId) => results.find((task) => task.id === taskId) ?? null)
+        .filter((task): task is Task => task !== null),
+    [results, selectedIds],
   );
   const selectedCount = selectedIds.length;
 
   function toggleFilter(filter: SearchFilter) {
     if (forcedFilter && filter === forcedFilter) return;
 
-    setUserFilters(current => {
+    setUserFilters((current) => {
       const next = new Set(current);
-      if (filter === 'ALL') {
+      if (filter === "ALL") {
         return new Set();
       }
 
@@ -3721,7 +4374,7 @@ function SearchPage({
   }
 
   function toggleSelection(taskId: string) {
-    setSelectedTaskIds(current => {
+    setSelectedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(taskId)) {
         next.delete(taskId);
@@ -3737,7 +4390,7 @@ function SearchPage({
   }
 
   function openDateDialog() {
-    setActiveDialog('reschedule');
+    setActiveDialog("reschedule");
   }
 
   function closeDialog() {
@@ -3745,7 +4398,8 @@ function SearchPage({
   }
 
   useEffect(() => {
-    const focusToken = (location as { state?: { focusSearchToken?: number } }).state?.focusSearchToken;
+    const focusToken = (location as { state?: { focusSearchToken?: number } })
+      .state?.focusSearchToken;
     if (!focusToken) return;
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [location]);
@@ -3754,37 +4408,52 @@ function SearchPage({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setSelectionMode(true);
-        setSelectedTaskIds(new Set(results.map(task => task.id)));
+        setSelectedTaskIds(new Set(results.map((task) => task.id)));
         return;
       }
 
       if (selectionMode && !activeDialog) {
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "t"
+        ) {
           event.preventDefault();
           openDateDialog();
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "v"
+        ) {
           event.preventDefault();
-          setActiveDialog('move');
+          setActiveDialog("move");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "p"
+        ) {
           event.preventDefault();
-          setActiveDialog('priority');
+          setActiveDialog("priority");
           return;
         }
-        if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (event.key === "Delete" || event.key === "Backspace") {
           event.preventDefault();
-          setActiveDialog('delete');
+          setActiveDialog("delete");
           return;
         }
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         if (activeDialog) {
           event.preventDefault();
           closeDialog();
@@ -3797,8 +4466,8 @@ function SearchPage({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeDialog, results, selectionMode]);
 
   function submitMove(projectId: string | null) {
@@ -3823,7 +4492,7 @@ function SearchPage({
   }
 
   function renderTaskRowActions(task: Task) {
-    if (task.status !== 'OPEN') return null;
+    if (task.status !== "OPEN") return null;
     return (
       <TaskRowActions
         payload={payload}
@@ -3832,7 +4501,7 @@ function SearchPage({
         onSetActionState={setRowActionState}
         onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -3845,27 +4514,35 @@ function SearchPage({
   }
 
   return (
-    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
+    <div
+      className="space-y-6"
+      data-task-selection-mode={selectionMode ? "true" : undefined}
+    >
       <HeroCard
         eyebrow="Search"
-        title={forcedFilter === 'NO_DUE' ? 'Tasks without due dates' : 'Find tasks'}
-        description={
-          forcedFilter === 'NO_DUE'
-            ? 'This is a real filtered view of open tasks that do not have a due date yet.'
-            : 'Search titles, descriptions, project names, and sections. Bulk actions stay available when you need to reschedule, move, reprioritize, or delete several tasks at once.'
+        title={
+          forcedFilter === "NO_DUE" ? "Tasks without due dates" : "Find tasks"
         }
-        actions={(
+        description={
+          forcedFilter === "NO_DUE"
+            ? "This is a real filtered view of open tasks that do not have a due date yet."
+            : "Search titles, descriptions, project names, and sections. Bulk actions stay available when you need to reschedule, move, reprioritize, or delete several tasks at once."
+        }
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             {showSelectionButtons || selectionMode ? (
               <button
                 type="button"
-                onClick={() => (selectionMode ? clearSelection() : openSelection())}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                  }`}
+                onClick={() =>
+                  selectionMode ? clearSelection() : openSelection()
+                }
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  selectionMode
+                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                }`}
               >
-                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+                {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
@@ -3874,7 +4551,7 @@ function SearchPage({
               </span>
             ) : null}
           </div>
-        )}
+        }
       />
 
       <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
@@ -3883,25 +4560,27 @@ function SearchPage({
           <input
             ref={inputRef}
             value={query}
-            onChange={event => setQuery(event.target.value)}
+            onChange={(event) => setQuery(event.target.value)}
             placeholder="Search tasks, projects, and notes"
             className="w-full bg-transparent text-sm outline-none placeholder:text-[#9F7B63]"
           />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          {SEARCH_FILTERS.map(filter => {
-            const active = filter.value === 'ALL'
-              ? !forcedFilter && userFilters.size === 0
-              : filters.has(filter.value);
+          {SEARCH_FILTERS.map((filter) => {
+            const active =
+              filter.value === "ALL"
+                ? !forcedFilter && userFilters.size === 0
+                : filters.has(filter.value);
             return (
               <button
                 key={filter.value}
                 onClick={() => toggleFilter(filter.value)}
                 disabled={forcedFilter === filter.value}
-                className={`rounded-full px-3 py-2 text-sm font-medium transition ${active
-                  ? 'bg-[#EE6A3C] text-white'
-                  : 'border border-[#E1D5CA] bg-[#FBF7F3] text-[#6D5C50] hover:bg-white'
-                  } ${forcedFilter === filter.value ? 'cursor-default opacity-90' : ''}`}
+                className={`rounded-full px-3 py-2 text-sm font-medium transition ${
+                  active
+                    ? "bg-[#EE6A3C] text-white"
+                    : "border border-[#E1D5CA] bg-[#FBF7F3] text-[#6D5C50] hover:bg-white"
+                } ${forcedFilter === filter.value ? "cursor-default opacity-90" : ""}`}
               >
                 {filter.label}
               </button>
@@ -3924,7 +4603,7 @@ function SearchPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('move')}
+              onClick={() => setActiveDialog("move")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
@@ -3932,7 +4611,7 @@ function SearchPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('priority')}
+              onClick={() => setActiveDialog("priority")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
@@ -3940,7 +4619,7 @@ function SearchPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('delete')}
+              onClick={() => setActiveDialog("delete")}
               className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Delete
@@ -3951,7 +4630,7 @@ function SearchPage({
 
       <TaskGroup
         title="Results"
-        subtitle={`${results.length} open task${results.length === 1 ? '' : 's'} matched.`}
+        subtitle={`${results.length} open task${results.length === 1 ? "" : "s"} matched.`}
         payload={payload}
         todayStartMs={todayStartMs}
         tasks={results}
@@ -3959,7 +4638,7 @@ function SearchPage({
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onPromoteSubtask={onPromoteSubtask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
@@ -3978,34 +4657,34 @@ function SearchPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
           rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
         />
       ) : null}
 
-      {activeDialog === 'reschedule' ? (
+      {activeDialog === "reschedule" ? (
         <RescheduleDialog
           title="Reschedule tasks"
-          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           tasks={selectedTasks}
           onClose={closeDialog}
           onRescheduleTasks={(taskIds, dueAt) => {
             onRescheduleTasks(taskIds, dueAt);
             clearSelection();
           }}
-          onPostponeTasks={taskIds => {
+          onPostponeTasks={(taskIds) => {
             onPostponeTasks(taskIds);
             clearSelection();
           }}
         />
       ) : null}
 
-      {activeDialog === 'move' ? (
+      {activeDialog === "move" ? (
         <ChoiceDialog
           title="Move tasks"
-          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or back to Inbox.`}
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? "" : "s"} into a project or back to Inbox.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
@@ -4016,7 +4695,7 @@ function SearchPage({
             >
               Inbox
             </button>
-            {projects.map(project => (
+            {projects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -4030,14 +4709,14 @@ function SearchPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'priority' ? (
+      {activeDialog === "priority" ? (
         <ChoiceDialog
           title="Change priority"
-          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority) => (
               <button
                 key={priority}
                 type="button"
@@ -4051,12 +4730,12 @@ function SearchPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'delete' ? (
+      {activeDialog === "delete" ? (
         <ChoiceDialog
           title="Delete tasks"
-          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}? This syncs as tombstones.`}
           onClose={closeDialog}
-          footer={(
+          footer={
             <div className="flex flex-wrap justify-end gap-2">
               <button
                 type="button"
@@ -4073,13 +4752,12 @@ function SearchPage({
                 Delete tasks
               </button>
             </div>
-          )}
+          }
         />
       ) : null}
     </div>
   );
 }
-
 
 function InboxPage({
   payload,
@@ -4099,9 +4777,17 @@ function InboxPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -4117,24 +4803,35 @@ function InboxPage({
   const tasks = getInboxTasks(payload);
   const completedTasks = getCompletedInboxTasks(payload);
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
-  const visibleTaskIds = useMemo(() => new Set(tasks.map(task => task.id)), [tasks]);
+  const visibleTaskIds = useMemo(
+    () => new Set(tasks.map((task) => task.id)),
+    [tasks],
+  );
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
-  const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [activeDialog, setActiveDialog] = useState<
+    null | "reschedule" | "move" | "priority" | "delete"
+  >(null);
   const [rowActionState, setRowActionState] = useState<{
-    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
     taskId: string;
     anchorRect?: DOMRect | null;
   } | null>(null);
   const selectedIds = useMemo(
-    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
-    [selectedTaskIds, visibleTaskIds]
+    () =>
+      Array.from(selectedTaskIds).filter((taskId) =>
+        visibleTaskIds.has(taskId),
+      ),
+    [selectedTaskIds, visibleTaskIds],
   );
   const selectedTasks = useMemo(
-    () => selectedIds
-      .map(taskId => tasks.find(task => task.id === taskId) ?? null)
-      .filter((task): task is Task => task !== null),
-    [selectedIds, tasks]
+    () =>
+      selectedIds
+        .map((taskId) => tasks.find((task) => task.id === taskId) ?? null)
+        .filter((task): task is Task => task !== null),
+    [selectedIds, tasks],
   );
   const selectedCount = selectedIds.length;
 
@@ -4144,7 +4841,7 @@ function InboxPage({
   }
 
   function toggleSelection(taskId: string) {
-    setSelectedTaskIds(current => {
+    setSelectedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(taskId)) {
         next.delete(taskId);
@@ -4167,37 +4864,52 @@ function InboxPage({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setSelectionMode(true);
-        setSelectedTaskIds(new Set(tasks.map(task => task.id)));
+        setSelectedTaskIds(new Set(tasks.map((task) => task.id)));
         return;
       }
 
       if (selectionMode && !activeDialog) {
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "t"
+        ) {
           event.preventDefault();
-          setActiveDialog('reschedule');
+          setActiveDialog("reschedule");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "v"
+        ) {
           event.preventDefault();
-          setActiveDialog('move');
+          setActiveDialog("move");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "p"
+        ) {
           event.preventDefault();
-          setActiveDialog('priority');
+          setActiveDialog("priority");
           return;
         }
-        if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (event.key === "Delete" || event.key === "Backspace") {
           event.preventDefault();
-          setActiveDialog('delete');
+          setActiveDialog("delete");
           return;
         }
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         if (activeDialog) {
           event.preventDefault();
           closeDialog();
@@ -4210,12 +4922,12 @@ function InboxPage({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeDialog, selectionMode, tasks]);
 
   function renderTaskRowActions(task: Task) {
-    if (task.status !== 'OPEN') return null;
+    if (task.status !== "OPEN") return null;
     return (
       <TaskRowActions
         payload={payload}
@@ -4224,7 +4936,7 @@ function InboxPage({
         onSetActionState={setRowActionState}
         onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -4237,23 +4949,29 @@ function InboxPage({
   }
 
   return (
-    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
+    <div
+      className="space-y-6"
+      data-task-selection-mode={selectionMode ? "true" : undefined}
+    >
       <HeroCard
         eyebrow="Inbox"
         title="Unsorted tasks"
         description="These tasks are not attached to a project yet. Open one to move it into a project or section."
-        actions={(
+        actions={
           <div className="flex flex-wrap items-center gap-2">
             {showSelectionButtons || selectionMode ? (
               <button
                 type="button"
-                onClick={() => (selectionMode ? clearSelection() : openSelection())}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                  }`}
+                onClick={() =>
+                  selectionMode ? clearSelection() : openSelection()
+                }
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  selectionMode
+                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                }`}
               >
-                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+                {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
@@ -4262,7 +4980,7 @@ function InboxPage({
               </span>
             ) : null}
           </div>
-        )}
+        }
       />
 
       {selectionMode ? (
@@ -4271,7 +4989,7 @@ function InboxPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('reschedule')}
+              onClick={() => setActiveDialog("reschedule")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
@@ -4279,7 +4997,7 @@ function InboxPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('move')}
+              onClick={() => setActiveDialog("move")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
@@ -4287,7 +5005,7 @@ function InboxPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('priority')}
+              onClick={() => setActiveDialog("priority")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
@@ -4295,7 +5013,7 @@ function InboxPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('delete')}
+              onClick={() => setActiveDialog("delete")}
               className="rounded-full border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE3D7] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Delete
@@ -4313,7 +5031,7 @@ function InboxPage({
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onPromoteSubtask={onPromoteSubtask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
@@ -4332,34 +5050,34 @@ function InboxPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
           rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
         />
       ) : null}
 
-      {activeDialog === 'reschedule' ? (
+      {activeDialog === "reschedule" ? (
         <RescheduleDialog
           title="Reschedule tasks"
-          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           tasks={selectedTasks}
           onClose={closeDialog}
           onRescheduleTasks={(taskIds, dueAt) => {
             onRescheduleTasks(taskIds, dueAt);
             clearSelection();
           }}
-          onPostponeTasks={taskIds => {
+          onPostponeTasks={(taskIds) => {
             onPostponeTasks(taskIds);
             clearSelection();
           }}
         />
       ) : null}
 
-      {activeDialog === 'move' ? (
+      {activeDialog === "move" ? (
         <ChoiceDialog
           title="Move tasks"
-          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a project or keep them in Inbox.`}
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? "" : "s"} into a project or keep them in Inbox.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
@@ -4375,7 +5093,7 @@ function InboxPage({
             >
               Inbox
             </button>
-            {projects.map(project => (
+            {projects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -4393,17 +5111,17 @@ function InboxPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'priority' ? (
+      {activeDialog === "priority" ? (
         <ChoiceDialog
           title="Change priority"
-          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           onClose={closeDialog}
         >
           <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map((priority, index) => (
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority, index) => (
               <button
                 key={priority}
-                data-dialog-autofocus={index === 0 ? 'true' : undefined}
+                data-dialog-autofocus={index === 0 ? "true" : undefined}
                 type="button"
                 onClick={() => {
                   onSetTasksPriority(selectedIds, priority);
@@ -4419,10 +5137,10 @@ function InboxPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'delete' ? (
+      {activeDialog === "delete" ? (
         <ConfirmDialog
           title="Delete tasks"
-          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}? This syncs as tombstones.`}
           confirmLabel="Delete tasks"
           tone="destructive"
           onClose={closeDialog}
@@ -4461,15 +5179,29 @@ function ProjectPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onCreateSection: (projectId: string, name: string) => void;
-  onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
+  onUpdateProject: (
+    projectId: string,
+    updater: (project: Project) => Project,
+  ) => void;
   onDeleteProject: (projectId: string) => void;
-  onUpdateSection: (sectionId: string, updater: (section: Section) => Section) => void;
+  onUpdateSection: (
+    sectionId: string,
+    updater: (section: Section) => Section,
+  ) => void;
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -4483,36 +5215,71 @@ function ProjectPage({
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const { projectId } = useParams();
-  const [sectionName, setSectionName] = useState('');
-  const [activeBoardDropSectionId, setActiveBoardDropSectionId] = useState<string | '__loose__' | null>(null);
-  const [isProjectRenameDialogOpen, setIsProjectRenameDialogOpen] = useState(false);
-  const [projectRenameValue, setProjectRenameValue] = useState('');
-  const [sectionRenameState, setSectionRenameState] = useState<{ id: string; value: string } | null>(null);
-  const [sectionDeleteState, setSectionDeleteState] = useState<{ id: string; name: string } | null>(null);
-  const [isProjectDeleteDialogOpen, setIsProjectDeleteDialogOpen] = useState(false);
+  const [sectionName, setSectionName] = useState("");
+  const [activeBoardDropSectionId, setActiveBoardDropSectionId] = useState<
+    string | "__loose__" | null
+  >(null);
+  const [isProjectRenameDialogOpen, setIsProjectRenameDialogOpen] =
+    useState(false);
+  const [projectRenameValue, setProjectRenameValue] = useState("");
+  const [sectionRenameState, setSectionRenameState] = useState<{
+    id: string;
+    value: string;
+  } | null>(null);
+  const [sectionDeleteState, setSectionDeleteState] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [isProjectDeleteDialogOpen, setIsProjectDeleteDialogOpen] =
+    useState(false);
   const [isAddSectionDialogOpen, setIsAddSectionDialogOpen] = useState(false);
-  const [activeListDropSectionId, setActiveListDropSectionId] = useState<string | '__loose__' | null>(null);
+  const [activeListDropSectionId, setActiveListDropSectionId] = useState<
+    string | "__loose__" | null
+  >(null);
   const [projectTaskActionState, setProjectTaskActionState] = useState<{
-    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
     taskId: string;
   } | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
-  const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
-  const project = useMemo(() => (projectId ? getProjectById(payload, projectId) : undefined), [payload, projectId]);
-  const tasks = useMemo(() => (projectId ? getProjectTasks(payload, projectId) : []), [payload, projectId]);
-  const completedTasks = useMemo(() => (projectId ? getCompletedProjectTasks(payload, projectId) : []), [payload, projectId]);
-  const sections = useMemo(() => (projectId ? getProjectSections(payload, projectId) : []), [payload, projectId]);
-  const visibleTaskIds = useMemo(() => new Set(tasks.map(task => task.id)), [tasks]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [activeDialog, setActiveDialog] = useState<
+    null | "reschedule" | "move" | "priority" | "delete"
+  >(null);
+  const project = useMemo(
+    () => (projectId ? getProjectById(payload, projectId) : undefined),
+    [payload, projectId],
+  );
+  const tasks = useMemo(
+    () => (projectId ? getProjectTasks(payload, projectId) : []),
+    [payload, projectId],
+  );
+  const completedTasks = useMemo(
+    () => (projectId ? getCompletedProjectTasks(payload, projectId) : []),
+    [payload, projectId],
+  );
+  const sections = useMemo(
+    () => (projectId ? getProjectSections(payload, projectId) : []),
+    [payload, projectId],
+  );
+  const visibleTaskIds = useMemo(
+    () => new Set(tasks.map((task) => task.id)),
+    [tasks],
+  );
   const selectedIds = useMemo(
-    () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
-    [selectedTaskIds, visibleTaskIds]
+    () =>
+      Array.from(selectedTaskIds).filter((taskId) =>
+        visibleTaskIds.has(taskId),
+      ),
+    [selectedTaskIds, visibleTaskIds],
   );
   const selectedTasks = useMemo(
-    () => selectedIds
-      .map(taskId => tasks.find(task => task.id === taskId) ?? null)
-      .filter((task): task is Task => task !== null),
-    [selectedIds, tasks]
+    () =>
+      selectedIds
+        .map((taskId) => tasks.find((task) => task.id === taskId) ?? null)
+        .filter((task): task is Task => task !== null),
+    [selectedIds, tasks],
   );
   const selectedCount = selectedIds.length;
 
@@ -4520,43 +5287,64 @@ function ProjectPage({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isTypingTarget(event.target)) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
         event.preventDefault();
         setSelectionMode(true);
-        setSelectedTaskIds(new Set(tasks.map(task => task.id)));
+        setSelectedTaskIds(new Set(tasks.map((task) => task.id)));
         return;
       }
 
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "s"
+      ) {
         event.preventDefault();
         setIsAddSectionDialogOpen(true);
         return;
       }
 
       if (selectionMode && !activeDialog) {
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 't') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "t"
+        ) {
           event.preventDefault();
-          setActiveDialog('reschedule');
+          setActiveDialog("reschedule");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'v') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "v"
+        ) {
           event.preventDefault();
-          setActiveDialog('move');
+          setActiveDialog("move");
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'p') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key.toLowerCase() === "p"
+        ) {
           event.preventDefault();
-          setActiveDialog('priority');
+          setActiveDialog("priority");
           return;
         }
-        if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (event.key === "Delete" || event.key === "Backspace") {
           event.preventDefault();
-          setActiveDialog('delete');
+          setActiveDialog("delete");
           return;
         }
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         if (activeDialog) {
           event.preventDefault();
           setActiveDialog(null);
@@ -4570,34 +5358,44 @@ function ProjectPage({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [activeDialog, selectionMode, tasks]);
 
   if (!projectId) {
-    return <EmptyState title="Project not found" description="Choose a project from the sidebar or create a new one." />;
+    return (
+      <EmptyState
+        title="Project not found"
+        description="Choose a project from the sidebar or create a new one."
+      />
+    );
   }
 
   if (!project) {
-    return <EmptyState title="Project not found" description="This project may have been deleted or archived elsewhere." />;
+    return (
+      <EmptyState
+        title="Project not found"
+        description="This project may have been deleted or archived elsewhere."
+      />
+    );
   }
 
   const currentProject = project;
-  const unsectionedTasks = tasks.filter(task => !task.sectionId);
-  const projectView = currentProject.viewPreference ?? 'LIST';
+  const unsectionedTasks = tasks.filter((task) => !task.sectionId);
+  const projectView = currentProject.viewPreference ?? "LIST";
   const boardColumns = [
     {
-      id: '__loose__',
-      title: 'Loose tasks',
-      subtitle: 'Open tasks without a section.',
+      id: "__loose__",
+      title: "Loose tasks",
+      subtitle: "Open tasks without a section.",
       tasks: unsectionedTasks,
       sectionId: null as string | null,
     },
-    ...sections.map(section => ({
+    ...sections.map((section) => ({
       id: section.id,
       title: section.name,
-      subtitle: `${tasks.filter(task => task.sectionId === section.id).length} task${tasks.filter(task => task.sectionId === section.id).length === 1 ? '' : 's'}`,
-      tasks: tasks.filter(task => task.sectionId === section.id),
+      subtitle: `${tasks.filter((task) => task.sectionId === section.id).length} task${tasks.filter((task) => task.sectionId === section.id).length === 1 ? "" : "s"}`,
+      tasks: tasks.filter((task) => task.sectionId === section.id),
       sectionId: section.id,
     })),
   ];
@@ -4605,36 +5403,54 @@ function ProjectPage({
   function readDraggedTaskId(event: DragEvent<HTMLElement>) {
     const directValue = activeDraggedTaskId?.trim();
     if (directValue) return directValue;
-    const transferValue = event.dataTransfer.getData('text/task-id').trim();
+    const transferValue = event.dataTransfer.getData("text/task-id").trim();
     return transferValue || null;
   }
 
-  function canDropTaskIntoSection(draggedTaskId: string, targetSectionId: string | null) {
-    const draggedTask = tasks.find(task => task.id === draggedTaskId && !task.deletedAt);
-    if (!draggedTask || draggedTask.status !== 'OPEN') return false;
+  function canDropTaskIntoSection(
+    draggedTaskId: string,
+    targetSectionId: string | null,
+  ) {
+    const draggedTask = tasks.find(
+      (task) => task.id === draggedTaskId && !task.deletedAt,
+    );
+    if (!draggedTask || draggedTask.status !== "OPEN") return false;
     if (draggedTask.projectId !== currentProject.id) return false;
     if ((draggedTask.sectionId ?? null) === targetSectionId) return false;
     return true;
   }
 
   function getListDropHandlers(targetSectionId: string | null) {
-    const targetId = targetSectionId ?? '__loose__';
+    const targetId = targetSectionId ?? "__loose__";
     return {
       onDragOver(event: DragEvent<HTMLElement>) {
         const draggedTaskId = readDraggedTaskId(event);
-        if (!draggedTaskId || !canDropTaskIntoSection(draggedTaskId, targetSectionId)) return;
+        if (
+          !draggedTaskId ||
+          !canDropTaskIntoSection(draggedTaskId, targetSectionId)
+        )
+          return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'move';
+        event.dataTransfer.dropEffect = "move";
         setActiveListDropSectionId(targetId);
       },
       onDragLeave(event: DragEvent<HTMLElement>) {
-        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-        setActiveListDropSectionId(current => (current === targetId ? null : current));
+        if (event.currentTarget.contains(event.relatedTarget as Node | null))
+          return;
+        setActiveListDropSectionId((current) =>
+          current === targetId ? null : current,
+        );
       },
       onDrop(event: DragEvent<HTMLElement>) {
         const draggedTaskId = readDraggedTaskId(event);
-        setActiveListDropSectionId(current => (current === targetId ? null : current));
-        if (!draggedTaskId || !canDropTaskIntoSection(draggedTaskId, targetSectionId)) return;
+        setActiveListDropSectionId((current) =>
+          current === targetId ? null : current,
+        );
+        if (
+          !draggedTaskId ||
+          !canDropTaskIntoSection(draggedTaskId, targetSectionId)
+        )
+          return;
         event.preventDefault();
         event.stopPropagation();
         onMoveTasksToSection([draggedTaskId], targetSectionId);
@@ -4645,25 +5461,34 @@ function ProjectPage({
   function submitProjectRename(nextName: string) {
     const trimmedName = nextName.trim();
     if (!trimmedName) return;
-    onUpdateProject(currentProject.id, current => ({ ...current, name: trimmedName }));
+    onUpdateProject(currentProject.id, (current) => ({
+      ...current,
+      name: trimmedName,
+    }));
     setIsProjectRenameDialogOpen(false);
   }
 
   function toggleArchiveProject() {
-    onUpdateProject(currentProject.id, current => ({ ...current, archived: !current.archived }));
+    onUpdateProject(currentProject.id, (current) => ({
+      ...current,
+      archived: !current.archived,
+    }));
   }
 
   function confirmDeleteProject() {
     onDeleteProject(currentProject.id);
     setIsProjectDeleteDialogOpen(false);
-    navigate('/today');
+    navigate("/today");
   }
 
   function submitSectionRename() {
     const currentSectionRename = sectionRenameState;
     const nextName = currentSectionRename?.value.trim();
     if (!currentSectionRename || !nextName) return;
-    onUpdateSection(currentSectionRename.id, current => ({ ...current, name: nextName }));
+    onUpdateSection(currentSectionRename.id, (current) => ({
+      ...current,
+      name: nextName,
+    }));
     setSectionRenameState(null);
   }
 
@@ -4671,16 +5496,19 @@ function ProjectPage({
     const trimmedName = nextName.trim();
     if (!trimmedName) return;
     onCreateSection(currentProject.id, trimmedName);
-    setSectionName('');
+    setSectionName("");
     setIsAddSectionDialogOpen(false);
   }
 
-  function setProjectView(viewPreference: Project['viewPreference']) {
-    onUpdateProject(currentProject.id, current => ({ ...current, viewPreference }));
+  function setProjectView(viewPreference: Project["viewPreference"]) {
+    onUpdateProject(currentProject.id, (current) => ({
+      ...current,
+      viewPreference,
+    }));
   }
 
   function renderProjectRowActions(task: Task) {
-    if (task.status !== 'OPEN') return null;
+    if (task.status !== "OPEN") return null;
     return (
       <TaskRowActions
         payload={payload}
@@ -4689,7 +5517,7 @@ function ProjectPage({
         onSetActionState={setProjectTaskActionState}
         onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
-        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -4707,7 +5535,7 @@ function ProjectPage({
   }
 
   function toggleSelection(taskId: string) {
-    setSelectedTaskIds(current => {
+    setSelectedTaskIds((current) => {
       const next = new Set(current);
       if (next.has(taskId)) {
         next.delete(taskId);
@@ -4723,26 +5551,35 @@ function ProjectPage({
   }
 
   return (
-    <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
+    <div
+      className="space-y-6"
+      data-task-selection-mode={selectionMode ? "true" : undefined}
+    >
       <section className="px-1 pb-2 pt-1">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">Project</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">
+              Project
+            </p>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">
-              Manage tasks, sections, and project metadata for {currentProject.name}.
+              Manage tasks, sections, and project metadata for{" "}
+              {currentProject.name}.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {showSelectionButtons || selectionMode ? (
               <button
                 type="button"
-                onClick={() => (selectionMode ? clearSelection() : openSelection())}
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${selectionMode
-                  ? 'border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                  : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                  }`}
+                onClick={() =>
+                  selectionMode ? clearSelection() : openSelection()
+                }
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  selectionMode
+                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                }`}
               >
-                {selectionMode ? 'Cancel selection' : 'Select tasks'}
+                {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
@@ -4754,27 +5591,33 @@ function ProjectPage({
               label="Project actions"
               items={[
                 {
-                  label: 'Add section',
+                  label: "Add section",
                   onSelect: () => setIsAddSectionDialogOpen(true),
                 },
                 {
-                  label: projectView === 'BOARD' ? 'Switch to list view' : 'Switch to board view',
-                  onSelect: () => setProjectView(projectView === 'BOARD' ? 'LIST' : 'BOARD'),
+                  label:
+                    projectView === "BOARD"
+                      ? "Switch to list view"
+                      : "Switch to board view",
+                  onSelect: () =>
+                    setProjectView(projectView === "BOARD" ? "LIST" : "BOARD"),
                 },
                 {
-                  label: 'Rename project',
+                  label: "Rename project",
                   onSelect: () => {
                     setProjectRenameValue(currentProject.name);
                     setIsProjectRenameDialogOpen(true);
                   },
                 },
                 {
-                  label: currentProject.archived ? 'Unarchive project' : 'Archive project',
+                  label: currentProject.archived
+                    ? "Unarchive project"
+                    : "Archive project",
                   onSelect: toggleArchiveProject,
                 },
                 {
-                  label: 'Delete project',
-                  tone: 'destructive',
+                  label: "Delete project",
+                  tone: "destructive",
                   onSelect: () => setIsProjectDeleteDialogOpen(true),
                 },
               ]}
@@ -4789,7 +5632,7 @@ function ProjectPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('reschedule')}
+              onClick={() => setActiveDialog("reschedule")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
@@ -4797,7 +5640,7 @@ function ProjectPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('move')}
+              onClick={() => setActiveDialog("move")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
@@ -4805,7 +5648,7 @@ function ProjectPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('priority')}
+              onClick={() => setActiveDialog("priority")}
               className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
@@ -4813,7 +5656,7 @@ function ProjectPage({
             <button
               type="button"
               disabled={selectedCount === 0}
-              onClick={() => setActiveDialog('delete')}
+              onClick={() => setActiveDialog("delete")}
               className="rounded-full border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE3D7] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Delete
@@ -4823,183 +5666,228 @@ function ProjectPage({
       ) : null}
 
       <section className="space-y-4">
-          {projectView === 'BOARD' ? (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {boardColumns.map(column => (
-                <section
-                  key={column.id}
-                  onDragOver={event => {
-                    const draggedTaskId = readDraggedTaskId(event);
-                    if (!draggedTaskId) return;
-                    event.preventDefault();
-                    setActiveBoardDropSectionId(column.id);
-                  }}
-                  onDragLeave={event => {
-                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-                    setActiveBoardDropSectionId(current => (current === column.id ? null : current));
-                  }}
-                  onDrop={event => {
-                    const draggedTaskId = readDraggedTaskId(event);
-                    setActiveBoardDropSectionId(null);
-                    if (!draggedTaskId) return;
-                    event.preventDefault();
-                    onMoveTasksToSection([draggedTaskId], column.sectionId);
-                  }}
-                  className={`space-y-3 rounded-[28px] border p-5 shadow-sm transition ${
-                    activeBoardDropSectionId === column.id
-                      ? 'border-[#EE6A3C] bg-[#FFF7F2]'
-                      : 'border-[#E1D5CA] bg-white'
-                  }`}
+        {projectView === "BOARD" ? (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {boardColumns.map((column) => (
+              <section
+                key={column.id}
+                onDragOver={(event) => {
+                  const draggedTaskId = readDraggedTaskId(event);
+                  if (!draggedTaskId) return;
+                  event.preventDefault();
+                  setActiveBoardDropSectionId(column.id);
+                }}
+                onDragLeave={(event) => {
+                  if (
+                    event.currentTarget.contains(
+                      event.relatedTarget as Node | null,
+                    )
+                  )
+                    return;
+                  setActiveBoardDropSectionId((current) =>
+                    current === column.id ? null : current,
+                  );
+                }}
+                onDrop={(event) => {
+                  const draggedTaskId = readDraggedTaskId(event);
+                  setActiveBoardDropSectionId(null);
+                  if (!draggedTaskId) return;
+                  event.preventDefault();
+                  onMoveTasksToSection([draggedTaskId], column.sectionId);
+                }}
+                className={`space-y-3 rounded-[28px] border p-5 shadow-sm transition ${
+                  activeBoardDropSectionId === column.id
+                    ? "border-[#EE6A3C] bg-[#FFF7F2]"
+                    : "border-[#E1D5CA] bg-white"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#1E2D2F]">
+                      {column.title}
+                    </h3>
+                    <p className="text-sm text-[#6D5C50]">{column.subtitle}</p>
+                  </div>
+                  <button
+                    onClick={() =>
+                      onOpenQuickAdd({
+                        defaultProjectId: currentProject.id,
+                        defaultSectionId: column.sectionId,
+                      })
+                    }
+                    className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EE6A3C] text-white transition hover:bg-[#d75e33]"
+                    title="Add task"
+                    aria-label="Add task"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+                <TaskListBlock
+                  payload={payload}
+                  todayStartMs={todayStartMs}
+                  tasks={column.tasks}
+                  emptyMessage={
+                    column.sectionId
+                      ? "No tasks in this section yet."
+                      : "No unsectioned tasks here."
+                  }
+                  onToggleTask={onToggleTask}
+                  onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                  onPromoteSubtask={onPromoteSubtask}
+                  onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+                  selectionMode={selectionMode}
+                  selectedTaskIds={selectedTaskIds}
+                  onToggleSelection={toggleSelection}
+                  onStartSelection={openSelection}
+                  rowActions={renderProjectRowActions}
+                />
+              </section>
+            ))}
+          </div>
+        ) : (
+          <>
+            <TaskGroup
+              title="Loose tasks"
+              subtitle="Open tasks in this project without a section."
+              payload={payload}
+              todayStartMs={todayStartMs}
+              tasks={unsectionedTasks}
+              emptyMessage="No unsectioned tasks here."
+              onToggleTask={onToggleTask}
+              onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+              onPromoteSubtask={onPromoteSubtask}
+              onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+              selectionMode={selectionMode}
+              selectedTaskIds={selectedTaskIds}
+              onToggleSelection={toggleSelection}
+              onStartSelection={openSelection}
+              rowActions={renderProjectRowActions}
+              dropTargetState={{
+                active: activeListDropSectionId === "__loose__",
+                hint: "Drop task here to move it out of a section.",
+                ...getListDropHandlers(null),
+              }}
+              headerActions={
+                <button
+                  onClick={() =>
+                    onOpenQuickAdd({ defaultProjectId: currentProject.id })
+                  }
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  title="Add task"
+                  aria-label="Add task"
                 >
-                  <div className="flex items-start justify-between gap-3">
+                  <Plus size={14} />
+                </button>
+              }
+            />
+
+            {sections.map((section) => {
+              const sectionTasks = tasks.filter(
+                (task) => task.sectionId === section.id,
+              );
+              const listDropHandlers = getListDropHandlers(section.id);
+              return (
+                <div
+                  key={section.id}
+                  className="space-y-3 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm"
+                >
+                  <div
+                    {...listDropHandlers}
+                    className={`flex items-center justify-between gap-3 rounded-[18px] px-2 py-2 transition ${
+                      activeListDropSectionId === section.id
+                        ? "bg-[#FFF1EB] ring-1 ring-inset ring-[#EE6A3C]"
+                        : ""
+                    }`}
+                  >
                     <div>
-                      <h3 className="text-lg font-semibold text-[#1E2D2F]">{column.title}</h3>
-                      <p className="text-sm text-[#6D5C50]">{column.subtitle}</p>
+                      <h3 className="text-lg font-semibold text-[#1E2D2F]">
+                        {section.name}
+                      </h3>
+                      <p className="text-sm text-[#6D5C50]">
+                        {sectionTasks.length} task
+                        {sectionTasks.length === 1 ? "" : "s"}
+                      </p>
+                      {activeListDropSectionId === section.id ? (
+                        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
+                          Drop task to move it here
+                        </p>
+                      ) : null}
                     </div>
-                    <button
-                      onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: column.sectionId })}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EE6A3C] text-white transition hover:bg-[#d75e33]"
-                      title="Add task"
-                      aria-label="Add task"
-                    >
-                      <Plus size={16} />
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() =>
+                          onOpenQuickAdd({
+                            defaultProjectId: currentProject.id,
+                            defaultSectionId: section.id,
+                          })
+                        }
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EE6A3C] text-white transition hover:bg-[#d75e33]"
+                        title="Add task"
+                        aria-label="Add task"
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <OverflowMenu
+                        label={`Actions for ${section.name}`}
+                        items={[
+                          {
+                            label: "Rename section",
+                            onSelect: () =>
+                              setSectionRenameState({
+                                id: section.id,
+                                value: section.name,
+                              }),
+                          },
+                          {
+                            label: "Delete section",
+                            tone: "destructive",
+                            onSelect: () =>
+                              setSectionDeleteState({
+                                id: section.id,
+                                name: section.name,
+                              }),
+                          },
+                        ]}
+                      />
+                    </div>
                   </div>
                   <TaskListBlock
                     payload={payload}
                     todayStartMs={todayStartMs}
-                    tasks={column.tasks}
-                    emptyMessage={column.sectionId ? 'No tasks in this section yet.' : 'No unsectioned tasks here.'}
+                    tasks={sectionTasks}
+                    emptyMessage="No tasks in this section yet."
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onPromoteSubtask={onPromoteSubtask}
-                    onOpenTask={taskId => navigate(`/task/${taskId}`)}
+                    onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
                     selectionMode={selectionMode}
                     selectedTaskIds={selectedTaskIds}
                     onToggleSelection={toggleSelection}
                     onStartSelection={openSelection}
                     rowActions={renderProjectRowActions}
                   />
-                </section>
-              ))}
-            </div>
-          ) : (
-            <>
-              <TaskGroup
-                title="Loose tasks"
-                subtitle="Open tasks in this project without a section."
-                payload={payload}
-                todayStartMs={todayStartMs}
-                tasks={unsectionedTasks}
-                emptyMessage="No unsectioned tasks here."
-                onToggleTask={onToggleTask}
-                onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                onPromoteSubtask={onPromoteSubtask}
-                onOpenTask={taskId => navigate(`/task/${taskId}`)}
-                selectionMode={selectionMode}
-                selectedTaskIds={selectedTaskIds}
-                onToggleSelection={toggleSelection}
-                onStartSelection={openSelection}
-                rowActions={renderProjectRowActions}
-                dropTargetState={{
-                  active: activeListDropSectionId === '__loose__',
-                  hint: 'Drop task here to move it out of a section.',
-                  ...getListDropHandlers(null),
-                }}
-                headerActions={(
-                  <button
-                    onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id })}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                    title="Add task"
-                    aria-label="Add task"
-                  >
-                    <Plus size={14} />
-                  </button>
-                )}
-              />
+                </div>
+              );
+            })}
+          </>
+        )}
 
-              {sections.map(section => {
-                const sectionTasks = tasks.filter(task => task.sectionId === section.id);
-                const listDropHandlers = getListDropHandlers(section.id);
-                return (
-                  <div key={section.id} className="space-y-3 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-                    <div
-                      {...listDropHandlers}
-                      className={`flex items-center justify-between gap-3 rounded-[18px] px-2 py-2 transition ${
-                        activeListDropSectionId === section.id ? 'bg-[#FFF1EB] ring-1 ring-inset ring-[#EE6A3C]' : ''
-                      }`}
-                    >
-                      <div>
-                        <h3 className="text-lg font-semibold text-[#1E2D2F]">{section.name}</h3>
-                        <p className="text-sm text-[#6D5C50]">{sectionTasks.length} task{sectionTasks.length === 1 ? '' : 's'}</p>
-                        {activeListDropSectionId === section.id ? (
-                          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
-                            Drop task to move it here
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          onClick={() => onOpenQuickAdd({ defaultProjectId: currentProject.id, defaultSectionId: section.id })}
-                          className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EE6A3C] text-white transition hover:bg-[#d75e33]"
-                          title="Add task"
-                          aria-label="Add task"
-                        >
-                          <Plus size={16} />
-                        </button>
-                        <OverflowMenu
-                          label={`Actions for ${section.name}`}
-                          items={[
-                            {
-                              label: 'Rename section',
-                              onSelect: () => setSectionRenameState({ id: section.id, value: section.name }),
-                            },
-                            {
-                              label: 'Delete section',
-                              tone: 'destructive',
-                              onSelect: () => setSectionDeleteState({ id: section.id, name: section.name }),
-                            },
-                          ]}
-                        />
-                      </div>
-                    </div>
-                    <TaskListBlock
-                      payload={payload}
-                      todayStartMs={todayStartMs}
-                      tasks={sectionTasks}
-                      emptyMessage="No tasks in this section yet."
-                      onToggleTask={onToggleTask}
-                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                      onPromoteSubtask={onPromoteSubtask}
-                      onOpenTask={taskId => navigate(`/task/${taskId}`)}
-                      selectionMode={selectionMode}
-                      selectedTaskIds={selectedTaskIds}
-                      onToggleSelection={toggleSelection}
-                      onStartSelection={openSelection}
-                      rowActions={renderProjectRowActions}
-                    />
-                  </div>
-                );
-              })}
-            </>
-          )}
-
-          {completedTasks.length ? (
-            <TaskGroup
-              title="Completed"
-              subtitle="Finished tasks in this project."
-              payload={payload}
-              todayStartMs={todayStartMs}
-              tasks={completedTasks}
-              emptyMessage="No completed tasks in this project."
-              onToggleTask={onToggleTask}
-              onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-              onPromoteSubtask={onPromoteSubtask}
-              onOpenTask={taskId => navigate(`/task/${taskId}`)}
-              collapsible
-              defaultCollapsed
-            />
-          ) : null}
+        {completedTasks.length ? (
+          <TaskGroup
+            title="Completed"
+            subtitle="Finished tasks in this project."
+            payload={payload}
+            todayStartMs={todayStartMs}
+            tasks={completedTasks}
+            emptyMessage="No completed tasks in this project."
+            onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onPromoteSubtask={onPromoteSubtask}
+            onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+            collapsible
+            defaultCollapsed
+          />
+        ) : null}
       </section>
 
       {isAddSectionDialogOpen ? (
@@ -5012,7 +5900,7 @@ function ProjectPage({
           onChange={setSectionName}
           onClose={() => {
             setIsAddSectionDialogOpen(false);
-            setSectionName('');
+            setSectionName("");
           }}
           onSubmit={submitSectionName}
         />
@@ -5049,7 +5937,11 @@ function ProjectPage({
           label="Section name"
           value={sectionRenameState.value}
           submitLabel="Save section"
-          onChange={value => setSectionRenameState(current => (current ? { ...current, value } : current))}
+          onChange={(value) =>
+            setSectionRenameState((current) =>
+              current ? { ...current, value } : current,
+            )
+          }
           onClose={() => setSectionRenameState(null)}
           onSubmit={submitSectionRename}
         />
@@ -5069,27 +5961,27 @@ function ProjectPage({
         />
       ) : null}
 
-      {activeDialog === 'reschedule' ? (
+      {activeDialog === "reschedule" ? (
         <RescheduleDialog
           title="Reschedule tasks"
-          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Choose a new date for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           tasks={selectedTasks}
           onClose={() => setActiveDialog(null)}
           onRescheduleTasks={(taskIds, dueAt) => {
             onRescheduleTasks(taskIds, dueAt);
             clearSelection();
           }}
-          onPostponeTasks={taskIds => {
+          onPostponeTasks={(taskIds) => {
             onPostponeTasks(taskIds);
             clearSelection();
           }}
         />
       ) : null}
 
-      {activeDialog === 'move' ? (
+      {activeDialog === "move" ? (
         <ChoiceDialog
           title="Move tasks"
-          description={`Move ${selectedCount} selected task${selectedCount === 1 ? '' : 's'} into a section or keep them loose.`}
+          description={`Move ${selectedCount} selected task${selectedCount === 1 ? "" : "s"} into a section or keep them loose.`}
           onClose={() => setActiveDialog(null)}
         >
           <div className="flex flex-wrap gap-2">
@@ -5105,7 +5997,7 @@ function ProjectPage({
             >
               Loose tasks
             </button>
-            {sections.map(section => (
+            {sections.map((section) => (
               <button
                 key={section.id}
                 type="button"
@@ -5123,17 +6015,17 @@ function ProjectPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'priority' ? (
+      {activeDialog === "priority" ? (
         <ChoiceDialog
           title="Change priority"
-          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}.`}
+          description={`Update the priority for ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}.`}
           onClose={() => setActiveDialog(null)}
         >
           <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map((priority, index) => (
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority, index) => (
               <button
                 key={priority}
-                data-dialog-autofocus={index === 0 ? 'true' : undefined}
+                data-dialog-autofocus={index === 0 ? "true" : undefined}
                 type="button"
                 onClick={() => {
                   onSetTasksPriority(selectedIds, priority);
@@ -5149,10 +6041,10 @@ function ProjectPage({
         </ChoiceDialog>
       ) : null}
 
-      {activeDialog === 'delete' ? (
+      {activeDialog === "delete" ? (
         <ConfirmDialog
           title="Delete tasks"
-          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? '' : 's'}? This syncs as tombstones.`}
+          description={`Delete ${selectedCount} selected task${selectedCount === 1 ? "" : "s"}? This syncs as tombstones.`}
           confirmLabel="Delete tasks"
           tone="destructive"
           onClose={() => setActiveDialog(null)}
@@ -5182,17 +6074,26 @@ function TaskDetailPage({
   canUndoActivity,
 }: {
   payload: SyncPayload;
-  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTask: (
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onShowBanner: (
-    tone: Banner['tone'],
+    tone: Banner["tone"],
     message: string,
-    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+    options?: Pick<
+      Banner,
+      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
+    >,
   ) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onPromoteSubtask: (taskId: string) => void;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
@@ -5202,7 +6103,12 @@ function TaskDetailPage({
   const task = taskId ? getTaskById(payload, taskId) : undefined;
 
   if (!taskId || !task) {
-    return <EmptyState title="Task not found" description="This task may have been deleted or archived elsewhere." />;
+    return (
+      <EmptyState
+        title="Task not found"
+        description="This task may have been deleted or archived elsewhere."
+      />
+    );
   }
 
   return (
@@ -5210,7 +6116,7 @@ function TaskDetailPage({
       key={task.id}
       payload={payload}
       task={task}
-      returnPath={task.projectId ? `/project/${task.projectId}` : '/inbox'}
+      returnPath={task.projectId ? `/project/${task.projectId}` : "/inbox"}
       onCreateTask={onCreateTask}
       onSaveTask={onSaveTask}
       onShowBanner={onShowBanner}
@@ -5245,17 +6151,26 @@ function TaskEditor({
   payload: SyncPayload;
   task: Task;
   returnPath: string;
-  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTask: (
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onShowBanner: (
-    tone: Banner['tone'],
+    tone: Banner["tone"],
     message: string,
-    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+    options?: Pick<
+      Banner,
+      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
+    >,
   ) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onPromoteSubtask: (taskId: string) => void;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
@@ -5264,11 +6179,20 @@ function TaskEditor({
   const navigate = useNavigate();
   const projects = getActiveProjects(payload, true);
   const todayStartMs = useTodayStartMs();
-  const subtasks = useMemo(() => getSubtasks(payload, task.id), [payload, task.id]);
-  const taskReminders = useMemo(() => getTaskReminderDrafts(payload, task.id), [payload, task.id]);
+  const subtasks = useMemo(
+    () => getSubtasks(payload, task.id),
+    [payload, task.id],
+  );
+  const taskReminders = useMemo(
+    () => getTaskReminderDrafts(payload, task.id),
+    [payload, task.id],
+  );
   const taskReminderRecords = useMemo(
-    () => payload.reminders.filter(reminder => reminder.taskId === task.id && !reminder.deletedAt),
-    [payload.reminders, task.id]
+    () =>
+      payload.reminders.filter(
+        (reminder) => reminder.taskId === task.id && !reminder.deletedAt,
+      ),
+    [payload.reminders, task.id],
   );
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const prioritySelectRef = useRef<HTMLSelectElement | null>(null);
@@ -5277,51 +6201,89 @@ function TaskEditor({
   const [parserLine, setParserLine] = useState(task.title);
   const [title, setTitle] = useState(task.title);
   const [description, setDescription] = useState(task.description);
-  const [projectId, setProjectId] = useState<string>(task.projectId ?? '');
-  const [sectionId, setSectionId] = useState<string>(task.sectionId ?? '');
+  const [projectId, setProjectId] = useState<string>(task.projectId ?? "");
+  const [sectionId, setSectionId] = useState<string>(task.sectionId ?? "");
   const [priority, setPriority] = useState<Priority>(task.priority);
   const [allDay, setAllDay] = useState(task.allDay);
-  const [dueAt, setDueAt] = useState(toInputValue(task.dueAt ?? null, task.allDay));
-  const [deadlineEnabled, setDeadlineEnabled] = useState(Boolean(task.deadlineAt));
-  const [deadlineAllDay, setDeadlineAllDay] = useState(task.deadlineAllDay ?? false);
-  const [deadlineAt, setDeadlineAt] = useState(
-    toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false)
+  const [dueAt, setDueAt] = useState(
+    toInputValue(task.dueAt ?? null, task.allDay),
   );
-  const [recurringRule, setRecurringRule] = useState<string | null>(task.recurringRule ?? null);
-  const [deadlineRecurringRule, setDeadlineRecurringRule] = useState<string | null>(task.deadlineRecurringRule ?? null);
-  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(() => buildReminderEditors(taskReminders));
-  const [newSubtask, setNewSubtask] = useState('');
+  const [deadlineEnabled, setDeadlineEnabled] = useState(
+    Boolean(task.deadlineAt),
+  );
+  const [deadlineAllDay, setDeadlineAllDay] = useState(
+    task.deadlineAllDay ?? false,
+  );
+  const [deadlineAt, setDeadlineAt] = useState(
+    toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
+  );
+  const [recurringRule, setRecurringRule] = useState<string | null>(
+    task.recurringRule ?? null,
+  );
+  const [deadlineRecurringRule, setDeadlineRecurringRule] = useState<
+    string | null
+  >(task.deadlineRecurringRule ?? null);
+  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(
+    () => buildReminderEditors(taskReminders),
+  );
+  const [newSubtask, setNewSubtask] = useState("");
   const [showBulkSubtaskChoices, setShowBulkSubtaskChoices] = useState(false);
   const [isCreatingSubtasks, setIsCreatingSubtasks] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
-  const sectionOptions = projectId ? getProjectSections(payload, projectId) : [];
-  const bulkSubtaskLines = useMemo(() => extractBulkQuickAddLines(newSubtask), [newSubtask]);
-  const reminderDrafts = useMemo(() => serializeReminderEditors(reminderEditors), [reminderEditors]);
-  const initialReminderSignature = useMemo(() => JSON.stringify(taskReminders), [taskReminders]);
-  const currentReminderSignature = useMemo(() => JSON.stringify(reminderDrafts), [reminderDrafts]);
-  const parsedDueAt = useMemo(() => parseInputValue(dueAt, allDay), [allDay, dueAt]);
+  const sectionOptions = projectId
+    ? getProjectSections(payload, projectId)
+    : [];
+  const bulkSubtaskLines = useMemo(
+    () => extractBulkQuickAddLines(newSubtask),
+    [newSubtask],
+  );
+  const reminderDrafts = useMemo(
+    () => serializeReminderEditors(reminderEditors),
+    [reminderEditors],
+  );
+  const initialReminderSignature = useMemo(
+    () => JSON.stringify(taskReminders),
+    [taskReminders],
+  );
+  const currentReminderSignature = useMemo(
+    () => JSON.stringify(reminderDrafts),
+    [reminderDrafts],
+  );
+  const parsedDueAt = useMemo(
+    () => parseInputValue(dueAt, allDay),
+    [allDay, dueAt],
+  );
   const parsedDeadlineAt = useMemo(
-    () => (deadlineEnabled ? parseInputValue(deadlineAt, deadlineAllDay) : null),
-    [deadlineAllDay, deadlineAt, deadlineEnabled]
+    () =>
+      deadlineEnabled ? parseInputValue(deadlineAt, deadlineAllDay) : null,
+    [deadlineAllDay, deadlineAt, deadlineEnabled],
   );
   const parserPreviewDraft = useMemo(
-    () => buildDraftFromParsed(
-      payload,
-      parseQuickAdd(parserLine),
+    () =>
+      buildDraftFromParsed(
+        payload,
+        parseQuickAdd(parserLine),
+        description,
+        {
+          defaultProjectId: task.projectId,
+          defaultSectionId: task.sectionId,
+          defaultDueToday: false,
+        },
+        todayStartMs,
+      ),
+    [
       description,
-      {
-        defaultProjectId: task.projectId,
-        defaultSectionId: task.sectionId,
-        defaultDueToday: false,
-      },
-      todayStartMs
-    ),
-    [description, parserLine, payload, task.projectId, task.sectionId, todayStartMs]
+      parserLine,
+      payload,
+      task.projectId,
+      task.sectionId,
+      todayStartMs,
+    ],
   );
   const taskTimeline = useMemo(
     () => buildTaskTimeline(task, taskReminderRecords, activityEntries),
-    [activityEntries, task, taskReminderRecords]
+    [activityEntries, task, taskReminderRecords],
   );
   const editorDraftPreview = useMemo<TaskDraft>(
     () => ({
@@ -5356,7 +6318,7 @@ function TaskEditor({
       task.title,
       title,
       deadlineRecurringRule,
-    ]
+    ],
   );
   const isDirty =
     title.trim() !== task.title ||
@@ -5368,7 +6330,8 @@ function TaskEditor({
     dueAt !== toInputValue(task.dueAt ?? null, task.allDay) ||
     deadlineEnabled !== Boolean(task.deadlineAt) ||
     deadlineAllDay !== (task.deadlineAllDay ?? false) ||
-    deadlineAt !== toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false) ||
+    deadlineAt !==
+      toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false) ||
     recurringRule !== (task.recurringRule ?? null) ||
     deadlineRecurringRule !== (task.deadlineRecurringRule ?? null) ||
     currentReminderSignature !== initialReminderSignature;
@@ -5377,34 +6340,35 @@ function TaskEditor({
 
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      event.returnValue = '';
+      event.returnValue = "";
     };
 
     const handleDocumentClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+        return;
 
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
 
-      const anchor = target.closest('a[href]');
+      const anchor = target.closest("a[href]");
       if (!(anchor instanceof HTMLAnchorElement)) return;
-      if (anchor.target && anchor.target !== '_self') return;
+      if (anchor.target && anchor.target !== "_self") return;
 
-      const href = anchor.getAttribute('href');
-      if (!href || href === '#' || href === window.location.hash) return;
-      if (!href.startsWith('#/') && !href.startsWith('/')) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href === "#" || href === window.location.hash) return;
+      if (!href.startsWith("#/") && !href.startsWith("/")) return;
 
       event.preventDefault();
       event.stopPropagation();
       setPendingExitPath(normalizeInternalHref(href));
     };
 
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('click', handleDocumentClick, true);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleDocumentClick, true);
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('click', handleDocumentClick, true);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleDocumentClick, true);
     };
   }, [isDirty]);
 
@@ -5413,11 +6377,20 @@ function TaskEditor({
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
     if (hasIncompleteReminderEditors(reminderEditors)) {
-      onShowBanner('error', 'Complete each reminder row or remove it before saving.');
+      onShowBanner(
+        "error",
+        "Complete each reminder row or remove it before saving.",
+      );
       return;
     }
-    if (reminderEditors.some(editor => editor.mode === 'OFFSET') && parsedDueAt === null) {
-      onShowBanner('error', 'Relative reminders need a due date. Add a due date or switch them to a fixed time.');
+    if (
+      reminderEditors.some((editor) => editor.mode === "OFFSET") &&
+      parsedDueAt === null
+    ) {
+      onShowBanner(
+        "error",
+        "Relative reminders need a due date. Add a due date or switch them to a fixed time.",
+      );
       return;
     }
 
@@ -5474,42 +6447,62 @@ function TaskEditor({
         navigate(returnPath);
       };
 
-      if ((event.metaKey || event.ctrlKey) && lowerKey === 's') {
+      if ((event.metaKey || event.ctrlKey) && lowerKey === "s") {
         event.preventDefault();
         titleInputRef.current?.form?.requestSubmit();
         return;
       }
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         event.preventDefault();
         attemptGoBack();
         return;
       }
       if (typing) return;
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'e') {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        lowerKey === "e"
+      ) {
         event.preventDefault();
         onToggleTask(task.id);
         return;
       }
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'p') {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        lowerKey === "p"
+      ) {
         event.preventDefault();
         prioritySelectRef.current?.focus();
         return;
       }
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 't') {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        lowerKey === "t"
+      ) {
         event.preventDefault();
         if (event.shiftKey) {
-          setDueAt('');
+          setDueAt("");
           return;
         }
         dueInputRef.current?.focus();
         return;
       }
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'd') {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        lowerKey === "d"
+      ) {
         event.preventDefault();
         if (event.shiftKey) {
           setDeadlineEnabled(false);
-          setDeadlineAt('');
+          setDeadlineAt("");
           setDeadlineRecurringRule(null);
           return;
         }
@@ -5522,32 +6515,47 @@ function TaskEditor({
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [deadlineEnabled, isDirty, navigate, onToggleTask, returnPath, task.id]);
 
-  async function createSubtaskDrafts(mode: 'single' | 'many') {
+  async function createSubtaskDrafts(mode: "single" | "many") {
     setIsCreatingSubtasks(true);
     try {
-      if (mode === 'single') {
-        const mergedDraft = buildCombinedSubtaskDraft(payload, task, bulkSubtaskLines, todayStartMs);
-        const createdTaskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 subtask.' });
+      if (mode === "single") {
+        const mergedDraft = buildCombinedSubtaskDraft(
+          payload,
+          task,
+          bulkSubtaskLines,
+          todayStartMs,
+        );
+        const createdTaskId = await onCreateTask(mergedDraft, {
+          successMessage: "Combined list into 1 subtask.",
+        });
         if (createdTaskId) {
-          setNewSubtask('');
+          setNewSubtask("");
         }
         return;
       }
 
       let createdCount = 0;
-      for (const draft of buildBulkSubtaskDrafts(payload, task, bulkSubtaskLines, todayStartMs)) {
+      for (const draft of buildBulkSubtaskDrafts(
+        payload,
+        task,
+        bulkSubtaskLines,
+        todayStartMs,
+      )) {
         const createdTaskId = await onCreateTask(draft, { silent: true });
         if (createdTaskId) {
           createdCount += 1;
         }
       }
       if (createdCount > 0) {
-        onShowBanner('success', `${createdCount} subtask${createdCount === 1 ? '' : 's'} created.`);
-        setNewSubtask('');
+        onShowBanner(
+          "success",
+          `${createdCount} subtask${createdCount === 1 ? "" : "s"} created.`,
+        );
+        setNewSubtask("");
       }
     } finally {
       setIsCreatingSubtasks(false);
@@ -5567,9 +6575,11 @@ function TaskEditor({
 
     setIsCreatingSubtasks(true);
     try {
-      const createdTaskId = await onCreateTask(draft, { successMessage: `Created subtask "${draft.title}".` });
+      const createdTaskId = await onCreateTask(draft, {
+        successMessage: `Created subtask "${draft.title}".`,
+      });
       if (createdTaskId) {
-        setNewSubtask('');
+        setNewSubtask("");
       }
     } finally {
       setIsCreatingSubtasks(false);
@@ -5587,12 +6597,12 @@ function TaskEditor({
         defaultSectionId: sectionId || null,
         defaultDueToday: false,
       },
-      todayStartMs
+      todayStartMs,
     );
 
     setTitle(parsedDraft.title);
-    setProjectId(parsedDraft.projectId ?? '');
-    setSectionId(parsedDraft.sectionId ?? '');
+    setProjectId(parsedDraft.projectId ?? "");
+    setSectionId(parsedDraft.sectionId ?? "");
     setPriority(parsedDraft.priority);
     setAllDay(parsedDraft.allDay);
     setDueAt(toInputValue(parsedDraft.dueAt, parsedDraft.allDay));
@@ -5600,9 +6610,11 @@ function TaskEditor({
     setReminderEditors(buildReminderEditors(parsedDraft.reminders));
     setDeadlineEnabled(Boolean(parsedDraft.deadlineAt));
     setDeadlineAllDay(parsedDraft.deadlineAllDay);
-    setDeadlineAt(toInputValue(parsedDraft.deadlineAt, parsedDraft.deadlineAllDay));
+    setDeadlineAt(
+      toInputValue(parsedDraft.deadlineAt, parsedDraft.deadlineAllDay),
+    );
     setDeadlineRecurringRule(parsedDraft.deadlineRecurringRule);
-    onShowBanner('info', 'Applied parser changes into the task editor.');
+    onShowBanner("info", "Applied parser changes into the task editor.");
   }
 
   function setDueDateQuick(daysFromToday: number) {
@@ -5636,7 +6648,7 @@ function TaskEditor({
               onClick={() => onArchiveTask(task.id)}
               className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
             >
-              {task.status === 'ARCHIVED' ? 'Unarchive' : 'Archive'}
+              {task.status === "ARCHIVED" ? "Unarchive" : "Archive"}
             </button>
             <button
               onClick={deleteCurrentTask}
@@ -5648,7 +6660,10 @@ function TaskEditor({
         }
       />
 
-      <form onSubmit={saveTask} className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+      <form
+        onSubmit={saveTask}
+        className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"
+      >
         <section className="space-y-4 rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
           {isDirty ? (
             <p className="rounded-[18px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-3 text-sm text-[#A24628]">
@@ -5656,16 +6671,20 @@ function TaskEditor({
             </p>
           ) : null}
           <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
-            <p className="text-sm font-semibold text-[#1E2D2F]">Live task summary</p>
+            <p className="text-sm font-semibold text-[#1E2D2F]">
+              Live task summary
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              {renderQuickAddMetadata(payload, editorDraftPreview).map(item => (
-                <span
-                  key={item}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
-                >
-                  {item}
-                </span>
-              ))}
+              {renderQuickAddMetadata(payload, editorDraftPreview).map(
+                (item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
+                  >
+                    {item}
+                  </span>
+                ),
+              )}
               {deadlineRecurringRule ? (
                 <span className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
                   Deadline {renderRecurrenceLabel(deadlineRecurringRule)}
@@ -5676,21 +6695,23 @@ function TaskEditor({
           <Field label="Task line">
             <textarea
               value={parserLine}
-              onChange={event => setParserLine(event.target.value)}
+              onChange={(event) => setParserLine(event.target.value)}
               rows={2}
               placeholder="Try: pay rent p1 tomorrow #bills/home"
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
-                {renderQuickAddMetadata(payload, parserPreviewDraft).map(item => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
-                  >
-                    {item}
-                  </span>
-                ))}
+                {renderQuickAddMetadata(payload, parserPreviewDraft).map(
+                  (item) => (
+                    <span
+                      key={item}
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
+                    >
+                      {item}
+                    </span>
+                  ),
+                )}
               </div>
               <button
                 type="button"
@@ -5706,7 +6727,7 @@ function TaskEditor({
               ref={titleInputRef}
               autoFocus
               value={title}
-              onChange={event => setTitle(event.target.value)}
+              onChange={(event) => setTitle(event.target.value)}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
           </Field>
@@ -5714,7 +6735,7 @@ function TaskEditor({
           <Field label="Description">
             <textarea
               value={description}
-              onChange={event => setDescription(event.target.value)}
+              onChange={(event) => setDescription(event.target.value)}
               rows={6}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
@@ -5724,14 +6745,14 @@ function TaskEditor({
             <Field label="Project">
               <select
                 value={projectId}
-                onChange={event => {
+                onChange={(event) => {
                   setProjectId(event.target.value);
-                  setSectionId('');
+                  setSectionId("");
                 }}
                 className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
               >
                 <option value="">Inbox</option>
-                {projects.map(projectOption => (
+                {projects.map((projectOption) => (
                   <option key={projectOption.id} value={projectOption.id}>
                     {projectOption.name}
                   </option>
@@ -5742,12 +6763,12 @@ function TaskEditor({
             <Field label="Section">
               <select
                 value={sectionId}
-                onChange={event => setSectionId(event.target.value)}
+                onChange={(event) => setSectionId(event.target.value)}
                 disabled={!projectId}
                 className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">No section</option>
-                {sectionOptions.map(section => (
+                {sectionOptions.map((section) => (
                   <option key={section.id} value={section.id}>
                     {section.name}
                   </option>
@@ -5762,7 +6783,7 @@ function TaskEditor({
             <select
               ref={prioritySelectRef}
               value={priority}
-              onChange={event => setPriority(event.target.value as Priority)}
+              onChange={(event) => setPriority(event.target.value as Priority)}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             >
               <option value="P1">P1 · Critical</option>
@@ -5776,7 +6797,7 @@ function TaskEditor({
             <input
               type="checkbox"
               checked={allDay}
-              onChange={event => setAllDay(event.target.checked)}
+              onChange={(event) => setAllDay(event.target.checked)}
               className="h-4 w-4 accent-[#EE6A3C]"
             />
             Due date is all day
@@ -5785,9 +6806,9 @@ function TaskEditor({
           <Field label="Due date">
             <input
               ref={dueInputRef}
-              type={allDay ? 'date' : 'datetime-local'}
+              type={allDay ? "date" : "datetime-local"}
               value={dueAt}
-              onChange={event => setDueAt(event.target.value)}
+              onChange={(event) => setDueAt(event.target.value)}
               className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
             <div className="mt-2 flex flex-wrap gap-2">
@@ -5815,7 +6836,7 @@ function TaskEditor({
               {dueAt ? (
                 <button
                   type="button"
-                  onClick={() => setDueAt('')}
+                  onClick={() => setDueAt("")}
                   className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-1.5 text-xs font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
                 >
                   Clear due date
@@ -5835,7 +6856,7 @@ function TaskEditor({
             <input
               type="checkbox"
               checked={deadlineEnabled}
-              onChange={event => setDeadlineEnabled(event.target.checked)}
+              onChange={(event) => setDeadlineEnabled(event.target.checked)}
               className="h-4 w-4 accent-[#EE6A3C]"
             />
             Track a deadline separately
@@ -5847,7 +6868,7 @@ function TaskEditor({
                 <input
                   type="checkbox"
                   checked={deadlineAllDay}
-                  onChange={event => setDeadlineAllDay(event.target.checked)}
+                  onChange={(event) => setDeadlineAllDay(event.target.checked)}
                   className="h-4 w-4 accent-[#EE6A3C]"
                 />
                 Deadline is all day
@@ -5855,9 +6876,9 @@ function TaskEditor({
               <Field label="Deadline">
                 <input
                   ref={deadlineInputRef}
-                  type={deadlineAllDay ? 'date' : 'datetime-local'}
+                  type={deadlineAllDay ? "date" : "datetime-local"}
                   value={deadlineAt}
-                  onChange={event => setDeadlineAt(event.target.value)}
+                  onChange={(event) => setDeadlineAt(event.target.value)}
                   className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                 />
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -5896,7 +6917,8 @@ function TaskEditor({
           <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
             <p className="text-sm font-semibold text-[#1E2D2F]">Reminders</p>
             <p className="mt-1 text-sm text-[#6D5C50]">
-              Add fixed-time reminders or relative reminders before the due date.
+              Add fixed-time reminders or relative reminders before the due
+              date.
             </p>
             <div className="mt-4">
               <ReminderListEditor
@@ -5919,28 +6941,42 @@ function TaskEditor({
       <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Activity</p>
-            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">Recent changes for this task</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
+              Activity
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">
+              Recent changes for this task
+            </h3>
             <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-              Local web activity appears here alongside the task's saved schedule state.
+              Local web activity appears here alongside the task's saved
+              schedule state.
             </p>
           </div>
           <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
-            {taskTimeline.length} event{taskTimeline.length === 1 ? '' : 's'}
+            {taskTimeline.length} event{taskTimeline.length === 1 ? "" : "s"}
           </span>
         </div>
         <div className="mt-5 space-y-3">
-          {taskTimeline.map(entry => (
-            <div key={entry.id} className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+          {taskTimeline.map((entry) => (
+            <div
+              key={entry.id}
+              className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4"
+            >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-[#1E2D2F]">{entry.title}</p>
+                  <p className="text-sm font-semibold text-[#1E2D2F]">
+                    {entry.title}
+                  </p>
                   {entry.detail ? (
-                    <p className="mt-1 text-sm text-[#6D5C50]">{entry.detail}</p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">
+                      {entry.detail}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-[#8A8076]">{formatDateTime(entry.at)}</span>
+                  <span className="text-xs font-semibold text-[#8A8076]">
+                    {formatDateTime(entry.at)}
+                  </span>
                   {entry.activityId && canUndoActivity(entry.activityId) ? (
                     <button
                       type="button"
@@ -5960,14 +6996,19 @@ function TaskEditor({
       <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Subtasks</p>
-            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">Break this task down</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
+              Subtasks
+            </p>
+            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">
+              Break this task down
+            </h3>
             <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-              Subtasks stay linked to this task, inherit its current project and section, and support pasted lists.
+              Subtasks stay linked to this task, inherit its current project and
+              section, and support pasted lists.
             </p>
           </div>
           <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
-            {subtasks.length} subtask{subtasks.length === 1 ? '' : 's'}
+            {subtasks.length} subtask{subtasks.length === 1 ? "" : "s"}
           </span>
         </div>
 
@@ -5980,7 +7021,7 @@ function TaskEditor({
             onToggleTask={onToggleTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onPromoteSubtask={onPromoteSubtask}
-            onOpenTask={taskId => navigate(`/task/${taskId}`)}
+            onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
             baseDepth={1}
           />
         </div>
@@ -5989,7 +7030,7 @@ function TaskEditor({
           <Field label="Add subtask">
             <textarea
               value={newSubtask}
-              onChange={event => {
+              onChange={(event) => {
                 setNewSubtask(event.target.value);
                 if (showBulkSubtaskChoices) {
                   setShowBulkSubtaskChoices(false);
@@ -6000,15 +7041,19 @@ function TaskEditor({
               className="w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
             />
             <p className="mt-2 text-xs text-[#8A8076]">
-              Quick Add parsing works here too: dates, priorities, projects, sections, recurrence, and reminders.
+              Quick Add parsing works here too: dates, priorities, projects,
+              sections, recurrence, and reminders.
             </p>
           </Field>
 
           {showBulkSubtaskChoices && bulkSubtaskLines.length > 1 ? (
             <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
-              <p className="text-sm font-semibold text-[#A24628]">Add {bulkSubtaskLines.length} subtasks?</p>
+              <p className="text-sm font-semibold text-[#A24628]">
+                Add {bulkSubtaskLines.length} subtasks?
+              </p>
               <p className="mt-1 text-sm text-[#8A5A44]">
-                Combine the pasted list into one subtask or create one subtask per line.
+                Combine the pasted list into one subtask or create one subtask
+                per line.
               </p>
               <div className="mt-4 flex flex-wrap justify-end gap-3">
                 <button
@@ -6021,18 +7066,20 @@ function TaskEditor({
                 <button
                   type="button"
                   disabled={isCreatingSubtasks}
-                  onClick={() => void createSubtaskDrafts('single')}
+                  onClick={() => void createSubtaskDrafts("single")}
                   className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isCreatingSubtasks ? 'Adding...' : 'Add 1 subtask'}
+                  {isCreatingSubtasks ? "Adding..." : "Add 1 subtask"}
                 </button>
                 <button
                   type="button"
                   disabled={isCreatingSubtasks}
-                  onClick={() => void createSubtaskDrafts('many')}
+                  onClick={() => void createSubtaskDrafts("many")}
                   className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isCreatingSubtasks ? 'Adding...' : `Add all ${bulkSubtaskLines.length}`}
+                  {isCreatingSubtasks
+                    ? "Adding..."
+                    : `Add all ${bulkSubtaskLines.length}`}
                 </button>
               </div>
             </section>
@@ -6044,7 +7091,11 @@ function TaskEditor({
               disabled={isCreatingSubtasks || !newSubtask.trim()}
               className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isCreatingSubtasks ? 'Adding...' : bulkSubtaskLines.length > 1 ? `Review ${bulkSubtaskLines.length} subtasks` : 'Add subtask'}
+              {isCreatingSubtasks
+                ? "Adding..."
+                : bulkSubtaskLines.length > 1
+                  ? `Review ${bulkSubtaskLines.length} subtasks`
+                  : "Add subtask"}
             </button>
           </div>
         </form>
@@ -6098,17 +7149,19 @@ function SettingsDisclosure({
     <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
       <button
         type="button"
-        onClick={() => setIsOpen(value => !value)}
+        onClick={() => setIsOpen((value) => !value)}
         className="flex w-full items-start justify-between gap-4 text-left"
         aria-expanded={isOpen}
       >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">{title}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
+            {title}
+          </p>
           <p className="mt-2 text-sm leading-6 text-[#6D5C50]">{description}</p>
         </div>
         <ChevronDown
           size={18}
-          className={`mt-1 shrink-0 text-[#9F7B63] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          className={`mt-1 shrink-0 text-[#9F7B63] transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
       {isOpen ? <div className="mt-4 space-y-4">{children}</div> : null}
@@ -6187,8 +7240,16 @@ function SettingsPage({
     isSyncing,
     lastCloudSyncAt,
   });
-  const feedbackHref = buildFeedbackMailto('Emberlist feedback', location.pathname, cloudSession);
-  const issueHref = buildFeedbackMailto('Emberlist bug report', location.pathname, cloudSession);
+  const feedbackHref = buildFeedbackMailto(
+    "Emberlist feedback",
+    location.pathname,
+    cloudSession,
+  );
+  const issueHref = buildFeedbackMailto(
+    "Emberlist bug report",
+    location.pathname,
+    cloudSession,
+  );
 
   return (
     <div className="space-y-6">
@@ -6199,12 +7260,31 @@ function SettingsPage({
       />
 
       <div className="space-y-4">
-        <SettingsDisclosure title="Cloud sync" description="Connection status, sync account, and whether this browser should sync automatically." defaultOpen>
+        <SettingsDisclosure
+          title="Cloud sync"
+          description="Connection status, sync account, and whether this browser should sync automatically."
+          defaultOpen
+        >
           <div className="space-y-3">
             <InfoRow label="Status" value={cloudStatus.label} />
-            <InfoRow label="Account" value={cloudSession?.email ?? 'No Google account connected in this tab'} />
-            <InfoRow label="Last sync" value={lastCloudSyncAt ? formatDateTime(lastCloudSyncAt) : 'No recent sync'} />
-            <InfoRow label="Auto sync" value={autoSyncEnabled ? 'Enabled' : 'Manual only'} />
+            <InfoRow
+              label="Account"
+              value={
+                cloudSession?.email ?? "No Google account connected in this tab"
+              }
+            />
+            <InfoRow
+              label="Last sync"
+              value={
+                lastCloudSyncAt
+                  ? formatDateTime(lastCloudSyncAt)
+                  : "No recent sync"
+              }
+            />
+            <InfoRow
+              label="Auto sync"
+              value={autoSyncEnabled ? "Enabled" : "Manual only"}
+            />
             <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
               {cloudStatus.detail}
             </p>
@@ -6227,13 +7307,20 @@ function SettingsPage({
                 disabled={isResettingCloud || !cloudConfigured}
                 className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-3 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isResettingCloud ? 'Resetting cloud sync...' : 'Reset cloud sync'}
+                {isResettingCloud
+                  ? "Resetting cloud sync..."
+                  : "Reset cloud sync"}
               </button>
             </div>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">Run cloud sync automatically</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">When enabled, the web app syncs on changes, reconnect, focus, and load.</p>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Run cloud sync automatically
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  When enabled, the web app syncs on changes, reconnect, focus,
+                  and load.
+                </p>
               </div>
               <input
                 type="checkbox"
@@ -6245,11 +7332,22 @@ function SettingsPage({
           </div>
         </SettingsDisclosure>
 
-        <SettingsDisclosure title="Backups and recovery" description="Save a browser snapshot, export JSON, or recover this browser's local workspace.">
+        <SettingsDisclosure
+          title="Backups and recovery"
+          description="Save a browser snapshot, export JSON, or recover this browser's local workspace."
+        >
           <div className="space-y-3">
-            <InfoRow label="Last browser backup" value={lastLocalBackupAt ? formatDateTime(lastLocalBackupAt) : 'No browser backup saved yet'} />
+            <InfoRow
+              label="Last browser backup"
+              value={
+                lastLocalBackupAt
+                  ? formatDateTime(lastLocalBackupAt)
+                  : "No browser backup saved yet"
+              }
+            />
             <p className="text-sm leading-6 text-[#6D5C50]">
-              Keep a local browser backup snapshot, restore it, or download a JSON export you can keep outside the browser.
+              Keep a local browser backup snapshot, restore it, or download a
+              JSON export you can keep outside the browser.
             </p>
             <div className="flex flex-wrap gap-3">
               <button
@@ -6274,20 +7372,32 @@ function SettingsPage({
               <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white">
                 <Import size={16} />
                 Import JSON
-                <input type="file" accept=".json" className="hidden" onChange={onImport} />
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={onImport}
+                />
               </label>
               <button
                 onClick={onResetLocalCache}
                 disabled={isResettingCache}
                 className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isResettingCache ? 'Resetting web cache...' : 'Reset web cache'}
+                {isResettingCache
+                  ? "Resetting web cache..."
+                  : "Reset web cache"}
               </button>
             </div>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">Maintain browser backups automatically</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">Save a fresh local browser snapshot whenever the workspace changes.</p>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Maintain browser backups automatically
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  Save a fresh local browser snapshot whenever the workspace
+                  changes.
+                </p>
               </div>
               <input
                 type="checkbox"
@@ -6299,12 +7409,21 @@ function SettingsPage({
           </div>
         </SettingsDisclosure>
 
-        <SettingsDisclosure title="Display and behavior" description="Local-only web preferences that do not affect Android." defaultOpen>
+        <SettingsDisclosure
+          title="Display and behavior"
+          description="Local-only web preferences that do not affect Android."
+          defaultOpen
+        >
           <div className="space-y-4">
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">Show completed tasks in Today</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">This toggle is local to the web app and does not affect Android.</p>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Show completed tasks in Today
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  This toggle is local to the web app and does not affect
+                  Android.
+                </p>
               </div>
               <input
                 type="checkbox"
@@ -6315,8 +7434,12 @@ function SettingsPage({
             </label>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">Show Select tasks buttons on list pages</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">Keyboard selection with X still works even when this is off.</p>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Show Select tasks buttons on list pages
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  Keyboard selection with X still works even when this is off.
+                </p>
               </div>
               <input
                 type="checkbox"
@@ -6327,8 +7450,13 @@ function SettingsPage({
             </label>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">Use 24-hour time</p>
-                <p className="mt-1 text-sm text-[#6D5C50]">Applies to task times, reminders, and sync timestamps in the web app.</p>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Use 24-hour time
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  Applies to task times, reminders, and sync timestamps in the
+                  web app.
+                </p>
               </div>
               <input
                 type="checkbox"
@@ -6340,23 +7468,29 @@ function SettingsPage({
             <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#1E2D2F]">Week starts on</p>
-                  <p className="mt-1 text-sm text-[#6D5C50]">Affects week-based filters and calendars in the web app.</p>
+                  <p className="text-sm font-semibold text-[#1E2D2F]">
+                    Week starts on
+                  </p>
+                  <p className="mt-1 text-sm text-[#6D5C50]">
+                    Affects week-based filters and calendars in the web app.
+                  </p>
                 </div>
-                <span className="text-sm font-semibold text-[#6D5C50]">{weekStartsOn === 1 ? 'Monday' : 'Sunday'}</span>
+                <span className="text-sm font-semibold text-[#6D5C50]">
+                  {weekStartsOn === 1 ? "Monday" : "Sunday"}
+                </span>
               </div>
               <div className="mt-4 flex flex-wrap gap-3">
                 <button
                   type="button"
                   onClick={() => onWeekStartsOnChange(0)}
-                  className={`rounded-full px-4 py-3 text-sm font-semibold transition ${weekStartsOn === 0 ? 'bg-[#EE6A3C] text-white' : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FFFDFC]'}`}
+                  className={`rounded-full px-4 py-3 text-sm font-semibold transition ${weekStartsOn === 0 ? "bg-[#EE6A3C] text-white" : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FFFDFC]"}`}
                 >
                   Sunday
                 </button>
                 <button
                   type="button"
                   onClick={() => onWeekStartsOnChange(1)}
-                  className={`rounded-full px-4 py-3 text-sm font-semibold transition ${weekStartsOn === 1 ? 'bg-[#EE6A3C] text-white' : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FFFDFC]'}`}
+                  className={`rounded-full px-4 py-3 text-sm font-semibold transition ${weekStartsOn === 1 ? "bg-[#EE6A3C] text-white" : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FFFDFC]"}`}
                 >
                   Monday
                 </button>
@@ -6365,11 +7499,15 @@ function SettingsPage({
           </div>
         </SettingsDisclosure>
 
-        <SettingsDisclosure title="Feedback" description="Quick paths for bug reports and product feedback.">
+        <SettingsDisclosure
+          title="Feedback"
+          description="Quick paths for bug reports and product feedback."
+        >
           <div className="space-y-3">
             <p className="text-sm leading-6 text-[#6D5C50]">
-              Send product feedback or a bug report straight from the app. The email draft includes the current route,
-              connected sync account, and browser details so issues are easier to reproduce.
+              Send product feedback or a bug report straight from the app. The
+              email draft includes the current route, connected sync account,
+              and browser details so issues are easier to reproduce.
             </p>
             <div className="flex flex-wrap gap-3">
               <a
@@ -6423,7 +7561,10 @@ function TaskGroup({
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onPromoteSubtask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   collapsible?: boolean;
@@ -6448,35 +7589,43 @@ function TaskGroup({
   return (
     <section className="rounded-[18px] bg-transparent">
       <div
-        className={`mb-2 rounded-[18px] px-3 py-2 transition ${dropTargetState?.active ? 'bg-[#FFF1EB] ring-1 ring-inset ring-[#EE6A3C]' : ''}`}
+        className={`mb-2 rounded-[18px] px-3 py-2 transition ${dropTargetState?.active ? "bg-[#FFF1EB] ring-1 ring-inset ring-[#EE6A3C]" : ""}`}
         onDragOver={dropTargetState?.onDragOver}
         onDragLeave={dropTargetState?.onDragLeave}
         onDrop={dropTargetState?.onDrop}
       >
         <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-[18px] font-semibold text-[#202020]">{title}</h3>
-          {subtitle ? <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p> : null}
-          {dropTargetState?.active ? (
-            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
-              {dropTargetState.hint}
-            </p>
-          ) : null}
+          <div>
+            <h3 className="text-[18px] font-semibold text-[#202020]">
+              {title}
+            </h3>
+            {subtitle ? (
+              <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p>
+            ) : null}
+            {dropTargetState?.active ? (
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
+                {dropTargetState.hint}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-3">
+            {headerActions}
+            <span className="text-xs font-medium text-[#8a8076]">
+              {tasks.length} task{tasks.length === 1 ? "" : "s"}
+            </span>
+            {collapsible ? (
+              <button
+                type="button"
+                onClick={() => setCollapsed((value) => !value)}
+                className="rounded-full border border-[#e7ddd4] bg-white px-3 py-1 text-xs font-semibold text-[#6d5c50] transition hover:bg-[#fbf7f3]"
+              >
+                {isCollapsed
+                  ? `Show ${title.toLowerCase()}`
+                  : `Hide ${title.toLowerCase()}`}
+              </button>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {headerActions}
-          <span className="text-xs font-medium text-[#8a8076]">{tasks.length} task{tasks.length === 1 ? '' : 's'}</span>
-          {collapsible ? (
-            <button
-              type="button"
-              onClick={() => setCollapsed(value => !value)}
-              className="rounded-full border border-[#e7ddd4] bg-white px-3 py-1 text-xs font-semibold text-[#6d5c50] transition hover:bg-[#fbf7f3]"
-            >
-              {isCollapsed ? `Show ${title.toLowerCase()}` : `Hide ${title.toLowerCase()}`}
-            </button>
-          ) : null}
-        </div>
-      </div>
       </div>
       {!isCollapsed ? (
         <TaskListBlock
@@ -6520,7 +7669,10 @@ function TaskListBlock({
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onPromoteSubtask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   baseDepth?: number;
@@ -6530,15 +7682,22 @@ function TaskListBlock({
   onStartSelection?: () => void;
   rowActions?: (task: Task) => ReactNode;
 }) {
-  const flattenedTasks = useMemo(() => flattenTasksWithSubtasks(tasks), [tasks]);
+  const flattenedTasks = useMemo(
+    () => flattenTasksWithSubtasks(tasks),
+    [tasks],
+  );
 
   if (!tasks.length) {
-    return <p className="rounded-[12px] border border-[#ece7e3] bg-white px-4 py-5 text-sm text-[#7b736b]">{emptyMessage}</p>;
+    return (
+      <p className="rounded-[12px] border border-[#ece7e3] bg-white px-4 py-5 text-sm text-[#7b736b]">
+        {emptyMessage}
+      </p>
+    );
   }
 
   return (
     <div className="overflow-visible rounded-[14px] border border-[#ece7e3] bg-white">
-      {flattenedTasks.map(item => (
+      {flattenedTasks.map((item) => (
         <TaskRow
           key={item.task.id}
           payload={payload}
@@ -6586,7 +7745,10 @@ function TaskRow({
   hasVisibleSubtasks: boolean;
   visibleSubtaskCount: number;
   onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
+  onReparentTaskAsSubtask: (
+    draggedTaskId: string,
+    parentTaskId: string,
+  ) => void;
   onPromoteSubtask: (taskId: string) => void;
   onOpenTask: (taskId: string) => void;
   selectionMode?: boolean;
@@ -6595,10 +7757,13 @@ function TaskRow({
   onStartSelection?: () => void;
   rowActions?: (task: Task) => ReactNode;
 }) {
-  const completed = task.status === 'COMPLETED';
-  const canDrag = !selectionMode && task.status === 'OPEN';
-  const canAcceptSubtaskDrop = task.status === 'OPEN' && task.parentTaskId === null;
-  const overdue = Boolean(task.dueAt && task.status === 'OPEN' && task.dueAt < todayStartMs);
+  const completed = task.status === "COMPLETED";
+  const canDrag = !selectionMode && task.status === "OPEN";
+  const canAcceptSubtaskDrop =
+    task.status === "OPEN" && task.parentTaskId === null;
+  const overdue = Boolean(
+    task.dueAt && task.status === "OPEN" && task.dueAt < todayStartMs,
+  );
   const locationLabel = getTaskLocationLabel(payload, task);
   const dueLabel = task.dueAt ? formatTaskDate(task.dueAt, task.allDay) : null;
   const [isDropActive, setIsDropActive] = useState(false);
@@ -6614,7 +7779,7 @@ function TaskRow({
   function getDraggedTaskId(event: DragEvent<HTMLElement>): string | null {
     const directValue = activeDraggedTaskId?.trim();
     if (directValue) return directValue;
-    const fallbackValue = event.dataTransfer.getData('text/task-id').trim();
+    const fallbackValue = event.dataTransfer.getData("text/task-id").trim();
     return fallbackValue || null;
   }
 
@@ -6622,9 +7787,9 @@ function TaskRow({
     if (!canDrag) return;
     event.stopPropagation();
     activeDraggedTaskId = task.id;
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/task-id', task.id);
-    event.dataTransfer.setData('text/plain', task.title);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/task-id", task.id);
+    event.dataTransfer.setData("text/plain", task.title);
   }
 
   function handleDragEnd() {
@@ -6634,13 +7799,17 @@ function TaskRow({
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
     const draggedTaskId = getDraggedTaskId(event);
-    if (!draggedTaskId || !canAcceptSubtaskDrop || !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)) {
+    if (
+      !draggedTaskId ||
+      !canAcceptSubtaskDrop ||
+      !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)
+    ) {
       setIsDropActive(false);
       return;
     }
 
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
+    event.dataTransfer.dropEffect = "move";
     if (!isDropActive) {
       setIsDropActive(true);
     }
@@ -6656,7 +7825,11 @@ function TaskRow({
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     const draggedTaskId = getDraggedTaskId(event);
     setIsDropActive(false);
-    if (!draggedTaskId || !canAcceptSubtaskDrop || !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)) {
+    if (
+      !draggedTaskId ||
+      !canAcceptSubtaskDrop ||
+      !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)
+    ) {
       return;
     }
 
@@ -6675,34 +7848,45 @@ function TaskRow({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={handleRowAction}
-      onKeyDown={event => {
+      onKeyDown={(event) => {
         const lowerKey = event.key.toLowerCase();
-        if (event.key === 'Enter' || event.key === ' ') {
+        if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           handleRowAction();
           return;
         }
-        if (event.key === 'ArrowDown' || lowerKey === 'j') {
+        if (event.key === "ArrowDown" || lowerKey === "j") {
           event.preventDefault();
           focusAdjacentTaskRow(task.id, 1);
           return;
         }
-        if (event.key === 'ArrowUp' || lowerKey === 'k') {
+        if (event.key === "ArrowUp" || lowerKey === "k") {
           event.preventDefault();
           focusAdjacentTaskRow(task.id, -1);
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'e') {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          lowerKey === "e"
+        ) {
           event.preventDefault();
           onToggleTask(task.id);
           return;
         }
-        if ((event.metaKey || event.ctrlKey) && lowerKey === 'e') {
+        if ((event.metaKey || event.ctrlKey) && lowerKey === "e") {
           event.preventDefault();
           onOpenTask(task.id);
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && lowerKey === 'x' && onToggleSelection) {
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          lowerKey === "x" &&
+          onToggleSelection
+        ) {
           event.preventDefault();
           if (!selectionMode) {
             onStartSelection?.();
@@ -6710,33 +7894,44 @@ function TaskRow({
           onToggleSelection(task.id);
           return;
         }
-        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === '.') {
-          const menuTrigger = event.currentTarget.querySelector<HTMLElement>('[data-task-row-menu-trigger="true"]');
+        if (
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          event.key === "."
+        ) {
+          const menuTrigger = event.currentTarget.querySelector<HTMLElement>(
+            '[data-task-row-menu-trigger="true"]',
+          );
           if (menuTrigger) {
             event.preventDefault();
             menuTrigger.click();
             return;
           }
         }
-        if ((event.metaKey || event.ctrlKey) && event.key === ']') {
+        if ((event.metaKey || event.ctrlKey) && event.key === "]") {
           event.preventDefault();
           const previousTaskId = getAdjacentTaskRowId(task.id, -1);
-          if (previousTaskId && canReparentTaskAsSubtask(payload, task.id, previousTaskId)) {
+          if (
+            previousTaskId &&
+            canReparentTaskAsSubtask(payload, task.id, previousTaskId)
+          ) {
             onReparentTaskAsSubtask(task.id, previousTaskId);
           }
           return;
         }
-        if ((event.metaKey || event.ctrlKey) && event.key === '[') {
+        if ((event.metaKey || event.ctrlKey) && event.key === "[") {
           event.preventDefault();
           onPromoteSubtask(task.id);
         }
       }}
-      className={`group/task-row flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${isDropActive
-        ? 'bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]'
-        : selected
-        ? 'bg-[#FFF3EE]'
-        : 'hover:bg-[#fcfaf7]'
-        } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]`}
+      className={`group/task-row flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${
+        isDropActive
+          ? "bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]"
+          : selected
+            ? "bg-[#FFF3EE]"
+            : "hover:bg-[#fcfaf7]"
+      } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]`}
     >
       {canDrag ? (
         <button
@@ -6744,7 +7939,7 @@ function TaskRow({
           draggable
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onClick={event => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
           aria-label={`Drag ${task.title}`}
           className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[#FBF7F3] active:cursor-grabbing"
         >
@@ -6757,52 +7952,73 @@ function TaskRow({
       {selectionMode ? (
         <button
           type="button"
-          onClick={event => {
+          onClick={(event) => {
             event.stopPropagation();
             onToggleSelection?.(task.id);
           }}
-          aria-label={selected ? `Deselect ${task.title}` : `Select ${task.title}`}
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${selected
-            ? 'border-[#EE6A3C] bg-[#EE6A3C] text-white'
-            : 'border-[#D8C9BC] bg-white text-transparent'
-            }`}
+          aria-label={
+            selected ? `Deselect ${task.title}` : `Select ${task.title}`
+          }
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
+            selected
+              ? "border-[#EE6A3C] bg-[#EE6A3C] text-white"
+              : "border-[#D8C9BC] bg-white text-transparent"
+          }`}
         >
           <Check size={12} />
         </button>
       ) : null}
       <button
         type="button"
-        onClick={event => {
+        onClick={(event) => {
           event.stopPropagation();
           onToggleTask(task.id);
         }}
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${completed
-          ? 'border-[#dc4c3e] bg-[#dc4c3e] text-white'
-          : `${priorityCircleClasses(task.priority)} bg-white text-transparent`
-          }`}
+        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
+          completed
+            ? "border-[#dc4c3e] bg-[#dc4c3e] text-white"
+            : `${priorityCircleClasses(task.priority)} bg-white text-transparent`
+        }`}
       >
         <Check size={12} />
       </button>
       <div className="min-w-0 flex-1">
-        <p className={`text-[15px] leading-5 ${completed ? 'text-[#9a928c] line-through' : 'text-[#202020]'}`}>{task.title}</p>
+        <p
+          className={`text-[15px] leading-5 ${completed ? "text-[#9a928c] line-through" : "text-[#202020]"}`}
+        >
+          {task.title}
+        </p>
         {task.description ? (
-          <p className={`mt-1 text-sm leading-5 ${completed ? 'text-[#a39a93]' : 'text-[#6d665e]'}`}>{task.description}</p>
+          <p
+            className={`mt-1 text-sm leading-5 ${completed ? "text-[#a39a93]" : "text-[#6d665e]"}`}
+          >
+            {task.description}
+          </p>
         ) : null}
         {isDropActive ? (
-          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">Drop to make subtask</p>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
+            Drop to make subtask
+          </p>
         ) : null}
         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#8a8076]">
           {depth > 0 ? <span>Subtask</span> : null}
           {hasVisibleSubtasks ? (
-            <span>{visibleSubtaskCount} subtask{visibleSubtaskCount === 1 ? '' : 's'}</span>
+            <span>
+              {visibleSubtaskCount} subtask
+              {visibleSubtaskCount === 1 ? "" : "s"}
+            </span>
           ) : null}
           {dueLabel ? (
-            <span className={`inline-flex items-center gap-1 ${overdue ? 'text-[#d1453b]' : 'text-[#8a8076]'}`}>
+            <span
+              className={`inline-flex items-center gap-1 ${overdue ? "text-[#d1453b]" : "text-[#8a8076]"}`}
+            >
               <Calendar size={11} />
               <span>{dueLabel}</span>
             </span>
           ) : null}
-          {task.recurringRule ? <span className={overdue ? 'text-[#d1453b]' : ''}>↻</span> : null}
+          {task.recurringRule ? (
+            <span className={overdue ? "text-[#d1453b]" : ""}>↻</span>
+          ) : null}
           {task.parentTaskId && depth === 0 ? <span>Subtask</span> : null}
           <span className="md:hidden">{locationLabel}</span>
         </div>
@@ -6821,7 +8037,11 @@ function TaskRow({
 
 function TaskHierarchyGutter({ depth }: { depth: number }) {
   return (
-    <div aria-hidden="true" className="flex shrink-0 self-stretch items-stretch" style={{ width: depth * 18 }}>
+    <div
+      aria-hidden="true"
+      className="flex shrink-0 self-stretch items-stretch"
+      style={{ width: depth * 18 }}
+    >
       {Array.from({ length: depth }).map((_, index) => {
         const isLast = index === depth - 1;
         return (
@@ -6868,19 +8088,21 @@ function ChoiceDialog({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== "Escape") return;
       event.preventDefault();
       onClose();
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    const preferredTarget = dialog.querySelector<HTMLElement>('[data-dialog-autofocus="true"]');
+    const preferredTarget = dialog.querySelector<HTMLElement>(
+      '[data-dialog-autofocus="true"]',
+    );
     if (preferredTarget) {
       preferredTarget.focus();
       return;
@@ -6896,36 +8118,48 @@ function ChoiceDialog({
       data-overlay-dialog="true"
       onMouseDown={stopDialogEvent}
       onClick={stopDialogEvent}
-      className={`fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6 ${anchorRect ? 'items-start justify-start !bg-transparent' : ''}`}
+      className={`fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6 ${anchorRect ? "items-start justify-start !bg-transparent" : ""}`}
     >
       <div
         ref={dialogRef}
         onMouseDown={stopDialogEvent}
         onClick={stopDialogEvent}
-        style={anchorRect ? {
-          position: 'absolute',
-          top: Math.min(anchorRect.bottom + 8, window.innerHeight - 400),
-          left: Math.min(anchorRect.left, window.innerWidth - 680), // Approx width calculation
-          maxHeight: 'min(82vh, 760px)'
-        } : undefined}
-        className={`flex max-h-[min(82vh,760px)] w-full ${dialogClassName ?? 'max-w-lg'} flex-col overflow-hidden rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-xl`}
+        style={
+          anchorRect
+            ? {
+                position: "absolute",
+                top: Math.min(anchorRect.bottom + 8, window.innerHeight - 400),
+                left: Math.min(anchorRect.left, window.innerWidth - 680), // Approx width calculation
+                maxHeight: "min(82vh, 760px)",
+              }
+            : undefined
+        }
+        className={`flex max-h-[min(82vh,760px)] w-full ${dialogClassName ?? "max-w-lg"} flex-col overflow-hidden rounded-xl border border-[#E1D5CA] bg-white p-4 shadow-xl`}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-xl font-semibold text-[#1E2D2F]">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">{description}</p>
+            <h3 className="text-lg font-semibold text-[#1E2D2F]">{title}</h3>
+            <p className="mt-1 text-sm leading-6 text-[#6D5C50]">
+              {description}
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-full p-2 text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+            className="rounded-lg p-2 text-[#6D5C50] transition hover:bg-[#FBF7F3]"
           >
             <X size={16} />
           </button>
         </div>
-        {children ? <div className={`mt-5 overflow-y-auto pr-1 ${childrenClassName ?? ''}`}>{children}</div> : null}
-        {footer ? <div className="mt-5 shrink-0">{footer}</div> : null}
+        {children ? (
+          <div
+            className={`mt-4 overflow-y-auto pr-1 ${childrenClassName ?? ""}`}
+          >
+            {children}
+          </div>
+        ) : null}
+        {footer ? <div className="mt-4 shrink-0">{footer}</div> : null}
       </div>
     </div>
   );
@@ -6941,16 +8175,22 @@ function QuickAddDialog({
   payload: SyncPayload;
   context: QuickAddContext;
   onClose: () => void;
-  onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTask: (
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onShowBanner: (
-    tone: Banner['tone'],
+    tone: Banner["tone"],
     message: string,
-    options?: Pick<Banner, 'actionLabel' | 'onAction' | 'persistOnNavigation' | 'autoDismissMs'>
+    options?: Pick<
+      Banner,
+      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
+    >,
   ) => void;
 }) {
   const todayStartMs = useTodayStartMs();
-  const [input, setInput] = useState('');
-  const [description, setDescription] = useState('');
+  const [input, setInput] = useState("");
+  const [description, setDescription] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showBulkChoices, setShowBulkChoices] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
@@ -6964,51 +8204,112 @@ function QuickAddDialog({
   const sectionMenuRef = useRef<HTMLDivElement | null>(null);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const projectQueryRef = useRef<HTMLInputElement | null>(null);
-  const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(async () => undefined);
-  const createBulkTasksRef = useRef<(mode: 'single' | 'many') => Promise<void>>(async () => undefined);
+  const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(
+    async () => undefined,
+  );
+  const createBulkTasksRef = useRef<(mode: "single" | "many") => Promise<void>>(
+    async () => undefined,
+  );
   const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
   const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
   const hasInput = input.trim().length > 0;
   const previewDraft = useMemo(
-    () => buildDraftFromParsed(payload, parsedPreview, description, context, todayStartMs),
-    [context, description, parsedPreview, payload, todayStartMs]
+    () =>
+      buildDraftFromParsed(
+        payload,
+        parsedPreview,
+        description,
+        context,
+        todayStartMs,
+      ),
+    [context, description, parsedPreview, payload, todayStartMs],
   );
-  const [projectOverrideId, setProjectOverrideId] = useState<string | null | undefined>(undefined);
-  const [sectionOverrideId, setSectionOverrideId] = useState<string | null | undefined>(undefined);
-  const [priorityOverride, setPriorityOverride] = useState<Priority | undefined>(undefined);
-  const [recurrenceOverride, setRecurrenceOverride] = useState<string | null | undefined>(undefined);
-  const [reminderEditorsOverride, setReminderEditorsOverride] = useState<ReminderEditorDraft[] | undefined>(undefined);
-  const [dueOverrideAt, setDueOverrideAt] = useState<number | null | undefined>(undefined);
-  const [dueOverrideAllDay, setDueOverrideAllDay] = useState<boolean | undefined>(undefined);
-  const [deadlineEnabledOverride, setDeadlineEnabledOverride] = useState<boolean | undefined>(undefined);
-  const [deadlineAllDayOverride, setDeadlineAllDayOverride] = useState<boolean | undefined>(undefined);
-  const [deadlineInputOverride, setDeadlineInputOverride] = useState<string | undefined>(undefined);
-  const [projectQuery, setProjectQuery] = useState('');
-  const deferredProjectQuery = useDeferredValue(projectQuery.trim().toLowerCase());
-  const effectiveProjectId = projectOverrideId === undefined ? previewDraft.projectId : projectOverrideId;
-  const effectiveProjectName = projectOverrideId === undefined ? previewDraft.projectName : null;
-  const quickAddSectionOptions = effectiveProjectId ? getProjectSections(payload, effectiveProjectId) : [];
+  const [projectOverrideId, setProjectOverrideId] = useState<
+    string | null | undefined
+  >(undefined);
+  const [sectionOverrideId, setSectionOverrideId] = useState<
+    string | null | undefined
+  >(undefined);
+  const [priorityOverride, setPriorityOverride] = useState<
+    Priority | undefined
+  >(undefined);
+  const [recurrenceOverride, setRecurrenceOverride] = useState<
+    string | null | undefined
+  >(undefined);
+  const [reminderEditorsOverride, setReminderEditorsOverride] = useState<
+    ReminderEditorDraft[] | undefined
+  >(undefined);
+  const [dueOverrideAt, setDueOverrideAt] = useState<number | null | undefined>(
+    undefined,
+  );
+  const [dueOverrideAllDay, setDueOverrideAllDay] = useState<
+    boolean | undefined
+  >(undefined);
+  const [deadlineEnabledOverride, setDeadlineEnabledOverride] = useState<
+    boolean | undefined
+  >(undefined);
+  const [deadlineAllDayOverride, setDeadlineAllDayOverride] = useState<
+    boolean | undefined
+  >(undefined);
+  const [deadlineInputOverride, setDeadlineInputOverride] = useState<
+    string | undefined
+  >(undefined);
+  const [projectQuery, setProjectQuery] = useState("");
+  const deferredProjectQuery = useDeferredValue(
+    projectQuery.trim().toLowerCase(),
+  );
+  const effectiveProjectId =
+    projectOverrideId === undefined
+      ? previewDraft.projectId
+      : projectOverrideId;
+  const effectiveProjectName =
+    projectOverrideId === undefined ? previewDraft.projectName : null;
+  const quickAddSectionOptions = effectiveProjectId
+    ? getProjectSections(payload, effectiveProjectId)
+    : [];
   const effectiveSectionId = effectiveProjectId
-    ? (sectionOverrideId === undefined ? previewDraft.sectionId : sectionOverrideId)
+    ? sectionOverrideId === undefined
+      ? previewDraft.sectionId
+      : sectionOverrideId
     : null;
   const effectiveSectionName = effectiveProjectId
-    ? (sectionOverrideId === undefined ? previewDraft.sectionName : null)
+    ? sectionOverrideId === undefined
+      ? previewDraft.sectionName
+      : null
     : null;
-  const effectiveDueAt = dueOverrideAt === undefined ? previewDraft.dueAt : dueOverrideAt;
-  const effectiveAllDay = dueOverrideAt === undefined ? previewDraft.allDay : (dueOverrideAllDay ?? true);
+  const effectiveDueAt =
+    dueOverrideAt === undefined ? previewDraft.dueAt : dueOverrideAt;
+  const effectiveAllDay =
+    dueOverrideAt === undefined
+      ? previewDraft.allDay
+      : (dueOverrideAllDay ?? true);
   const effectivePriority = priorityOverride ?? previewDraft.priority;
-  const effectiveRecurrenceRule = recurrenceOverride === undefined ? previewDraft.recurringRule : recurrenceOverride;
-  const effectiveDeadlineEnabled = deadlineEnabledOverride ?? (previewDraft.deadlineAt !== null);
-  const effectiveDeadlineAllDay = deadlineAllDayOverride ?? previewDraft.deadlineAllDay;
-  const effectiveDeadlineInput = deadlineInputOverride ?? toInputValue(previewDraft.deadlineAt ?? null, previewDraft.deadlineAllDay ?? false);
+  const effectiveRecurrenceRule =
+    recurrenceOverride === undefined
+      ? previewDraft.recurringRule
+      : recurrenceOverride;
+  const effectiveDeadlineEnabled =
+    deadlineEnabledOverride ?? previewDraft.deadlineAt !== null;
+  const effectiveDeadlineAllDay =
+    deadlineAllDayOverride ?? previewDraft.deadlineAllDay;
+  const effectiveDeadlineInput =
+    deadlineInputOverride ??
+    toInputValue(
+      previewDraft.deadlineAt ?? null,
+      previewDraft.deadlineAllDay ?? false,
+    );
   const effectiveDeadlineAt = effectiveDeadlineEnabled
     ? parseInputValue(effectiveDeadlineInput, effectiveDeadlineAllDay)
     : null;
-  const parsedReminderEditors = useMemo(() => buildReminderEditors(previewDraft.reminders), [previewDraft.reminders]);
-  const effectiveReminderEditors = reminderEditorsOverride ?? parsedReminderEditors;
+  const parsedReminderEditors = useMemo(
+    () => buildReminderEditors(previewDraft.reminders),
+    [previewDraft.reminders],
+  );
+  const effectiveReminderEditors =
+    reminderEditorsOverride ?? parsedReminderEditors;
   const effectiveReminderDrafts = useMemo(
     () => serializeReminderEditors(effectiveReminderEditors),
-    [effectiveReminderEditors]
+    [effectiveReminderEditors],
   );
   const effectiveDraft = useMemo<TaskDraft>(
     () => ({
@@ -7021,7 +8322,9 @@ function QuickAddDialog({
       sectionName: effectiveSectionName,
       priority: effectivePriority,
       deadlineAt: effectiveDeadlineAt,
-      deadlineAllDay: effectiveDeadlineEnabled ? effectiveDeadlineAllDay : false,
+      deadlineAllDay: effectiveDeadlineEnabled
+        ? effectiveDeadlineAllDay
+        : false,
       recurringRule: effectiveRecurrenceRule,
       reminders: effectiveReminderDrafts,
     }),
@@ -7039,22 +8342,35 @@ function QuickAddDialog({
       effectiveSectionId,
       effectiveSectionName,
       previewDraft,
-    ]
+    ],
   );
-  const quickAddPreviewTask = useMemo(() => buildQuickAddPreviewTask(effectiveDraft), [effectiveDraft]);
-  const activeProjects = useMemo(() => getActiveProjects(payload, true), [payload]);
+  const quickAddPreviewTask = useMemo(
+    () => buildQuickAddPreviewTask(effectiveDraft),
+    [effectiveDraft],
+  );
+  const activeProjects = useMemo(
+    () => getActiveProjects(payload, true),
+    [payload],
+  );
   const filteredProjects = useMemo(
-    () => activeProjects.filter(project => project.name.toLowerCase().includes(deferredProjectQuery)),
-    [activeProjects, deferredProjectQuery]
+    () =>
+      activeProjects.filter((project) =>
+        project.name.toLowerCase().includes(deferredProjectQuery),
+      ),
+    [activeProjects, deferredProjectQuery],
   );
   const recurrencePreset = getRecurrencePreset(effectiveRecurrenceRule);
-  const dueSummaryLabel = effectiveDraft.dueAt !== null
-    ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
-    : 'Today';
+  const dueSummaryLabel =
+    effectiveDraft.dueAt !== null
+      ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
+      : "Today";
   const reminderSummaryLabel = effectiveDraft.reminders.length
     ? renderReminderLabel(effectiveDraft.reminders)
-    : 'Reminders';
-  const prioritySummaryLabel = effectivePriority === 'P4' && priorityOverride === undefined ? 'Priority' : effectivePriority;
+    : "Reminders";
+  const prioritySummaryLabel =
+    effectivePriority === "P4" && priorityOverride === undefined
+      ? "Priority"
+      : effectivePriority;
   const hasManualMetadataOverrides =
     dueOverrideAt !== undefined ||
     deadlineEnabledOverride !== undefined ||
@@ -7081,54 +8397,67 @@ function QuickAddDialog({
       if (sectionMenuRef.current && !sectionMenuRef.current.contains(target)) {
         setShowSectionMenu(false);
       }
-      if (priorityMenuRef.current && !priorityMenuRef.current.contains(target)) {
+      if (
+        priorityMenuRef.current &&
+        !priorityMenuRef.current.contains(target)
+      ) {
         setShowPriorityMenu(false);
       }
     }
 
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
   }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const lowerKey = event.key.toLowerCase();
       const typing = isTypingTarget(event.target);
-      if ((event.metaKey || event.ctrlKey) && lowerKey === 'enter' && !event.altKey) {
+      if (
+        (event.metaKey || event.ctrlKey) &&
+        lowerKey === "enter" &&
+        !event.altKey
+      ) {
         if (!typing) return;
         event.preventDefault();
         if (showBulkChoices) return;
-        void submitDraftRef.current('continue');
+        void submitDraftRef.current("continue");
         return;
       }
 
-      if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === 'Enter' && !event.shiftKey) {
+      if (
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
         if (!typing) return;
         event.preventDefault();
         if (showBulkChoices) return;
-        void submitDraftRef.current('close');
+        void submitDraftRef.current("close");
         return;
       }
 
-      if (event.key !== 'Escape') return;
+      if (event.key !== "Escape") return;
       if (isSaving) return;
 
       event.preventDefault();
       const action = getQuickAddEscapeAction(showBulkChoices);
-      if (action === 'dismiss-bulk') {
+      if (action === "dismiss-bulk") {
         setShowBulkChoices(false);
         return;
       }
       onClose();
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isSaving, onClose, showBulkChoices]);
 
   function resetDialogFields() {
-    setInput('');
-    setDescription('');
+    setInput("");
+    setDescription("");
     setShowBulkChoices(false);
     setShowAdvancedFields(false);
     setShowReminderEditor(false);
@@ -7136,7 +8465,7 @@ function QuickAddDialog({
     setShowPriorityMenu(false);
     setShowProjectMenu(false);
     setShowSectionMenu(false);
-    setProjectQuery('');
+    setProjectQuery("");
     setProjectOverrideId(undefined);
     setSectionOverrideId(undefined);
     setPriorityOverride(undefined);
@@ -7152,22 +8481,34 @@ function QuickAddDialog({
     }, 0);
   }
 
-  async function submitDraft(mode: QuickAddSubmitMode = 'close') {
+  async function submitDraft(mode: QuickAddSubmitMode = "close") {
     if (!hasInput) return;
     if (shouldPromptBulkQuickAdd(input)) {
       setShowBulkChoices(true);
       return;
     }
     if (hasIncompleteReminderEditors(effectiveReminderEditors)) {
-      onShowBanner('error', 'Complete each reminder row or remove it before creating the task.');
+      onShowBanner(
+        "error",
+        "Complete each reminder row or remove it before creating the task.",
+      );
       return;
     }
-    if (effectiveReminderEditors.some(editor => editor.mode === 'OFFSET') && effectiveDraft.dueAt === null) {
-      onShowBanner('error', 'Relative reminders need a due date. Add one in the parser or switch the reminder to a fixed time.');
+    if (
+      effectiveReminderEditors.some((editor) => editor.mode === "OFFSET") &&
+      effectiveDraft.dueAt === null
+    ) {
+      onShowBanner(
+        "error",
+        "Relative reminders need a due date. Add one in the parser or switch the reminder to a fixed time.",
+      );
       return;
     }
     if (effectiveDeadlineEnabled && effectiveDeadlineAt === null) {
-      onShowBanner('error', 'Choose a valid deadline before creating the task.');
+      onShowBanner(
+        "error",
+        "Choose a valid deadline before creating the task.",
+      );
       return;
     }
 
@@ -7188,42 +8529,77 @@ function QuickAddDialog({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await submitDraft('close');
+    await submitDraft("close");
   }
 
-  async function createBulkTasks(mode: 'single' | 'many') {
+  async function createBulkTasks(mode: "single" | "many") {
     if (hasIncompleteReminderEditors(effectiveReminderEditors)) {
-      onShowBanner('error', 'Complete each reminder row or remove it before creating tasks.');
+      onShowBanner(
+        "error",
+        "Complete each reminder row or remove it before creating tasks.",
+      );
       return;
     }
     setIsSaving(true);
     try {
-      if (mode === 'single') {
+      if (mode === "single") {
         const mergedDraft = mergeBulkDraftWithDefaults(
-          createMergedBulkDraft(payload, bulkLines, description, context, todayStartMs),
+          createMergedBulkDraft(
+            payload,
+            bulkLines,
+            description,
+            context,
+            todayStartMs,
+          ),
           effectiveDraft,
-          '',
+          "",
         );
-        if (mergedDraft.reminders.some(reminder => reminder.kind === 'OFFSET') && mergedDraft.dueAt === null) {
-          onShowBanner('error', 'Relative reminders need a due date before they can be applied to the combined task.');
+        if (
+          mergedDraft.reminders.some(
+            (reminder) => reminder.kind === "OFFSET",
+          ) &&
+          mergedDraft.dueAt === null
+        ) {
+          onShowBanner(
+            "error",
+            "Relative reminders need a due date before they can be applied to the combined task.",
+          );
           return;
         }
-        const taskId = await onCreateTask(mergedDraft, { successMessage: 'Combined list into 1 task.' });
+        const taskId = await onCreateTask(mergedDraft, {
+          successMessage: "Combined list into 1 task.",
+        });
         if (taskId) onClose();
         return;
       }
 
       for (const line of bulkLines) {
         const parsedLine = parseQuickAdd(line);
-        const baseDraft = buildDraftFromParsed(payload, parsedLine, description, context, todayStartMs);
-        const draft = mergeBulkDraftWithDefaults(baseDraft, effectiveDraft, line);
-        if (draft.reminders.some(reminder => reminder.kind === 'OFFSET') && draft.dueAt === null) {
-          onShowBanner('error', 'Each task needs a due date before a relative reminder can be applied.');
+        const baseDraft = buildDraftFromParsed(
+          payload,
+          parsedLine,
+          description,
+          context,
+          todayStartMs,
+        );
+        const draft = mergeBulkDraftWithDefaults(
+          baseDraft,
+          effectiveDraft,
+          line,
+        );
+        if (
+          draft.reminders.some((reminder) => reminder.kind === "OFFSET") &&
+          draft.dueAt === null
+        ) {
+          onShowBanner(
+            "error",
+            "Each task needs a due date before a relative reminder can be applied.",
+          );
           return;
         }
         await onCreateTask(draft, { silent: true });
       }
-      onShowBanner('success', `${bulkLines.length} tasks created.`);
+      onShowBanner("success", `${bulkLines.length} tasks created.`);
       onClose();
     } finally {
       setIsSaving(false);
@@ -7246,56 +8622,70 @@ function QuickAddDialog({
       applyQuickAddDueAt(null, false);
       return;
     }
-    applyQuickAddDueAt(postponedDueAt, postponedDueAt === startOfDay(postponedDueAt).getTime());
+    applyQuickAddDueAt(
+      postponedDueAt,
+      postponedDueAt === startOfDay(postponedDueAt).getTime(),
+    );
   }
 
   return (
-    <div data-overlay-dialog="true" className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[32px] border border-[#E7DDD4] bg-[#F7F4F0] p-5 shadow-2xl">
+    <div
+      data-overlay-dialog="true"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm"
+    >
+      <div className="w-full max-w-xl rounded-2xl border border-[#E7DDD4] bg-[#F7F4F0] p-4 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">Quick add</p>
-            <h3 className="mt-2 text-2xl font-semibold text-[#1E2D2F]">Create a task</h3>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">
+              Quick add
+            </p>
+            <h3 className="mt-1 text-xl font-semibold text-[#1E2D2F]">
+              Create a task
+            </h3>
           </div>
           <button
             onClick={onClose}
-            className="rounded-full border border-[#E1D5CA] bg-white p-2 text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-lg border border-[#E1D5CA] bg-white p-1.5 text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={submit} className="mt-5 space-y-4">
-          <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <section className="rounded-xl border border-[#E1D5CA] bg-white p-4 shadow-sm">
             <label className="block">
               <span className="sr-only">Task parser</span>
               <textarea
                 autoFocus
                 ref={inputRef}
                 value={input}
-                onChange={event => {
+                onChange={(event) => {
                   setInput(event.target.value);
                   if (showBulkChoices) setShowBulkChoices(false);
                 }}
                 rows={1}
                 placeholder="Pay rent every month on the 1st at 9am p1 #bills"
-                className="min-h-[60px] w-full resize-none border-0 bg-transparent px-0 py-0 text-[18px] font-semibold text-[#1E2D2F] outline-none placeholder:text-[#9A9188]"
+                className="min-h-[44px] w-full resize-none border-0 bg-transparent px-0 py-0 text-base font-semibold text-[#1E2D2F] outline-none placeholder:text-[#9A9188]"
               />
             </label>
-            <p className="mt-1 text-sm text-[#8A8076]">Use plain language for dates, priorities, projects, reminders, and repeat rules. Example: `Pay rent every month on the 1st at 9am p1 #bills`.</p>
+            <p className="mt-1 text-xs text-[#8A8076]">
+              Use plain language for dates, priorities, projects, reminders, and
+              repeat rules. Example: `Pay rent every month on the 1st at 9am p1
+              #bills`.
+            </p>
 
-            <label className="mt-4 block">
+            <label className="mt-3 block">
               <span className="sr-only">Description</span>
               <textarea
                 value={description}
-                onChange={event => setDescription(event.target.value)}
+                onChange={(event) => setDescription(event.target.value)}
                 rows={2}
                 placeholder="Description"
-                className="w-full resize-none border-0 bg-transparent px-0 py-0 text-[15px] text-[#6D5C50] outline-none placeholder:text-[#9A9188]"
+                className="w-full resize-none border-0 bg-transparent px-0 py-0 text-sm text-[#6D5C50] outline-none placeholder:text-[#9A9188]"
               />
             </label>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -7304,7 +8694,7 @@ function QuickAddDialog({
                   setShowProjectMenu(false);
                   setShowSectionMenu(false);
                 }}
-                className="inline-flex items-center gap-2 rounded-[12px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
               >
                 <CalendarDays size={14} className="text-[#4E9A57]" />
                 <span>{dueSummaryLabel}</span>
@@ -7312,7 +8702,7 @@ function QuickAddDialog({
                   <span
                     role="button"
                     tabIndex={-1}
-                    onClick={event => {
+                    onClick={(event) => {
                       event.stopPropagation();
                       setDueOverrideAt(null);
                       setDueOverrideAllDay(false);
@@ -7328,44 +8718,52 @@ function QuickAddDialog({
                 <button
                   type="button"
                   onClick={() => {
-                    setShowPriorityMenu(current => !current);
+                    setShowPriorityMenu((current) => !current);
                     setShowProjectMenu(false);
                     setShowSectionMenu(false);
                   }}
-                  className="inline-flex items-center gap-2 rounded-[12px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
                 >
                   <Flag size={14} className="text-[#6D5C50]" />
                   <span>{prioritySummaryLabel}</span>
                   <ChevronDown size={14} className="text-[#8A8076]" />
                 </button>
                 {showPriorityMenu ? (
-                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-40 rounded-[18px] border border-[#E1D5CA] bg-white p-2 shadow-xl">
-                    {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
-                      <button
-                        key={priority}
-                        type="button"
-                        onClick={() => {
-                          setPriorityOverride(priority);
-                          setShowPriorityMenu(false);
-                        }}
-                        className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                          effectivePriority === priority ? 'bg-[#FFF1EB] text-[#B64B28]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                        }`}
-                      >
-                        <span>{priority}</span>
-                        {effectivePriority === priority ? <Check size={14} /> : null}
-                      </button>
-                    ))}
+                  <div className="absolute left-0 top-[calc(100%+8px)] z-20 w-36 rounded-xl border border-[#E1D5CA] bg-white p-1.5 shadow-xl">
+                    {(["P1", "P2", "P3", "P4"] as Priority[]).map(
+                      (priority) => (
+                        <button
+                          key={priority}
+                          type="button"
+                          onClick={() => {
+                            setPriorityOverride(priority);
+                            setShowPriorityMenu(false);
+                          }}
+                          className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition ${
+                            effectivePriority === priority
+                              ? "bg-[#FFF1EB] text-[#B64B28]"
+                              : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                          }`}
+                        >
+                          <span>{priority}</span>
+                          {effectivePriority === priority ? (
+                            <Check size={14} />
+                          ) : null}
+                        </button>
+                      ),
+                    )}
                     <button
                       type="button"
                       onClick={() => {
                         setPriorityOverride(undefined);
                         setShowPriorityMenu(false);
                       }}
-                      className="mt-1 flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                      className="mt-1 flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
                     >
                       <span>Use parser</span>
-                      {priorityOverride === undefined ? <Check size={14} /> : null}
+                      {priorityOverride === undefined ? (
+                        <Check size={14} />
+                      ) : null}
                     </button>
                   </div>
                 ) : null}
@@ -7373,32 +8771,46 @@ function QuickAddDialog({
 
               <button
                 type="button"
-                onClick={() => setShowReminderEditor(current => !current)}
-                className={`inline-flex items-center gap-2 rounded-[12px] border px-3 py-2 text-sm font-medium transition ${
+                onClick={() => setShowReminderEditor((current) => !current)}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                   showReminderEditor || effectiveDraft.reminders.length
-                    ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                    : 'border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                    ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
                 }`}
               >
-                <Bell size={14} className={showReminderEditor || effectiveDraft.reminders.length ? 'text-[#B64B28]' : 'text-[#6D5C50]'} />
+                <Bell
+                  size={14}
+                  className={
+                    showReminderEditor || effectiveDraft.reminders.length
+                      ? "text-[#B64B28]"
+                      : "text-[#6D5C50]"
+                  }
+                />
                 <span>{reminderSummaryLabel}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  setShowAdvancedFields(current => !current);
+                  setShowAdvancedFields((current) => !current);
                   setShowProjectMenu(false);
                   setShowPriorityMenu(false);
                   setShowSectionMenu(false);
                 }}
-                className={`inline-flex items-center gap-2 rounded-[12px] border px-3 py-2 text-sm font-medium transition ${
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                   showAdvancedFields || hasManualMetadataOverrides
-                    ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]'
-                    : 'border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                    ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                    : "border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
                 }`}
               >
-                <MoreHorizontal size={14} className={showAdvancedFields || hasManualMetadataOverrides ? 'text-[#B64B28]' : 'text-[#6D5C50]'} />
+                <MoreHorizontal
+                  size={14}
+                  className={
+                    showAdvancedFields || hasManualMetadataOverrides
+                      ? "text-[#B64B28]"
+                      : "text-[#6D5C50]"
+                  }
+                />
                 <span>More</span>
               </button>
             </div>
@@ -7407,8 +8819,12 @@ function QuickAddDialog({
               <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#1E2D2F]">Reminders</p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">Add fixed-time or relative reminders for this task.</p>
+                    <p className="text-sm font-semibold text-[#1E2D2F]">
+                      Reminders
+                    </p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">
+                      Add fixed-time or relative reminders for this task.
+                    </p>
                   </div>
                   {reminderEditorsOverride !== undefined ? (
                     <button
@@ -7423,9 +8839,19 @@ function QuickAddDialog({
                 <ReminderListEditor
                   reminders={effectiveReminderEditors}
                   dueAt={effectiveDraft.dueAt}
-                  onChange={nextEditors => setReminderEditorsOverride(nextEditors)}
-                  autoLabel={reminderEditorsOverride !== undefined ? renderReminderSourceLabel(previewDraft.reminders) : undefined}
-                  onReset={reminderEditorsOverride !== undefined ? () => setReminderEditorsOverride(undefined) : undefined}
+                  onChange={(nextEditors) =>
+                    setReminderEditorsOverride(nextEditors)
+                  }
+                  autoLabel={
+                    reminderEditorsOverride !== undefined
+                      ? renderReminderSourceLabel(previewDraft.reminders)
+                      : undefined
+                  }
+                  onReset={
+                    reminderEditorsOverride !== undefined
+                      ? () => setReminderEditorsOverride(undefined)
+                      : undefined
+                  }
                 />
               </section>
             ) : null}
@@ -7434,8 +8860,13 @@ function QuickAddDialog({
               <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-[#1E2D2F]">More options</p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">Use deadline, section, or repeat settings only when you need them.</p>
+                    <p className="text-sm font-semibold text-[#1E2D2F]">
+                      More options
+                    </p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">
+                      Use deadline, section, or repeat settings only when you
+                      need them.
+                    </p>
                   </div>
                   {hasManualMetadataOverrides ? (
                     <button
@@ -7463,8 +8894,12 @@ function QuickAddDialog({
                   <div className="rounded-[18px] border border-[#E1D5CA] bg-white p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-[#1E2D2F]">Deadline</p>
-                        <p className="mt-1 text-sm text-[#6D5C50]">Track a separate deadline for the task.</p>
+                        <p className="text-sm font-semibold text-[#1E2D2F]">
+                          Deadline
+                        </p>
+                        <p className="mt-1 text-sm text-[#6D5C50]">
+                          Track a separate deadline for the task.
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -7472,17 +8907,19 @@ function QuickAddDialog({
                           const nextEnabled = !effectiveDeadlineEnabled;
                           setDeadlineEnabledOverride(nextEnabled);
                           if (nextEnabled && !effectiveDeadlineInput) {
-                            setDeadlineInputOverride(toInputValue(todayStartMs, true));
+                            setDeadlineInputOverride(
+                              toInputValue(todayStartMs, true),
+                            );
                             setDeadlineAllDayOverride(true);
                           }
                         }}
                         className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                           effectiveDeadlineEnabled
-                            ? 'bg-[#EE6A3C] text-white hover:bg-[#d75e33]'
-                            : 'border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                            ? "bg-[#EE6A3C] text-white hover:bg-[#d75e33]"
+                            : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
                         }`}
                       >
-                        {effectiveDeadlineEnabled ? 'Enabled' : 'Add deadline'}
+                        {effectiveDeadlineEnabled ? "Enabled" : "Add deadline"}
                       </button>
                     </div>
                     {effectiveDeadlineEnabled ? (
@@ -7491,15 +8928,21 @@ function QuickAddDialog({
                           <input
                             type="checkbox"
                             checked={effectiveDeadlineAllDay}
-                            onChange={event => setDeadlineAllDayOverride(event.target.checked)}
+                            onChange={(event) =>
+                              setDeadlineAllDayOverride(event.target.checked)
+                            }
                             className="h-4 w-4 rounded border-[#D7C5B7] text-[#EE6A3C] focus:ring-[#EE6A3C]"
                           />
                           All day
                         </label>
                         <input
-                          type={effectiveDeadlineAllDay ? 'date' : 'datetime-local'}
+                          type={
+                            effectiveDeadlineAllDay ? "date" : "datetime-local"
+                          }
                           value={effectiveDeadlineInput}
-                          onChange={event => setDeadlineInputOverride(event.target.value)}
+                          onChange={(event) =>
+                            setDeadlineInputOverride(event.target.value)
+                          }
                           className="w-full rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                         />
                       </div>
@@ -7507,23 +8950,36 @@ function QuickAddDialog({
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div ref={sectionMenuRef} className="relative rounded-[18px] border border-[#E1D5CA] bg-white p-4">
-                      <p className="text-sm font-semibold text-[#1E2D2F]">Section</p>
-                      <p className="mt-1 text-sm text-[#6D5C50]">Place the task directly into a section.</p>
+                    <div
+                      ref={sectionMenuRef}
+                      className="relative rounded-[18px] border border-[#E1D5CA] bg-white p-4"
+                    >
+                      <p className="text-sm font-semibold text-[#1E2D2F]">
+                        Section
+                      </p>
+                      <p className="mt-1 text-sm text-[#6D5C50]">
+                        Place the task directly into a section.
+                      </p>
                       <button
                         type="button"
                         disabled={!effectiveProjectId}
                         onClick={() => {
-                          setShowSectionMenu(current => !current);
+                          setShowSectionMenu((current) => !current);
                           setShowProjectMenu(false);
                           setShowPriorityMenu(false);
                         }}
                         className="mt-3 inline-flex w-full items-center justify-between rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        <span>{describeQuickAddSection(payload, effectiveDraft)}</span>
+                        <span>
+                          {describeQuickAddSection(payload, effectiveDraft)}
+                        </span>
                         <ChevronDown size={14} className="text-[#8A8076]" />
                       </button>
-                      {!effectiveProjectId ? <p className="mt-2 text-xs text-[#8A8076]">Pick a project first.</p> : null}
+                      {!effectiveProjectId ? (
+                        <p className="mt-2 text-xs text-[#8A8076]">
+                          Pick a project first.
+                        </p>
+                      ) : null}
                       {showSectionMenu && effectiveProjectId ? (
                         <div className="absolute left-4 right-4 top-[calc(100%+8px)] z-20 rounded-[18px] border border-[#E1D5CA] bg-white p-2 shadow-xl">
                           <button
@@ -7533,13 +8989,17 @@ function QuickAddDialog({
                               setShowSectionMenu(false);
                             }}
                             className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                              effectiveSectionId === null ? 'bg-[#FFF1EB] text-[#B64B28]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                              effectiveSectionId === null
+                                ? "bg-[#FFF1EB] text-[#B64B28]"
+                                : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
                             }`}
                           >
                             <span>No section</span>
-                            {effectiveSectionId === null ? <Check size={14} /> : null}
+                            {effectiveSectionId === null ? (
+                              <Check size={14} />
+                            ) : null}
                           </button>
-                          {quickAddSectionOptions.map(section => (
+                          {quickAddSectionOptions.map((section) => (
                             <button
                               key={section.id}
                               type="button"
@@ -7548,11 +9008,15 @@ function QuickAddDialog({
                                 setShowSectionMenu(false);
                               }}
                               className={`mt-1 flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                                effectiveSectionId === section.id ? 'bg-[#FFF1EB] text-[#B64B28]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                                effectiveSectionId === section.id
+                                  ? "bg-[#FFF1EB] text-[#B64B28]"
+                                  : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
                               }`}
                             >
                               <span>{section.name}</span>
-                              {effectiveSectionId === section.id ? <Check size={14} /> : null}
+                              {effectiveSectionId === section.id ? (
+                                <Check size={14} />
+                              ) : null}
                             </button>
                           ))}
                         </div>
@@ -7562,8 +9026,13 @@ function QuickAddDialog({
                     <div className="rounded-[18px] border border-[#E1D5CA] bg-white p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-sm font-semibold text-[#1E2D2F]">Repeat schedule</p>
-                          <p className="mt-1 text-sm text-[#6D5C50]">Set a repeat rule without relying only on the parser.</p>
+                          <p className="text-sm font-semibold text-[#1E2D2F]">
+                            Repeat schedule
+                          </p>
+                          <p className="mt-1 text-sm text-[#6D5C50]">
+                            Set a repeat rule without relying only on the
+                            parser.
+                          </p>
                         </div>
                         {recurrenceOverride !== undefined ? (
                           <button
@@ -7577,42 +9046,74 @@ function QuickAddDialog({
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {[
-                          { label: 'No repeat', preset: 'NONE' as RecurrencePreset },
-                          { label: 'Daily', preset: 'DAILY' as RecurrencePreset },
-                          { label: 'Weekdays', preset: 'WEEKDAYS' as RecurrencePreset },
-                          { label: 'Weekly', preset: 'WEEKLY' as RecurrencePreset },
-                          { label: 'Monthly', preset: 'MONTHLY' as RecurrencePreset },
-                          { label: 'Yearly', preset: 'YEARLY' as RecurrencePreset },
-                          { label: 'Custom', preset: 'CUSTOM' as RecurrencePreset },
-                        ].map(option => (
+                          {
+                            label: "No repeat",
+                            preset: "NONE" as RecurrencePreset,
+                          },
+                          {
+                            label: "Daily",
+                            preset: "DAILY" as RecurrencePreset,
+                          },
+                          {
+                            label: "Weekdays",
+                            preset: "WEEKDAYS" as RecurrencePreset,
+                          },
+                          {
+                            label: "Weekly",
+                            preset: "WEEKLY" as RecurrencePreset,
+                          },
+                          {
+                            label: "Monthly",
+                            preset: "MONTHLY" as RecurrencePreset,
+                          },
+                          {
+                            label: "Yearly",
+                            preset: "YEARLY" as RecurrencePreset,
+                          },
+                          {
+                            label: "Custom",
+                            preset: "CUSTOM" as RecurrencePreset,
+                          },
+                        ].map((option) => (
                           <button
                             key={option.preset}
                             type="button"
                             onClick={() => {
-                              if (option.preset === 'NONE') {
+                              if (option.preset === "NONE") {
                                 setRecurrenceOverride(null);
                                 return;
                               }
-                              if (option.preset === 'CUSTOM') {
-                                setRecurrenceOverride(effectiveRecurrenceRule && recurrencePreset === 'CUSTOM' ? effectiveRecurrenceRule : 'FREQ=DAILY');
+                              if (option.preset === "CUSTOM") {
+                                setRecurrenceOverride(
+                                  effectiveRecurrenceRule &&
+                                    recurrencePreset === "CUSTOM"
+                                    ? effectiveRecurrenceRule
+                                    : "FREQ=DAILY",
+                                );
                                 return;
                               }
-                              setRecurrenceOverride(getRuleForRecurrencePreset(option.preset));
+                              setRecurrenceOverride(
+                                getRuleForRecurrencePreset(option.preset),
+                              );
                             }}
                             className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
                               recurrencePreset === option.preset
-                                ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]'
-                                : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                                ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]"
+                                : "border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
                             }`}
                           >
                             {option.label}
                           </button>
                         ))}
                       </div>
-                      {recurrencePreset === 'CUSTOM' ? (
+                      {recurrencePreset === "CUSTOM" ? (
                         <input
-                          value={effectiveRecurrenceRule ?? ''}
-                          onChange={event => setRecurrenceOverride(event.target.value.trim() || null)}
+                          value={effectiveRecurrenceRule ?? ""}
+                          onChange={(event) =>
+                            setRecurrenceOverride(
+                              event.target.value.trim() || null,
+                            )
+                          }
                           placeholder="FREQ=WEEKLY;INTERVAL=2"
                           className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                         />
@@ -7625,74 +9126,83 @@ function QuickAddDialog({
 
             {bulkLines.length > 1 ? (
               <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#1E2D2F]">
-                    {bulkLines.length > 1 ? `Bulk add preview · ${bulkLines.length} tasks` : 'Parsed metadata'}
-                  </p>
-                  <p className="mt-1 text-sm text-[#6D5C50]">
-                    {bulkLines.length > 1
-                      ? 'Each line will be parsed as its own task. You can also combine the pasted list into one task.'
-                      : 'Parser output stays visible here so you can trust what will be created.'}
-                  </p>
-                </div>
-                {context.defaultDueToday || context.defaultProjectId ? (
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#9F7B63]">
-                    {describeQuickAddContext(payload, context)}
-                  </span>
-                ) : null}
-              </div>
-
-              {bulkLines.length > 1 ? (
-                <div className="mt-4 rounded-[18px] border border-[#E7DDD4] bg-white px-4 py-3 text-sm text-[#6D5C50]">
-                  <p className="font-medium text-[#1E2D2F]">First task preview</p>
-                  <p className="mt-2">{bulkLines[0]}</p>
-                </div>
-              ) : (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {renderQuickAddMetadata(payload, effectiveDraft).map(item => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-[#E7DDD4] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
-                    >
-                      {item}
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1E2D2F]">
+                      {bulkLines.length > 1
+                        ? `Bulk add preview · ${bulkLines.length} tasks`
+                        : "Parsed metadata"}
+                    </p>
+                    <p className="mt-1 text-sm text-[#6D5C50]">
+                      {bulkLines.length > 1
+                        ? "Each line will be parsed as its own task. You can also combine the pasted list into one task."
+                        : "Parser output stays visible here so you can trust what will be created."}
+                    </p>
+                  </div>
+                  {context.defaultDueToday || context.defaultProjectId ? (
+                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#9F7B63]">
+                      {describeQuickAddContext(payload, context)}
                     </span>
-                  ))}
+                  ) : null}
                 </div>
-              )}
+
+                {bulkLines.length > 1 ? (
+                  <div className="mt-4 rounded-[18px] border border-[#E7DDD4] bg-white px-4 py-3 text-sm text-[#6D5C50]">
+                    <p className="font-medium text-[#1E2D2F]">
+                      First task preview
+                    </p>
+                    <p className="mt-2">{bulkLines[0]}</p>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {renderQuickAddMetadata(payload, effectiveDraft).map(
+                      (item) => (
+                        <span
+                          key={item}
+                          className="rounded-full border border-[#E7DDD4] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
+                        >
+                          {item}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                )}
               </section>
             ) : null}
           </section>
 
           {showBulkChoices ? (
             <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
-              <p className="text-sm font-semibold text-[#A24628]">Add {bulkLines.length} tasks?</p>
-              <p className="mt-1 text-sm text-[#8A5A44]">
-                Review the pasted list, then either combine it into one task or create one task per line.
+              <p className="text-sm font-semibold text-[#A24628]">
+                Add {bulkLines.length} tasks?
               </p>
-              <div className="mt-4 flex flex-wrap justify-end gap-3">
+              <p className="mt-1 text-sm text-[#8A5A44]">
+                Review the pasted list, then either combine it into one task or
+                create one task per line.
+              </p>
+              <div className="mt-3 flex flex-wrap justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowBulkChoices(false)}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   disabled={isSaving || bulkLines.length === 0}
-                  onClick={() => void createBulkTasks('single')}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                  onClick={() => void createBulkTasks("single")}
+                  className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSaving ? 'Adding...' : 'Combine into 1 task'}
+                  {isSaving ? "Adding..." : "Combine into 1 task"}
                 </button>
                 <button
                   type="button"
                   disabled={isSaving || bulkLines.length === 0}
-                  onClick={() => void createBulkTasks('many')}
-                  className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+                  onClick={() => void createBulkTasks("many")}
+                  className="rounded-lg bg-[#EE6A3C] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isSaving ? 'Adding...' : `Add all ${bulkLines.length}`}
+                  {isSaving ? "Adding..." : `Add all ${bulkLines.length}`}
                 </button>
               </div>
             </section>
@@ -7703,11 +9213,11 @@ function QuickAddDialog({
               <button
                 type="button"
                 onClick={() => {
-                  setShowProjectMenu(current => !current);
+                  setShowProjectMenu((current) => !current);
                   setShowPriorityMenu(false);
                   setShowSectionMenu(false);
                 }}
-                className="inline-flex items-center gap-2 rounded-[12px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
               >
                 <Folder size={14} className="text-[#6D5C50]" />
                 <span>{describeQuickAddProject(payload, effectiveDraft)}</span>
@@ -7718,7 +9228,7 @@ function QuickAddDialog({
                   <input
                     ref={projectQueryRef}
                     value={projectQuery}
-                    onChange={event => setProjectQuery(event.target.value)}
+                    onChange={(event) => setProjectQuery(event.target.value)}
                     placeholder="Type a project name"
                     className="w-full rounded-[14px] border border-[#D7C5B7] bg-white px-3 py-2 text-sm outline-none transition focus:border-[#EE6A3C]"
                   />
@@ -7731,16 +9241,20 @@ function QuickAddDialog({
                         setShowProjectMenu(false);
                       }}
                       className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                        effectiveProjectId === null ? 'bg-[#FBF7F3] text-[#1E2D2F]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                        effectiveProjectId === null
+                          ? "bg-[#FBF7F3] text-[#1E2D2F]"
+                          : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
                       }`}
                     >
                       <span>Inbox</span>
-                      {effectiveProjectId === null ? <Check size={14} className="text-[#EE6A3C]" /> : null}
+                      {effectiveProjectId === null ? (
+                        <Check size={14} className="text-[#EE6A3C]" />
+                      ) : null}
                     </button>
                     <div className="px-3 pb-1 pt-3 text-xs font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">
                       My Projects
                     </div>
-                    {filteredProjects.map(project => (
+                    {filteredProjects.map((project) => (
                       <button
                         key={project.id}
                         type="button"
@@ -7750,11 +9264,15 @@ function QuickAddDialog({
                           setShowProjectMenu(false);
                         }}
                         className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                          effectiveProjectId === project.id ? 'bg-[#FBF7F3] text-[#1E2D2F]' : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                          effectiveProjectId === project.id
+                            ? "bg-[#FBF7F3] text-[#1E2D2F]"
+                            : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
                         }`}
                       >
                         <span>{project.name}</span>
-                        {effectiveProjectId === project.id ? <Check size={14} className="text-[#EE6A3C]" /> : null}
+                        {effectiveProjectId === project.id ? (
+                          <Check size={14} className="text-[#EE6A3C]" />
+                        ) : null}
                       </button>
                     ))}
                     {!filteredProjects.length ? (
@@ -7767,28 +9285,32 @@ function QuickAddDialog({
               ) : null}
             </div>
 
-            <div className="flex flex-wrap justify-end gap-3">
+            <div className="flex flex-wrap justify-end gap-2.5">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSaving || !hasInput}
-                className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-lg bg-[#EE6A3C] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSaving ? 'Creating...' : bulkLines.length > 1 ? `Review ${bulkLines.length} tasks` : 'Create task'}
+                {isSaving
+                  ? "Creating..."
+                  : bulkLines.length > 1
+                    ? `Review ${bulkLines.length} tasks`
+                    : "Create task"}
               </button>
               <button
                 type="button"
                 disabled={isSaving || !hasInput || bulkLines.length > 1}
-                onClick={() => void submitDraft('continue')}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={() => void submitDraft("continue")}
+                className="rounded-lg border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
-                {isSaving ? 'Creating...' : 'Create & add another'}
+                {isSaving ? "Creating..." : "Create & add another"}
               </button>
             </div>
           </div>
@@ -7798,10 +9320,15 @@ function QuickAddDialog({
       {showDueDialog ? (
         <RescheduleDialog
           title="Reschedule task"
-          description={`Choose a new date for "${effectiveDraft.title || 'this task'}".`}
+          description={`Choose a new date for "${effectiveDraft.title || "this task"}".`}
           tasks={[quickAddPreviewTask]}
           onClose={() => setShowDueDialog(false)}
-          onRescheduleTasks={(_, dueAt) => applyQuickAddDueAt(dueAt, dueAt !== null ? startOfDay(dueAt).getTime() === dueAt : false)}
+          onRescheduleTasks={(_, dueAt) =>
+            applyQuickAddDueAt(
+              dueAt,
+              dueAt !== null ? startOfDay(dueAt).getTime() === dueAt : false,
+            )
+          }
           onPostponeTasks={() => applyQuickAddPostpone()}
         />
       ) : null}
@@ -7812,8 +9339,8 @@ function QuickAddDialog({
 function buildQuickAddPreviewTask(draft: TaskDraft): Task {
   const now = Date.now();
   return {
-    id: '__quick-add-preview__',
-    title: draft.title.trim() || 'Untitled task',
+    id: "__quick-add-preview__",
+    title: draft.title.trim() || "Untitled task",
     description: draft.description,
     projectId: draft.projectId,
     sectionId: draft.sectionId,
@@ -7824,7 +9351,7 @@ function buildQuickAddPreviewTask(draft: TaskDraft): Task {
     deadlineAllDay: draft.deadlineAllDay,
     recurringRule: draft.recurringRule,
     deadlineRecurringRule: draft.deadlineRecurringRule,
-    status: 'OPEN',
+    status: "OPEN",
     completedAt: null,
     parentTaskId: draft.parentTaskId,
     locationId: null,
@@ -7854,10 +9381,19 @@ function RescheduleDialog({
 }) {
   const todayStartMs = useTodayStartMs();
   const weekStartsOn = getGlobalWebDisplayPreferences().weekStartsOn;
-  const [visibleMonthStart, setVisibleMonthStart] = useState(() => startOfMonth(new Date(tasks[0]?.dueAt ?? todayStartMs)));
-  const taskIds = useMemo(() => tasks.map(task => task.id), [tasks]);
+  const [visibleMonthStart, setVisibleMonthStart] = useState(() =>
+    startOfMonth(new Date(tasks[0]?.dueAt ?? todayStartMs)),
+  );
+  const taskIds = useMemo(() => tasks.map((task) => task.id), [tasks]);
   const postponeTargets = useMemo(
-    () => Array.from(new Set(tasks.map(task => getPostponeDate(task, todayStartMs)).filter((value): value is number => value !== null))),
+    () =>
+      Array.from(
+        new Set(
+          tasks
+            .map((task) => getPostponeDate(task, todayStartMs))
+            .filter((value): value is number => value !== null),
+        ),
+      ),
     [tasks, todayStartMs],
   );
   const calendarDays = useMemo(() => {
@@ -7868,7 +9404,10 @@ function RescheduleDialog({
   }, [visibleMonthStart, weekStartsOn]);
   const weekdayLabels = useMemo(() => {
     const weekStart = startOfWeek(todayStartMs, { weekStartsOn });
-    return eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) }).map(day => format(day, 'EEEEE'));
+    return eachDayOfInterval({
+      start: weekStart,
+      end: addDays(weekStart, 6),
+    }).map((day) => format(day, "EEEEE"));
   }, [todayStartMs, weekStartsOn]);
 
   function applyDate(dueAt: number | null) {
@@ -7882,12 +9421,52 @@ function RescheduleDialog({
   }
 
   const shortcutItems = [
-    { key: 'today', label: 'Today', meta: format(todayStartMs, 'EEE'), icon: SunMedium, onSelect: () => applyDate(todayStartMs) },
-    { key: 'tomorrow', label: 'Tomorrow', meta: format(addDays(todayStartMs, 1), 'EEE'), icon: Sunrise, onSelect: () => applyDate(addDays(todayStartMs, 1).getTime()) },
-    { key: 'weekend', label: 'This weekend', meta: format(getWeekendDate(todayStartMs), 'EEE'), icon: CalendarDays, onSelect: () => applyDate(getWeekendDate(todayStartMs).getTime()) },
-    { key: 'next-week', label: 'Next week', meta: format(getNextWeekDate(todayStartMs, weekStartsOn), 'EEE MMM d'), icon: ChevronRight, onSelect: () => applyDate(getNextWeekDate(todayStartMs, weekStartsOn).getTime()) },
-    { key: 'postpone', label: 'Postpone', meta: postponeTargets.length === 1 ? format(postponeTargets[0], 'EEE MMM d') : 'Varies', icon: RefreshCw, onSelect: applyPostpone },
-    { key: 'no-date', label: 'No Date', meta: null, icon: CircleSlash, onSelect: () => applyDate(null) },
+    {
+      key: "today",
+      label: "Today",
+      meta: format(todayStartMs, "EEE"),
+      icon: SunMedium,
+      onSelect: () => applyDate(todayStartMs),
+    },
+    {
+      key: "tomorrow",
+      label: "Tomorrow",
+      meta: format(addDays(todayStartMs, 1), "EEE"),
+      icon: Sunrise,
+      onSelect: () => applyDate(addDays(todayStartMs, 1).getTime()),
+    },
+    {
+      key: "weekend",
+      label: "This weekend",
+      meta: format(getWeekendDate(todayStartMs), "EEE"),
+      icon: CalendarDays,
+      onSelect: () => applyDate(getWeekendDate(todayStartMs).getTime()),
+    },
+    {
+      key: "next-week",
+      label: "Next week",
+      meta: format(getNextWeekDate(todayStartMs, weekStartsOn), "EEE MMM d"),
+      icon: ChevronRight,
+      onSelect: () =>
+        applyDate(getNextWeekDate(todayStartMs, weekStartsOn).getTime()),
+    },
+    {
+      key: "postpone",
+      label: "Postpone",
+      meta:
+        postponeTargets.length === 1
+          ? format(postponeTargets[0], "EEE MMM d")
+          : "Varies",
+      icon: RefreshCw,
+      onSelect: applyPostpone,
+    },
+    {
+      key: "no-date",
+      label: "No Date",
+      meta: null,
+      icon: CircleSlash,
+      onSelect: () => applyDate(null),
+    },
   ] as const;
 
   return (
@@ -7906,7 +9485,7 @@ function RescheduleDialog({
             return (
               <button
                 key={item.key}
-                data-dialog-autofocus={index === 0 ? 'true' : undefined}
+                data-dialog-autofocus={index === 0 ? "true" : undefined}
                 type="button"
                 onClick={item.onSelect}
                 className="flex w-full items-center gap-3 rounded-[18px] px-3 py-2 text-left transition hover:bg-[#FBF7F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]"
@@ -7915,20 +9494,30 @@ function RescheduleDialog({
                   <Icon size={16} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-[#1E2D2F]">{item.label}</span>
+                  <span className="block truncate text-sm font-semibold text-[#1E2D2F]">
+                    {item.label}
+                  </span>
                 </span>
-                {item.meta ? <span className="shrink-0 whitespace-nowrap text-right text-sm text-[#6D5C50]">{item.meta}</span> : null}
+                {item.meta ? (
+                  <span className="shrink-0 whitespace-nowrap text-right text-sm text-[#6D5C50]">
+                    {item.meta}
+                  </span>
+                ) : null}
               </button>
             );
           })}
         </div>
         <div className="border-t border-[#EDE3DA] pt-4 md:min-w-[280px] md:border-l md:border-t-0 md:pl-6 md:pt-0">
           <div className="flex items-center justify-between">
-            <p className="text-base font-semibold text-[#1E2D2F]">{format(visibleMonthStart, 'MMM yyyy')}</p>
+            <p className="text-base font-semibold text-[#1E2D2F]">
+              {format(visibleMonthStart, "MMM yyyy")}
+            </p>
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setVisibleMonthStart(current => subMonths(current, 1))}
+                onClick={() =>
+                  setVisibleMonthStart((current) => subMonths(current, 1))
+                }
                 className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FBF7F3]"
                 aria-label="Previous month"
               >
@@ -7936,7 +9525,9 @@ function RescheduleDialog({
               </button>
               <button
                 type="button"
-                onClick={() => setVisibleMonthStart(current => addMonths(current, 1))}
+                onClick={() =>
+                  setVisibleMonthStart((current) => addMonths(current, 1))
+                }
                 className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FBF7F3]"
                 aria-label="Next month"
               >
@@ -7950,10 +9541,14 @@ function RescheduleDialog({
             ))}
           </div>
           <div className="mt-3 grid grid-cols-7 gap-1.5">
-            {calendarDays.map(day => {
+            {calendarDays.map((day) => {
               const dayStart = startOfDay(day).getTime();
-              const inCurrentMonth = day.getMonth() === visibleMonthStart.getMonth();
-              const isSelected = tasks.some(task => task.dueAt !== null && isSameDay(task.dueAt, dayStart));
+              const inCurrentMonth =
+                day.getMonth() === visibleMonthStart.getMonth();
+              const isSelected = tasks.some(
+                (task) =>
+                  task.dueAt !== null && isSameDay(task.dueAt, dayStart),
+              );
               return (
                 <button
                   key={day.toISOString()}
@@ -7961,13 +9556,13 @@ function RescheduleDialog({
                   onClick={() => applyDate(dayStart)}
                   className={`flex h-9 w-9 items-center justify-center justify-self-center rounded-full border text-sm transition ${
                     isSelected
-                      ? 'border-[#EE6A3C] bg-[#FFF1EB] font-semibold text-[#B64B28]'
+                      ? "border-[#EE6A3C] bg-[#FFF1EB] font-semibold text-[#B64B28]"
                       : inCurrentMonth
-                        ? 'border-[#E1D5CA] text-[#1E2D2F] hover:bg-[#FBF7F3]'
-                        : 'border-transparent text-[#C5B5A8] hover:bg-[#FBF7F3]'
-                  } ${isToday(dayStart) ? 'ring-2 ring-[#F4B79F] ring-offset-2 ring-offset-white' : ''}`}
+                        ? "border-[#E1D5CA] text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                        : "border-transparent text-[#C5B5A8] hover:bg-[#FBF7F3]"
+                  } ${isToday(dayStart) ? "ring-2 ring-[#F4B79F] ring-offset-2 ring-offset-white" : ""}`}
                 >
-                  {format(day, 'd')}
+                  {format(day, "d")}
                 </button>
               );
             })}
@@ -7984,7 +9579,7 @@ function ConfirmDialog({
   confirmLabel,
   onClose,
   onConfirm,
-  tone = 'primary',
+  tone = "primary",
   disabled = false,
 }: {
   title: string;
@@ -7992,7 +9587,7 @@ function ConfirmDialog({
   confirmLabel: string;
   onClose: () => void;
   onConfirm: () => void;
-  tone?: 'primary' | 'destructive';
+  tone?: "primary" | "destructive";
   disabled?: boolean;
 }) {
   return (
@@ -8000,7 +9595,7 @@ function ConfirmDialog({
       title={title}
       description={description}
       onClose={onClose}
-      footer={(
+      footer={
         <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
@@ -8014,13 +9609,15 @@ function ConfirmDialog({
             disabled={disabled}
             onClick={onConfirm}
             className={`rounded-full px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-70 ${
-              tone === 'destructive' ? 'bg-[#B64B28] hover:bg-[#9e4122]' : 'bg-[#EE6A3C] hover:bg-[#d75e33]'
+              tone === "destructive"
+                ? "bg-[#B64B28] hover:bg-[#9e4122]"
+                : "bg-[#EE6A3C] hover:bg-[#d75e33]"
             }`}
           >
             {confirmLabel}
           </button>
         </div>
-      )}
+      }
     />
   );
 }
@@ -8056,7 +9653,7 @@ function TextInputDialog({
       title={title}
       description={description}
       onClose={onClose}
-      footer={(
+      footer={
         <div className="flex flex-wrap justify-end gap-2">
           <button
             type="button"
@@ -8073,11 +9670,11 @@ function TextInputDialog({
             {submitLabel}
           </button>
         </div>
-      )}
+      }
     >
       <form
         id="text-input-dialog-form"
-        onSubmit={event => {
+        onSubmit={(event) => {
           event.preventDefault();
           onSubmit(value);
         }}
@@ -8086,7 +9683,7 @@ function TextInputDialog({
           <input
             ref={inputRef}
             value={value}
-            onChange={event => onChange(event.target.value)}
+            onChange={(event) => onChange(event.target.value)}
             className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
           />
         </Field>
@@ -8100,10 +9697,14 @@ function OverflowMenu({
   items,
 }: {
   label: string;
-  items: Array<{ label: string; onSelect: () => void; tone?: 'default' | 'destructive' }>;
+  items: Array<{
+    label: string;
+    onSelect: () => void;
+    tone?: "default" | "destructive";
+  }>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [openDirection, setOpenDirection] = useState<'down' | 'up'>('down');
+  const [openDirection, setOpenDirection] = useState<"down" | "up">("down");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -8121,7 +9722,11 @@ function OverflowMenu({
       const estimatedMenuHeight = items.length * 42 + 18;
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      setOpenDirection(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow ? 'up' : 'down');
+      setOpenDirection(
+        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow
+          ? "up"
+          : "down",
+      );
     }
 
     const handlePointerDown = (event: MouseEvent) => {
@@ -8130,16 +9735,16 @@ function OverflowMenu({
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== "Escape") return;
       event.preventDefault();
       setIsOpen(false);
     };
 
-    window.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isOpen, items.length]);
 
@@ -8151,32 +9756,34 @@ function OverflowMenu({
         aria-label={label}
         data-task-row-menu-trigger="true"
         onMouseDown={stopTriggerEvent}
-        onClick={event => {
+        onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setIsOpen(current => !current);
+          setIsOpen((current) => !current);
         }}
         className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
       >
         <MoreHorizontal size={16} />
       </button>
       {isOpen ? (
-        <div className={`absolute right-0 z-20 max-h-[min(320px,calc(100vh-32px))] min-w-[220px] overflow-y-auto rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl ${openDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
-          {items.map(item => (
+        <div
+          className={`absolute right-0 z-20 max-h-[min(320px,calc(100vh-32px))] min-w-[220px] overflow-y-auto rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl ${openDirection === "up" ? "bottom-full mb-2" : "top-full mt-2"}`}
+        >
+          {items.map((item) => (
             <button
               key={item.label}
               type="button"
               onMouseDown={stopTriggerEvent}
-              onClick={event => {
+              onClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
                 setIsOpen(false);
                 item.onSelect();
               }}
               className={`flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-sm font-medium transition ${
-                item.tone === 'destructive'
-                  ? 'text-[#B64B28] hover:bg-[#FFF1EB]'
-                  : 'text-[#1E2D2F] hover:bg-[#FBF7F3]'
+                item.tone === "destructive"
+                  ? "text-[#B64B28] hover:bg-[#FFF1EB]"
+                  : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
               }`}
             >
               {item.label}
@@ -8206,9 +9813,24 @@ function TaskRowActions({
 }: {
   payload: SyncPayload;
   task: Task;
-  actionState: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string; anchorRect?: DOMRect | null } | null;
-  onSetActionState: (state: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string; anchorRect?: DOMRect | null } | null) => void;
-  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  actionState: {
+    mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
+    taskId: string;
+    anchorRect?: DOMRect | null;
+  } | null;
+  onSetActionState: (
+    state: {
+      mode: "reschedule" | "priority" | "deadline" | "reminders" | "move";
+      taskId: string;
+      anchorRect?: DOMRect | null;
+    } | null,
+  ) => void;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onOpenTask: (taskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
@@ -8219,28 +9841,50 @@ function TaskRowActions({
   onDeleteTasks: (taskIds: string[]) => void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
-  const isRescheduleOpen = actionState?.mode === 'reschedule' && actionState.taskId === task.id;
-  const isPriorityOpen = actionState?.mode === 'priority' && actionState.taskId === task.id;
-  const isDeadlineOpen = actionState?.mode === 'deadline' && actionState.taskId === task.id;
-  const isRemindersOpen = actionState?.mode === 'reminders' && actionState.taskId === task.id;
-  const isMoveOpen = actionState?.mode === 'move' && actionState.taskId === task.id;
-  const taskReminderDrafts = useMemo(() => getTaskReminderDrafts(payload, task.id), [payload, task.id]);
+  const isRescheduleOpen =
+    actionState?.mode === "reschedule" && actionState.taskId === task.id;
+  const isPriorityOpen =
+    actionState?.mode === "priority" && actionState.taskId === task.id;
+  const isDeadlineOpen =
+    actionState?.mode === "deadline" && actionState.taskId === task.id;
+  const isRemindersOpen =
+    actionState?.mode === "reminders" && actionState.taskId === task.id;
+  const isMoveOpen =
+    actionState?.mode === "move" && actionState.taskId === task.id;
+  const taskReminderDrafts = useMemo(
+    () => getTaskReminderDrafts(payload, task.id),
+    [payload, task.id],
+  );
   const activeProjects = useMemo(() => getActiveProjects(payload), [payload]);
-  const taskProject = useMemo(() => (task.projectId ? getProjectById(payload, task.projectId) ?? null : null), [payload, task.projectId]);
+  const taskProject = useMemo(
+    () =>
+      task.projectId ? (getProjectById(payload, task.projectId) ?? null) : null,
+    [payload, task.projectId],
+  );
   const taskProjectSections = useMemo(
     () => (task.projectId ? getProjectSections(payload, task.projectId) : []),
-    [payload, task.projectId]
+    [payload, task.projectId],
   );
-  const [deadlineEnabled, setDeadlineEnabled] = useState(Boolean(task.deadlineAt));
-  const [deadlineAllDay, setDeadlineAllDay] = useState(task.deadlineAllDay ?? false);
-  const [deadlineInput, setDeadlineInput] = useState(toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false));
-  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(() => buildReminderEditors(taskReminderDrafts));
+  const [deadlineEnabled, setDeadlineEnabled] = useState(
+    Boolean(task.deadlineAt),
+  );
+  const [deadlineAllDay, setDeadlineAllDay] = useState(
+    task.deadlineAllDay ?? false,
+  );
+  const [deadlineInput, setDeadlineInput] = useState(
+    toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
+  );
+  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(
+    () => buildReminderEditors(taskReminderDrafts),
+  );
 
   useEffect(() => {
     if (!isDeadlineOpen) return;
     setDeadlineEnabled(Boolean(task.deadlineAt));
     setDeadlineAllDay(task.deadlineAllDay ?? false);
-    setDeadlineInput(toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false));
+    setDeadlineInput(
+      toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
+    );
   }, [isDeadlineOpen, task.deadlineAllDay, task.deadlineAt]);
 
   useEffect(() => {
@@ -8255,17 +9899,29 @@ function TaskRowActions({
 
   function openRescheduleDialog(event: ReactMouseEvent<HTMLButtonElement>) {
     stopRowActionEvent(event);
-    const row = event.currentTarget.closest<HTMLElement>('[data-task-row="true"]');
-    onSetActionState({ mode: 'reschedule', taskId: task.id, anchorRect: row?.getBoundingClientRect() ?? null });
+    const row = event.currentTarget.closest<HTMLElement>(
+      '[data-task-row="true"]',
+    );
+    onSetActionState({
+      mode: "reschedule",
+      taskId: task.id,
+      anchorRect: row?.getBoundingClientRect() ?? null,
+    });
   }
 
   function openPriorityDialog(event: ReactMouseEvent<HTMLButtonElement>) {
     stopRowActionEvent(event);
-    const row = event.currentTarget.closest<HTMLElement>('[data-task-row="true"]');
-    onSetActionState({ mode: 'priority', taskId: task.id, anchorRect: row?.getBoundingClientRect() ?? null });
+    const row = event.currentTarget.closest<HTMLElement>(
+      '[data-task-row="true"]',
+    );
+    onSetActionState({
+      mode: "priority",
+      taskId: task.id,
+      anchorRect: row?.getBoundingClientRect() ?? null,
+    });
   }
 
-  async function handleCreateRelative(position: 'before' | 'after') {
+  async function handleCreateRelative(position: "before" | "after") {
     const createdTaskId = await onCreateTaskRelative(
       task.id,
       position,
@@ -8284,7 +9940,9 @@ function TaskRowActions({
   }
 
   function submitDeadline() {
-    const nextDeadlineAt = deadlineEnabled ? parseInputValue(deadlineInput, deadlineAllDay) : null;
+    const nextDeadlineAt = deadlineEnabled
+      ? parseInputValue(deadlineInput, deadlineAllDay)
+      : null;
     if (deadlineEnabled && nextDeadlineAt === null) {
       return;
     }
@@ -8301,7 +9959,10 @@ function TaskRowActions({
     if (hasIncompleteReminderEditors(reminderEditors)) {
       return;
     }
-    if (task.dueAt === null && reminderEditors.some(reminder => reminder.mode === 'OFFSET')) {
+    if (
+      task.dueAt === null &&
+      reminderEditors.some((reminder) => reminder.mode === "OFFSET")
+    ) {
       return;
     }
     const draft = buildTaskDraftFromTask(payload, task);
@@ -8338,42 +9999,46 @@ function TaskRowActions({
         label={`More actions for ${task.title}`}
         items={[
           {
-            label: 'Add task above',
+            label: "Add task above",
             onSelect: () => {
-              void handleCreateRelative('before');
+              void handleCreateRelative("before");
             },
           },
           {
-            label: 'Add task below',
+            label: "Add task below",
             onSelect: () => {
-              void handleCreateRelative('after');
+              void handleCreateRelative("after");
             },
           },
           {
-            label: 'Edit task',
+            label: "Edit task",
             onSelect: () => onOpenTask(task.id),
           },
           {
-            label: task.deadlineAt ? 'Change deadline' : 'Add deadline',
-            onSelect: () => onSetActionState({ mode: 'deadline', taskId: task.id }),
+            label: task.deadlineAt ? "Change deadline" : "Add deadline",
+            onSelect: () =>
+              onSetActionState({ mode: "deadline", taskId: task.id }),
           },
           {
-            label: taskReminderDrafts.length ? 'Change reminders' : 'Add reminders',
-            onSelect: () => onSetActionState({ mode: 'reminders', taskId: task.id }),
+            label: taskReminderDrafts.length
+              ? "Change reminders"
+              : "Add reminders",
+            onSelect: () =>
+              onSetActionState({ mode: "reminders", taskId: task.id }),
           },
           {
-            label: 'Move task',
-            onSelect: () => onSetActionState({ mode: 'move', taskId: task.id }),
+            label: "Move task",
+            onSelect: () => onSetActionState({ mode: "move", taskId: task.id }),
           },
           {
-            label: 'Duplicate',
+            label: "Duplicate",
             onSelect: () => {
               void handleDuplicate();
             },
           },
           {
-            label: 'Delete',
-            tone: 'destructive',
+            label: "Delete",
+            tone: "destructive",
             onSelect: () => {
               onDeleteTasks([task.id]);
             },
@@ -8400,8 +10065,8 @@ function TaskRowActions({
           onClose={() => onSetActionState(null)}
           anchorRect={actionState?.anchorRect}
         >
-          <div className="flex flex-wrap gap-2">
-            {(['P1', 'P2', 'P3', 'P4'] as Priority[]).map(priority => (
+          <div className="flex flex-wrap gap-2 text-sm justify-center">
+            {(["P1", "P2", "P3", "P4"] as Priority[]).map((priority) => (
               <button
                 key={priority}
                 type="button"
@@ -8409,10 +10074,10 @@ function TaskRowActions({
                   onSetTasksPriority([task.id], priority);
                   onSetActionState(null);
                 }}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                className={`rounded-lg border px-3 py-1.5 font-semibold transition ${
                   task.priority === priority
-                    ? 'border-[#EE6A3C] bg-[#FFF1EB] text-[#B64B28]'
-                    : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                    ? "border-[#EE6A3C] bg-[#FFF1EB] text-[#B64B28]"
+                    : "border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
                 }`}
               >
                 {priority}
@@ -8424,10 +10089,10 @@ function TaskRowActions({
 
       {isDeadlineOpen ? (
         <ChoiceDialog
-          title={task.deadlineAt ? 'Change deadline' : 'Add deadline'}
+          title={task.deadlineAt ? "Change deadline" : "Add deadline"}
           description={`Update the deadline for "${task.title}".`}
           onClose={() => onSetActionState(null)}
-          footer={(
+          footer={
             <div className="flex justify-end gap-3">
               <button
                 type="button"
@@ -8439,40 +10104,49 @@ function TaskRowActions({
               <button
                 type="button"
                 onClick={submitDeadline}
-                disabled={deadlineEnabled && parseInputValue(deadlineInput, deadlineAllDay) === null}
+                disabled={
+                  deadlineEnabled &&
+                  parseInputValue(deadlineInput, deadlineAllDay) === null
+                }
                 className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Save deadline
               </button>
             </div>
-          )}
+          }
         >
           <div className="space-y-4">
             <label className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3">
-              <span className="text-sm font-semibold text-[#1E2D2F]">Track a separate deadline</span>
+              <span className="text-sm font-semibold text-[#1E2D2F]">
+                Track a separate deadline
+              </span>
               <input
                 data-dialog-autofocus="true"
                 type="checkbox"
                 checked={deadlineEnabled}
-                onChange={event => setDeadlineEnabled(event.target.checked)}
+                onChange={(event) => setDeadlineEnabled(event.target.checked)}
                 className="h-5 w-5 accent-[#EE6A3C]"
               />
             </label>
             {deadlineEnabled ? (
               <div className="space-y-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-4">
                 <label className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-semibold text-[#1E2D2F]">All day</span>
+                  <span className="text-sm font-semibold text-[#1E2D2F]">
+                    All day
+                  </span>
                   <input
                     type="checkbox"
                     checked={deadlineAllDay}
-                    onChange={event => setDeadlineAllDay(event.target.checked)}
+                    onChange={(event) =>
+                      setDeadlineAllDay(event.target.checked)
+                    }
                     className="h-5 w-5 accent-[#EE6A3C]"
                   />
                 </label>
                 <input
-                  type={deadlineAllDay ? 'date' : 'datetime-local'}
+                  type={deadlineAllDay ? "date" : "datetime-local"}
                   value={deadlineInput}
-                  onChange={event => setDeadlineInput(event.target.value)}
+                  onChange={(event) => setDeadlineInput(event.target.value)}
                   className="w-full rounded-[14px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm text-[#1E2D2F] outline-none focus:border-[#EE6A3C]"
                 />
               </div>
@@ -8483,10 +10157,12 @@ function TaskRowActions({
 
       {isRemindersOpen ? (
         <ChoiceDialog
-          title={taskReminderDrafts.length ? 'Change reminders' : 'Add reminders'}
+          title={
+            taskReminderDrafts.length ? "Change reminders" : "Add reminders"
+          }
           description={`Update reminders for "${task.title}".`}
           onClose={() => onSetActionState(null)}
-          footer={(
+          footer={
             <div className="flex justify-end gap-3">
               <button
                 type="button"
@@ -8498,13 +10174,19 @@ function TaskRowActions({
               <button
                 type="button"
                 onClick={submitReminders}
-                disabled={hasIncompleteReminderEditors(reminderEditors) || (task.dueAt === null && reminderEditors.some(reminder => reminder.mode === 'OFFSET'))}
+                disabled={
+                  hasIncompleteReminderEditors(reminderEditors) ||
+                  (task.dueAt === null &&
+                    reminderEditors.some(
+                      (reminder) => reminder.mode === "OFFSET",
+                    ))
+                }
                 className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Save reminders
               </button>
             </div>
-          )}
+          }
         >
           <ReminderListEditor
             reminders={reminderEditors}
@@ -8522,7 +10204,9 @@ function TaskRowActions({
         >
           <div className="space-y-4">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Quick destinations</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">
+                Quick destinations
+              </p>
               <div className="flex flex-wrap gap-2">
                 <button
                   data-dialog-autofocus="true"
@@ -8535,23 +10219,27 @@ function TaskRowActions({
                 >
                   Inbox
                 </button>
-                  <button
-                    type="button"
-                    onClick={() => {
+                <button
+                  type="button"
+                  onClick={() => {
                     onMoveTasksToSection?.([task.id], null);
                     onSetActionState(null);
                   }}
                   className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                 >
-                  {taskProject?.name ?? 'Project'} / Loose tasks
+                  {taskProject?.name ?? "Project"} / Loose tasks
                 </button>
               </div>
             </div>
-            {taskProject && taskProjectSections.length && onMoveTasksToSection ? (
+            {taskProject &&
+            taskProjectSections.length &&
+            onMoveTasksToSection ? (
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Sections in {taskProject.name}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">
+                  Sections in {taskProject.name}
+                </p>
                 <div className="flex flex-wrap gap-2">
-                  {taskProjectSections.map(section => (
+                  {taskProjectSections.map((section) => (
                     <button
                       key={section.id}
                       type="button"
@@ -8568,11 +10256,13 @@ function TaskRowActions({
               </div>
             ) : null}
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Projects</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">
+                Projects
+              </p>
               <div className="flex flex-wrap gap-2">
                 {activeProjects
-                  .filter(project => project.id !== task.projectId)
-                  .map(project => (
+                  .filter((project) => project.id !== task.projectId)
+                  .map((project) => (
                     <button
                       key={project.id}
                       type="button"
@@ -8602,14 +10292,23 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
       onClose={onClose}
     >
       <div className="space-y-5">
-        {shortcutSections.map(section => (
+        {shortcutSections.map((section) => (
           <section key={section.title}>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">{section.title}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
+              {section.title}
+            </p>
             <div className="mt-3 space-y-2">
-              {section.items.map(item => (
-                <div key={`${section.title}-${item.keys}`} className="flex items-start justify-between gap-4 rounded-[16px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3">
-                  <span className="text-sm font-semibold text-[#1E2D2F]">{item.keys}</span>
-                  <span className="text-sm text-right text-[#6D5C50]">{item.description}</span>
+              {section.items.map((item) => (
+                <div
+                  key={`${section.title}-${item.keys}`}
+                  className="flex items-start justify-between gap-4 rounded-[16px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3"
+                >
+                  <span className="text-sm font-semibold text-[#1E2D2F]">
+                    {item.keys}
+                  </span>
+                  <span className="text-sm text-right text-[#6D5C50]">
+                    {item.description}
+                  </span>
                 </div>
               ))}
             </div>
@@ -8640,7 +10339,9 @@ function WelcomeDialog({
     >
       <div className="space-y-4">
         <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
-          <p className="text-sm font-semibold text-[#1E2D2F]">What sync gives you</p>
+          <p className="text-sm font-semibold text-[#1E2D2F]">
+            What sync gives you
+          </p>
           <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
             <li>Keep the same tasks on every browser and device.</li>
             <li>Store sync data in your own Google Drive app data area.</li>
@@ -8655,7 +10356,9 @@ function WelcomeDialog({
             disabled={!cloudConfigured}
             className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {cloudConfigured ? 'Connect Google Drive' : 'Cloud sync unavailable'}
+            {cloudConfigured
+              ? "Connect Google Drive"
+              : "Cloud sync unavailable"}
           </button>
           <button
             type="button"
@@ -8679,7 +10382,9 @@ function CloudConnectDialog({
   onClose: () => void;
   onConnect: () => void;
 }) {
-  const needsDrivePermissionRetry = Boolean(lastSyncError?.includes('Drive access was not granted'));
+  const needsDrivePermissionRetry = Boolean(
+    lastSyncError?.includes("Drive access was not granted"),
+  );
 
   return (
     <ChoiceDialog
@@ -8691,15 +10396,23 @@ function CloudConnectDialog({
       <div className="space-y-4">
         {needsDrivePermissionRetry ? (
           <div className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-5 py-4 text-sm leading-6 text-[#A24628]">
-            The last attempt finished sign-in, but Google Drive access was not granted. On the final Google screen, check the box for Drive configuration data before continuing.
+            The last attempt finished sign-in, but Google Drive access was not
+            granted. On the final Google screen, check the box for Drive
+            configuration data before continuing.
           </div>
         ) : null}
         <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
           <p className="text-sm font-semibold text-[#1E2D2F]">What to expect</p>
           <ol className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
             <li>1. Google will ask you to pick an account.</li>
-            <li>2. Google will show a permissions review before returning you to Emberlist.</li>
-            <li>3. On the last Google screen, check the Drive permission box before you press Continue.</li>
+            <li>
+              2. Google will show a permissions review before returning you to
+              Emberlist.
+            </li>
+            <li>
+              3. On the last Google screen, check the Drive permission box
+              before you press Continue.
+            </li>
           </ol>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -8736,17 +10449,28 @@ function ProjectSwitcherDialog({
   onCreateProject: (name: string) => Promise<string | null>;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
   const filteredProjects = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) return projects;
-    return projects.filter(project => project.name.toLowerCase().includes(normalizedQuery));
+    return projects.filter((project) =>
+      project.name.toLowerCase().includes(normalizedQuery),
+    );
   }, [projects, query]);
-  const canCreate = query.trim().length > 0 && !projects.some(project => project.name.localeCompare(query.trim(), undefined, { sensitivity: 'base' }) === 0);
-  const boundedActiveIndex = filteredProjects.length ? Math.min(activeIndex, filteredProjects.length - 1) : 0;
+  const canCreate =
+    query.trim().length > 0 &&
+    !projects.some(
+      (project) =>
+        project.name.localeCompare(query.trim(), undefined, {
+          sensitivity: "base",
+        }) === 0,
+    );
+  const boundedActiveIndex = filteredProjects.length
+    ? Math.min(activeIndex, filteredProjects.length - 1)
+    : 0;
   const highlightedProject = filteredProjects[boundedActiveIndex] ?? null;
 
   useEffect(() => {
@@ -8756,26 +10480,37 @@ function ProjectSwitcherDialog({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const lowerKey = event.key.toLowerCase();
-      if ((event.metaKey || event.ctrlKey || event.altKey) && event.key !== 'Enter') return;
+      if (
+        (event.metaKey || event.ctrlKey || event.altKey) &&
+        event.key !== "Enter"
+      )
+        return;
 
-      if (event.key === 'ArrowDown' || lowerKey === 'j') {
+      if (event.key === "ArrowDown" || lowerKey === "j") {
         if (!filteredProjects.length) return;
         event.preventDefault();
-        setActiveIndex(current => Math.min(current + 1, filteredProjects.length - 1));
+        setActiveIndex((current) =>
+          Math.min(current + 1, filteredProjects.length - 1),
+        );
         return;
       }
 
-      if (event.key === 'ArrowUp' || lowerKey === 'k') {
+      if (event.key === "ArrowUp" || lowerKey === "k") {
         if (!filteredProjects.length) return;
         event.preventDefault();
-        setActiveIndex(current => Math.max(current - 1, 0));
+        setActiveIndex((current) => Math.max(current - 1, 0));
         return;
       }
 
-      if (event.key !== 'Enter' || isSubmitting) return;
+      if (event.key !== "Enter" || isSubmitting) return;
       event.preventDefault();
 
-      const exactMatch = projects.find(project => project.name.localeCompare(query.trim(), undefined, { sensitivity: 'base' }) === 0);
+      const exactMatch = projects.find(
+        (project) =>
+          project.name.localeCompare(query.trim(), undefined, {
+            sensitivity: "base",
+          }) === 0,
+      );
       if (exactMatch) {
         onOpenProject(exactMatch.id);
         onClose();
@@ -8791,7 +10526,7 @@ function ProjectSwitcherDialog({
       if (!canCreate) return;
       setIsSubmitting(true);
       void onCreateProject(query.trim())
-        .then(projectId => {
+        .then((projectId) => {
           if (projectId) {
             onOpenProject(projectId);
           }
@@ -8800,9 +10535,19 @@ function ProjectSwitcherDialog({
         .finally(() => setIsSubmitting(false));
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [canCreate, filteredProjects, highlightedProject, isSubmitting, onClose, onCreateProject, onOpenProject, projects, query]);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    canCreate,
+    filteredProjects,
+    highlightedProject,
+    isSubmitting,
+    onClose,
+    onCreateProject,
+    onOpenProject,
+    projects,
+    query,
+  ]);
 
   return (
     <ChoiceDialog
@@ -8815,7 +10560,7 @@ function ProjectSwitcherDialog({
           <input
             ref={inputRef}
             value={query}
-            onChange={event => {
+            onChange={(event) => {
               setQuery(event.target.value);
               setActiveIndex(0);
             }}
@@ -8832,18 +10577,23 @@ function ProjectSwitcherDialog({
                 onOpenProject(project.id);
                 onClose();
               }}
-              className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition ${index === boundedActiveIndex
-                ? 'border-[#EE6A3C] bg-[#FFF3EE] text-[#1E2D2F]'
-                : 'border-[#E7DDD4] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
-                }`}
+              className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition ${
+                index === boundedActiveIndex
+                  ? "border-[#EE6A3C] bg-[#FFF3EE] text-[#1E2D2F]"
+                  : "border-[#E7DDD4] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
+              }`}
             >
               <span className="font-semibold">{project.name}</span>
-              <span className="text-xs text-[#6D5C50]">{getProjectTasks(payload, project.id).length} active</span>
+              <span className="text-xs text-[#6D5C50]">
+                {getProjectTasks(payload, project.id).length} active
+              </span>
             </button>
           ))}
           {!filteredProjects.length ? (
             <div className="rounded-[18px] border border-dashed border-[#E1D5CA] bg-[#FBF7F3] px-4 py-5 text-sm text-[#6D5C50]">
-              {canCreate ? `Press Enter to create "${query.trim()}".` : 'No matching projects.'}
+              {canCreate
+                ? `Press Enter to create "${query.trim()}".`
+                : "No matching projects."}
             </div>
           ) : null}
         </div>
@@ -8867,9 +10617,17 @@ function HeroCard({
     <section className="px-1 pb-2 pt-1">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">{eyebrow}</p>
-          {title ? <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">{title}</h2> : null}
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">{description}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">
+            {eyebrow}
+          </p>
+          {title ? (
+            <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">
+              {title}
+            </h2>
+          ) : null}
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">
+            {description}
+          </p>
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
       </div>
@@ -8920,14 +10678,14 @@ function RecurrenceField({
       {autoLabel ? <p className="text-xs text-[#8A8076]">{autoLabel}</p> : null}
       <select
         value={preset}
-        onChange={event => {
+        onChange={(event) => {
           const nextPreset = event.target.value as RecurrencePreset;
-          if (nextPreset === 'NONE') {
+          if (nextPreset === "NONE") {
             onChange(null);
             return;
           }
-          if (nextPreset === 'CUSTOM') {
-            onChange(preset === 'CUSTOM' && value ? value : 'FREQ=DAILY');
+          if (nextPreset === "CUSTOM") {
+            onChange(preset === "CUSTOM" && value ? value : "FREQ=DAILY");
             return;
           }
           onChange(getRuleForRecurrencePreset(nextPreset));
@@ -8942,15 +10700,17 @@ function RecurrenceField({
         <option value="YEARLY">Every year</option>
         <option value="CUSTOM">Custom rule</option>
       </select>
-      {preset === 'CUSTOM' ? (
+      {preset === "CUSTOM" ? (
         <input
-          value={value ?? ''}
-          onChange={event => onChange(event.target.value.trim() || null)}
+          value={value ?? ""}
+          onChange={(event) => onChange(event.target.value.trim() || null)}
           placeholder="FREQ=WEEKLY;INTERVAL=2"
           className="w-full rounded-[18px] border border-[#E1D5CA] bg-white px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
         />
       ) : null}
-      {description ? <p className="text-xs text-[#8A8076]">{description}</p> : null}
+      {description ? (
+        <p className="text-xs text-[#8A8076]">{description}</p>
+      ) : null}
     </div>
   );
 }
@@ -8968,13 +10728,16 @@ function ReminderListEditor({
   autoLabel?: string;
   onReset?: () => void;
 }) {
-  const hasOffsetWithoutDue = dueAt === null && reminders.some(reminder => reminder.mode === 'OFFSET');
+  const hasOffsetWithoutDue =
+    dueAt === null && reminders.some((reminder) => reminder.mode === "OFFSET");
 
   return (
     <div className="space-y-3">
       {autoLabel || onReset ? (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-[#8A8076]">{autoLabel ?? 'Using parser reminders.'}</p>
+          <p className="text-xs text-[#8A8076]">
+            {autoLabel ?? "Using parser reminders."}
+          </p>
           {onReset ? (
             <button
               type="button"
@@ -8989,7 +10752,7 @@ function ReminderListEditor({
 
       {reminders.length ? (
         <div className="space-y-3">
-          {reminders.map(reminder => (
+          {reminders.map((reminder) => (
             <div
               key={reminder.id}
               className="rounded-[20px] border border-[#E1D5CA] bg-white px-4 py-4"
@@ -8998,30 +10761,42 @@ function ReminderListEditor({
                 <Field label="Reminder type">
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { mode: 'ABSOLUTE' as const, label: 'At a specific time' },
-                      { mode: 'OFFSET' as const, label: 'Before the due date' },
-                    ].map(option => (
+                      {
+                        mode: "ABSOLUTE" as const,
+                        label: "At a specific time",
+                      },
+                      { mode: "OFFSET" as const, label: "Before the due date" },
+                    ].map((option) => (
                       <button
                         key={option.mode}
                         type="button"
                         onClick={() => {
                           const nextMode = option.mode;
-                          onChange(reminders.map(item => item.id === reminder.id
-                            ? {
-                              ...item,
-                              mode: nextMode,
-                              absoluteValue: nextMode === 'ABSOLUTE' && !item.absoluteValue
-                                ? createReminderEditor(null).absoluteValue
-                                : item.absoluteValue,
-                              offsetMinutes: nextMode === 'OFFSET' ? item.offsetMinutes || 30 : item.offsetMinutes,
-                            }
-                            : item
-                          ));
+                          onChange(
+                            reminders.map((item) =>
+                              item.id === reminder.id
+                                ? {
+                                    ...item,
+                                    mode: nextMode,
+                                    absoluteValue:
+                                      nextMode === "ABSOLUTE" &&
+                                      !item.absoluteValue
+                                        ? createReminderEditor(null)
+                                            .absoluteValue
+                                        : item.absoluteValue,
+                                    offsetMinutes:
+                                      nextMode === "OFFSET"
+                                        ? item.offsetMinutes || 30
+                                        : item.offsetMinutes,
+                                  }
+                                : item,
+                            ),
+                          );
                         }}
                         className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
                           reminder.mode === option.mode
-                            ? 'border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]'
-                            : 'border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white'
+                            ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]"
+                            : "border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
                         }`}
                       >
                         {option.label}
@@ -9030,16 +10805,19 @@ function ReminderListEditor({
                   </div>
                 </Field>
 
-                {reminder.mode === 'ABSOLUTE' ? (
+                {reminder.mode === "ABSOLUTE" ? (
                   <Field label="When">
                     <input
                       type="datetime-local"
                       value={reminder.absoluteValue}
-                      onChange={event => {
-                        onChange(reminders.map(item => item.id === reminder.id
-                          ? { ...item, absoluteValue: event.target.value }
-                          : item
-                        ));
+                      onChange={(event) => {
+                        onChange(
+                          reminders.map((item) =>
+                            item.id === reminder.id
+                              ? { ...item, absoluteValue: event.target.value }
+                              : item,
+                          ),
+                        );
                       }}
                       className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                     />
@@ -9051,11 +10829,21 @@ function ReminderListEditor({
                       min={1}
                       step={5}
                       value={reminder.offsetMinutes}
-                      onChange={event => {
-                        onChange(reminders.map(item => item.id === reminder.id
-                          ? { ...item, offsetMinutes: Number.parseInt(event.target.value || '0', 10) || 0 }
-                          : item
-                        ));
+                      onChange={(event) => {
+                        onChange(
+                          reminders.map((item) =>
+                            item.id === reminder.id
+                              ? {
+                                  ...item,
+                                  offsetMinutes:
+                                    Number.parseInt(
+                                      event.target.value || "0",
+                                      10,
+                                    ) || 0,
+                                }
+                              : item,
+                          ),
+                        );
                       }}
                       className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                     />
@@ -9064,7 +10852,11 @@ function ReminderListEditor({
 
                 <button
                   type="button"
-                  onClick={() => onChange(reminders.filter(item => item.id !== reminder.id))}
+                  onClick={() =>
+                    onChange(
+                      reminders.filter((item) => item.id !== reminder.id),
+                    )
+                  }
                   className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-3 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
                 >
                   Remove
@@ -9096,7 +10888,13 @@ function ReminderListEditor({
   );
 }
 
-function EmptyState({ title, description }: { title: string; description: string }) {
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
     <div className="rounded-[28px] border border-dashed border-[#D9CABC] bg-white px-6 py-10 text-center shadow-sm">
       <p className="text-lg font-semibold text-[#1E2D2F]">{title}</p>
@@ -9125,7 +10923,11 @@ function RailLink({
   collapsed = false,
 }: {
   to: string;
-  icon: ComponentType<{ size?: number; className?: string; style?: CSSProperties }>;
+  icon: ComponentType<{
+    size?: number;
+    className?: string;
+    style?: CSSProperties;
+  }>;
   label: string;
   compact?: boolean;
   count?: number;
@@ -9136,16 +10938,23 @@ function RailLink({
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center rounded-[10px] px-3 py-2 text-sm transition ${isActive
-          ? 'bg-[#fff1ed] text-[#dc4c3e]'
-          : 'text-[#4f4a45] hover:bg-[#f7f3ef]'
-        } ${compact ? 'py-1.5' : ''} ${collapsed ? 'justify-center' : 'gap-3'}`
+        `flex items-center rounded-[10px] px-3 py-2 text-sm transition ${
+          isActive
+            ? "bg-[#fff1ed] text-[#dc4c3e]"
+            : "text-[#4f4a45] hover:bg-[#f7f3ef]"
+        } ${compact ? "py-1.5" : ""} ${collapsed ? "justify-center" : "gap-3"}`
       }
       title={collapsed ? label : undefined}
     >
-      <Icon size={16} className={tint ? '' : undefined} style={tint ? { color: tint } : undefined} />
-      <span className={`truncate ${collapsed ? 'hidden' : ''}`}>{label}</span>
-      {typeof count === 'number' && !collapsed ? <span className="ml-auto text-xs text-[#9a928a]">{count}</span> : null}
+      <Icon
+        size={16}
+        className={tint ? "" : undefined}
+        style={tint ? { color: tint } : undefined}
+      />
+      <span className={`truncate ${collapsed ? "hidden" : ""}`}>{label}</span>
+      {typeof count === "number" && !collapsed ? (
+        <span className="ml-auto text-xs text-[#9a928a]">{count}</span>
+      ) : null}
     </NavLink>
   );
 }
@@ -9163,9 +10972,8 @@ function BottomLink({
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[11px] font-semibold transition ${isActive
-          ? 'bg-white text-[#EE6A3C]'
-          : 'text-[#7A675A]'
+        `flex flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[11px] font-semibold transition ${
+          isActive ? "bg-white text-[#EE6A3C]" : "text-[#7A675A]"
         }`
       }
     >
@@ -9186,49 +10994,51 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function StatusPill({ label, tone }: { label: string; tone: CloudStatusTone }) {
   return (
-    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusPillClasses(tone)}`}>
+    <span
+      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusPillClasses(tone)}`}
+    >
       {label}
     </span>
   );
 }
 
-function bannerClasses(tone: Banner['tone']): string {
+function bannerClasses(tone: Banner["tone"]): string {
   switch (tone) {
-    case 'success':
-      return 'border border-[#CDE3D4] bg-[#F1F8F3] text-[#24553A]';
-    case 'error':
-      return 'border border-[#F1C7B5] bg-[#FFF1EB] text-[#A24628]';
-    case 'info':
+    case "success":
+      return "border border-[#CDE3D4] bg-[#F1F8F3] text-[#24553A]";
+    case "error":
+      return "border border-[#F1C7B5] bg-[#FFF1EB] text-[#A24628]";
+    case "info":
     default:
-      return 'border border-[#D6E4EA] bg-[#F1F7F9] text-[#315566]';
+      return "border border-[#D6E4EA] bg-[#F1F7F9] text-[#315566]";
   }
 }
 
 function priorityCircleClasses(priority: Priority): string {
   switch (priority) {
-    case 'P1':
-      return 'border-[#d1453b] text-[#d1453b] hover:border-[#d1453b]';
-    case 'P2':
-      return 'border-[#d97706] text-[#d97706] hover:border-[#d97706]';
-    case 'P3':
-      return 'border-[#2563eb] text-[#2563eb] hover:border-[#2563eb]';
-    case 'P4':
+    case "P1":
+      return "border-[#d1453b] text-[#d1453b] hover:border-[#d1453b]";
+    case "P2":
+      return "border-[#d97706] text-[#d97706] hover:border-[#d97706]";
+    case "P3":
+      return "border-[#2563eb] text-[#2563eb] hover:border-[#2563eb]";
+    case "P4":
     default:
-      return 'border-[#c9c3bd] text-[#c9c3bd] hover:border-[#a79f97]';
+      return "border-[#c9c3bd] text-[#c9c3bd] hover:border-[#a79f97]";
   }
 }
 
 function statusPillClasses(tone: CloudStatusTone): string {
   switch (tone) {
-    case 'ready':
-      return 'bg-[#F1F8F3] text-[#24553A]';
-    case 'warning':
-      return 'bg-[#FFF1EB] text-[#A24628]';
-    case 'idle':
-      return 'bg-[#F1F7F9] text-[#315566]';
-    case 'muted':
+    case "ready":
+      return "bg-[#F1F8F3] text-[#24553A]";
+    case "warning":
+      return "bg-[#FFF1EB] text-[#A24628]";
+    case "idle":
+      return "bg-[#F1F7F9] text-[#315566]";
+    case "muted":
     default:
-      return 'bg-[#EFE6DD] text-[#6D5C50]';
+      return "bg-[#EFE6DD] text-[#6D5C50]";
   }
 }
 
@@ -9251,86 +11061,98 @@ function getCloudStatus({
 }): { label: string; detail: string; tone: CloudStatusTone } {
   if (!cloudConfigured) {
     return {
-      label: 'Unavailable',
-      detail: 'This deployment is missing its Google client ID, so cloud sync is disabled until the site is redeployed with VITE_GOOGLE_CLIENT_ID.',
-      tone: 'warning',
+      label: "Unavailable",
+      detail:
+        "This deployment is missing its Google client ID, so cloud sync is disabled until the site is redeployed with VITE_GOOGLE_CLIENT_ID.",
+      tone: "warning",
     };
   }
 
   if (isSyncing) {
     return {
-      label: 'Syncing',
-      detail: 'Emberlist is merging your local workspace with the latest Google Drive appData snapshot right now.',
-      tone: 'idle',
+      label: "Syncing",
+      detail:
+        "Emberlist is merging your local workspace with the latest Google Drive appData snapshot right now.",
+      tone: "idle",
     };
   }
 
   if (lastSyncError && hasPendingLocalChanges) {
     return {
-      label: 'Attention',
-      detail: 'The last cloud sync attempt failed and this browser still has local changes waiting to upload.',
-      tone: 'warning',
+      label: "Attention",
+      detail:
+        "The last cloud sync attempt failed and this browser still has local changes waiting to upload.",
+      tone: "warning",
     };
   }
 
   if (!isOnline && hasPendingLocalChanges) {
     return {
-      label: 'Offline',
-      detail: 'This browser has local changes waiting to sync. Emberlist will retry when the connection comes back.',
-      tone: 'warning',
+      label: "Offline",
+      detail:
+        "This browser has local changes waiting to sync. Emberlist will retry when the connection comes back.",
+      tone: "warning",
     };
   }
 
   if (hasPendingLocalChanges) {
     return {
-      label: 'Pending',
-      detail: 'Local changes are saved in this browser and queued for upload to Google Drive.',
-      tone: 'idle',
+      label: "Pending",
+      detail:
+        "Local changes are saved in this browser and queued for upload to Google Drive.",
+      tone: "idle",
     };
   }
 
   if (lastSyncError) {
     return {
-      label: 'Attention',
-      detail: 'The last cloud sync attempt failed. Review the last error below and retry after fixing the issue.',
-      tone: 'warning',
+      label: "Attention",
+      detail:
+        "The last cloud sync attempt failed. Review the last error below and retry after fixing the issue.",
+      tone: "warning",
     };
   }
 
   if (cloudSession?.email) {
     return {
-      label: 'Connected',
+      label: "Connected",
       detail: lastCloudSyncAt
         ? `Signed in as ${cloudSession.email}. Last successful sync was ${formatDateTime(lastCloudSyncAt)}.`
         : `Signed in as ${cloudSession.email}. Run Sync now whenever you want to push or pull changes.`,
-      tone: 'ready',
+      tone: "ready",
     };
   }
 
   if (lastCloudSyncAt) {
     return {
-      label: 'Ready',
+      label: "Ready",
       detail: `Cloud sync is configured. The last successful sync was ${formatDateTime(lastCloudSyncAt)}. Google may ask you to sign in again in this browser.`,
-      tone: 'idle',
+      tone: "idle",
     };
   }
 
   return {
-    label: 'Ready',
-    detail: 'Cloud sync is configured. The first sync in this browser session will prompt for Google sign-in if needed.',
-    tone: 'muted',
+    label: "Ready",
+    detail:
+      "Cloud sync is configured. The first sync in this browser session will prompt for Google sign-in if needed.",
+    tone: "muted",
   };
 }
 
 function useTodayStartMs(): number {
-  const [todayStartMs, setTodayStartMs] = useState(() => startOfDay(Date.now()).getTime());
+  const [todayStartMs, setTodayStartMs] = useState(() =>
+    startOfDay(Date.now()).getTime(),
+  );
 
   useEffect(() => {
     const now = Date.now();
     const nextMidnightMs = startOfDay(addDays(now, 1)).getTime();
-    const timer = window.setTimeout(() => {
-      setTodayStartMs(startOfDay(Date.now()).getTime());
-    }, Math.max(nextMidnightMs - now + 1000, 1000));
+    const timer = window.setTimeout(
+      () => {
+        setTodayStartMs(startOfDay(Date.now()).getTime());
+      },
+      Math.max(nextMidnightMs - now + 1000, 1000),
+    );
     return () => window.clearTimeout(timer);
   }, [todayStartMs]);
 
@@ -9338,41 +11160,71 @@ function useTodayStartMs(): number {
 }
 
 function getTaskLocationLabel(payload: SyncPayload, task: Task): string {
-  if (!task.projectId) return 'Inbox';
-  const project = payload.projects.find(projectItem => projectItem.id === task.projectId && !projectItem.deletedAt);
+  if (!task.projectId) return "Inbox";
+  const project = payload.projects.find(
+    (projectItem) =>
+      projectItem.id === task.projectId && !projectItem.deletedAt,
+  );
   const section = task.sectionId
-    ? payload.sections.find(sectionItem => sectionItem.id === task.sectionId && !sectionItem.deletedAt)
+    ? payload.sections.find(
+        (sectionItem) =>
+          sectionItem.id === task.sectionId && !sectionItem.deletedAt,
+      )
     : null;
-  if (!project) return 'Inbox';
+  if (!project) return "Inbox";
   return section ? `${project.name} / ${section.name}` : project.name;
 }
 
-function getQuickAddContext(pathname: string, payload: SyncPayload): QuickAddContext {
-  if (pathname.startsWith('/today')) {
-    return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: true };
+function getQuickAddContext(
+  pathname: string,
+  payload: SyncPayload,
+): QuickAddContext {
+  if (pathname.startsWith("/today")) {
+    return {
+      defaultProjectId: null,
+      defaultSectionId: null,
+      defaultDueToday: true,
+    };
   }
 
-  if (pathname.startsWith('/project/')) {
-    const projectId = pathname.split('/')[2];
+  if (pathname.startsWith("/project/")) {
+    const projectId = pathname.split("/")[2];
     const project = getProjectById(payload, projectId);
-    return { defaultProjectId: project?.id ?? null, defaultSectionId: null, defaultDueToday: false };
+    return {
+      defaultProjectId: project?.id ?? null,
+      defaultSectionId: null,
+      defaultDueToday: false,
+    };
   }
 
-  if (pathname.startsWith('/inbox')) {
-    return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: false };
+  if (pathname.startsWith("/inbox")) {
+    return {
+      defaultProjectId: null,
+      defaultSectionId: null,
+      defaultDueToday: false,
+    };
   }
 
-  return { defaultProjectId: null, defaultSectionId: null, defaultDueToday: false };
+  return {
+    defaultProjectId: null,
+    defaultSectionId: null,
+    defaultDueToday: false,
+  };
 }
 
-function renderQuickAddMetadata(payload: SyncPayload, draft: TaskDraft): string[] {
+function renderQuickAddMetadata(
+  payload: SyncPayload,
+  draft: TaskDraft,
+): string[] {
   const items: string[] = [];
   const projectLabel = draft.projectId
-    ? getProjectById(payload, draft.projectId)?.name ?? 'Inbox'
-    : draft.projectName ?? 'Inbox';
+    ? (getProjectById(payload, draft.projectId)?.name ?? "Inbox")
+    : (draft.projectName ?? "Inbox");
   if (draft.sectionId) {
-    const section = payload.sections.find(item => item.id === draft.sectionId && !item.deletedAt);
-    items.push(`#${projectLabel}/${section?.name ?? 'Section'}`);
+    const section = payload.sections.find(
+      (item) => item.id === draft.sectionId && !item.deletedAt,
+    );
+    items.push(`#${projectLabel}/${section?.name ?? "Section"}`);
   } else if (draft.sectionName) {
     items.push(`#${projectLabel}/${draft.sectionName}`);
   } else {
@@ -9382,10 +11234,12 @@ function renderQuickAddMetadata(payload: SyncPayload, draft: TaskDraft): string[
   if (draft.dueAt !== null) {
     items.push(formatTaskDate(draft.dueAt, draft.allDay));
   } else {
-    items.push('No due date');
+    items.push("No due date");
   }
   if (draft.deadlineAt !== null) {
-    items.push(`Deadline ${formatTaskDate(draft.deadlineAt, draft.deadlineAllDay)}`);
+    items.push(
+      `Deadline ${formatTaskDate(draft.deadlineAt, draft.deadlineAllDay)}`,
+    );
   }
   if (draft.recurringRule) {
     items.push(renderRecurrenceLabel(draft.recurringRule));
@@ -9396,45 +11250,66 @@ function renderQuickAddMetadata(payload: SyncPayload, draft: TaskDraft): string[
   return items;
 }
 
-function describeQuickAddProject(payload: SyncPayload, draft: TaskDraft): string {
+function describeQuickAddProject(
+  payload: SyncPayload,
+  draft: TaskDraft,
+): string {
   if (draft.projectId) {
-    return getProjectById(payload, draft.projectId)?.name ?? 'Current project';
+    return getProjectById(payload, draft.projectId)?.name ?? "Current project";
   }
   if (draft.projectName) {
     return `Create "${draft.projectName}"`;
   }
-  return 'Inbox';
+  return "Inbox";
 }
 
-function describeQuickAddSection(payload: SyncPayload, draft: TaskDraft): string {
+function describeQuickAddSection(
+  payload: SyncPayload,
+  draft: TaskDraft,
+): string {
   if (draft.sectionId) {
-    return payload.sections.find(section => section.id === draft.sectionId && !section.deletedAt)?.name ?? 'Current section';
+    return (
+      payload.sections.find(
+        (section) => section.id === draft.sectionId && !section.deletedAt,
+      )?.name ?? "Current section"
+    );
   }
   if (draft.sectionName) {
     return `Create "${draft.sectionName}"`;
   }
-  return 'No section';
+  return "No section";
 }
 
-function describeQuickAddContext(payload: SyncPayload, context: QuickAddContext): string {
+function describeQuickAddContext(
+  payload: SyncPayload,
+  context: QuickAddContext,
+): string {
   const labels: string[] = [];
   if (context.defaultDueToday) {
-    labels.push('Defaults to Today');
+    labels.push("Defaults to Today");
   }
   if (context.defaultProjectId) {
-    const projectName = getProjectById(payload, context.defaultProjectId)?.name ?? 'current';
+    const projectName =
+      getProjectById(payload, context.defaultProjectId)?.name ?? "current";
     const sectionName = context.defaultSectionId
-      ? payload.sections.find(section => section.id === context.defaultSectionId && !section.deletedAt)?.name
+      ? payload.sections.find(
+          (section) =>
+            section.id === context.defaultSectionId && !section.deletedAt,
+        )?.name
       : null;
-    labels.push(sectionName ? `Project ${projectName} / ${sectionName}` : `Project ${projectName}`);
+    labels.push(
+      sectionName
+        ? `Project ${projectName} / ${sectionName}`
+        : `Project ${projectName}`,
+    );
   }
-  return labels.join(' · ');
+  return labels.join(" · ");
 }
 
 function renderReminderLabel(reminders: TaskReminderDraft[]): string {
   if (reminders.length === 1) {
     const [reminder] = reminders;
-    return reminder.kind === 'ABSOLUTE'
+    return reminder.kind === "ABSOLUTE"
       ? `Reminder ${formatDateTime(reminder.timeAt)}`
       : `Reminder ${reminder.offsetMinutes}m before`;
   }
@@ -9442,7 +11317,7 @@ function renderReminderLabel(reminders: TaskReminderDraft[]): string {
 }
 
 function renderReminderSourceLabel(reminders: TaskReminderDraft[]): string {
-  return `Parser / context: ${reminders.length ? renderReminderLabel(reminders) : 'No reminders'}`;
+  return `Parser / context: ${reminders.length ? renderReminderLabel(reminders) : "No reminders"}`;
 }
 
 function buildTaskDraftFromTask(payload: SyncPayload, task: Task): TaskDraft {
@@ -9467,13 +11342,13 @@ function buildTaskDraftFromTask(payload: SyncPayload, task: Task): TaskDraft {
 
 function buildSiblingTaskDraft(task: Task): TaskDraft {
   return {
-    title: 'New task',
-    description: '',
+    title: "New task",
+    description: "",
     projectId: task.projectId,
     projectName: null,
     sectionId: task.sectionId,
     sectionName: null,
-    priority: 'P4',
+    priority: "P4",
     dueAt: task.dueAt ?? null,
     allDay: task.allDay,
     deadlineAt: null,
@@ -9486,154 +11361,182 @@ function buildSiblingTaskDraft(task: Task): TaskDraft {
 }
 
 function renderRecurrenceLabel(rule: string): string {
-  const frequency = /FREQ=([A-Z]+)/.exec(rule)?.[1] ?? 'CUSTOM';
-  const interval = Number.parseInt(/INTERVAL=(\d+)/.exec(rule)?.[1] ?? '1', 10);
+  const frequency = /FREQ=([A-Z]+)/.exec(rule)?.[1] ?? "CUSTOM";
+  const interval = Number.parseInt(/INTERVAL=(\d+)/.exec(rule)?.[1] ?? "1", 10);
   const byDay = /BYDAY=([A-Z,]+)/.exec(rule)?.[1];
   const byMonthDay = /BYMONTHDAY=(\d+)/.exec(rule)?.[1];
 
   if (byDay) {
-    const days = byDay.split(',').map(token => ({
-      MO: 'Mon',
-      TU: 'Tue',
-      WE: 'Wed',
-      TH: 'Thu',
-      FR: 'Fri',
-      SA: 'Sat',
-      SU: 'Sun',
-    }[token] ?? token));
-    return interval === 2 ? `Every other ${days.join(', ')}` : `Every ${days.join(', ')}`;
+    const days = byDay.split(",").map(
+      (token) =>
+        ({
+          MO: "Mon",
+          TU: "Tue",
+          WE: "Wed",
+          TH: "Thu",
+          FR: "Fri",
+          SA: "Sat",
+          SU: "Sun",
+        })[token] ?? token,
+    );
+    return interval === 2
+      ? `Every other ${days.join(", ")}`
+      : `Every ${days.join(", ")}`;
   }
 
-  if (frequency === 'MONTHLY' && byMonthDay) {
+  if (frequency === "MONTHLY" && byMonthDay) {
     return `Every month on ${byMonthDay}`;
   }
 
-  const label = frequency === 'DAILY'
-    ? 'day'
-    : frequency === 'WEEKLY'
-      ? 'week'
-      : frequency === 'MONTHLY'
-        ? 'month'
-        : frequency === 'YEARLY'
-          ? 'year'
-          : 'custom';
+  const label =
+    frequency === "DAILY"
+      ? "day"
+      : frequency === "WEEKLY"
+        ? "week"
+        : frequency === "MONTHLY"
+          ? "month"
+          : frequency === "YEARLY"
+            ? "year"
+            : "custom";
   return interval <= 1 ? `Every ${label}` : `Every ${interval} ${label}s`;
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
-  const input = target.closest('input, textarea, select, [contenteditable="true"]');
+  const input = target.closest(
+    'input, textarea, select, [contenteditable="true"]',
+  );
   return input !== null;
 }
 
 function hasOpenOverlayDialog(): boolean {
-  if (typeof document === 'undefined') return false;
+  if (typeof document === "undefined") return false;
   return document.querySelector('[data-overlay-dialog="true"]') !== null;
 }
 
 function hasFocusedTaskRow(): boolean {
-  if (typeof document === 'undefined') return false;
+  if (typeof document === "undefined") return false;
   const activeElement = document.activeElement;
-  return activeElement instanceof HTMLElement && activeElement.closest('[data-task-row="true"]') !== null;
+  return (
+    activeElement instanceof HTMLElement &&
+    activeElement.closest('[data-task-row="true"]') !== null
+  );
 }
 
 function isTaskSelectionModeActive(): boolean {
-  if (typeof document === 'undefined') return false;
+  if (typeof document === "undefined") return false;
   return document.querySelector('[data-task-selection-mode="true"]') !== null;
 }
 
-function focusEdgeTaskRow(edge: 'start' | 'end') {
-  if (typeof document === 'undefined') return;
-  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
-  const target = edge === 'start' ? rows[0] : rows[rows.length - 1];
+function focusEdgeTaskRow(edge: "start" | "end") {
+  if (typeof document === "undefined") return;
+  const rows = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-task-row="true"]'),
+  );
+  const target = edge === "start" ? rows[0] : rows[rows.length - 1];
   target?.focus();
 }
 
 function focusTaskRow(taskId: string) {
-  if (typeof document === 'undefined') return;
-  const row = document.querySelector<HTMLElement>(`[data-task-row="true"][data-task-id="${taskId}"]`);
+  if (typeof document === "undefined") return;
+  const row = document.querySelector<HTMLElement>(
+    `[data-task-row="true"][data-task-id="${taskId}"]`,
+  );
   row?.focus();
 }
 
-function getAdjacentTaskRowId(taskId: string, direction: -1 | 1): string | null {
-  if (typeof document === 'undefined') return null;
-  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
-  const index = rows.findIndex(row => row.dataset.taskId === taskId);
+function getAdjacentTaskRowId(
+  taskId: string,
+  direction: -1 | 1,
+): string | null {
+  if (typeof document === "undefined") return null;
+  const rows = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-task-row="true"]'),
+  );
+  const index = rows.findIndex((row) => row.dataset.taskId === taskId);
   if (index === -1) return null;
   const nextRow = rows[index + direction];
   return nextRow?.dataset.taskId ?? null;
 }
 
 function focusAdjacentTaskRow(taskId: string, direction: -1 | 1) {
-  if (typeof document === 'undefined') return;
-  const rows = Array.from(document.querySelectorAll<HTMLElement>('[data-task-row="true"]'));
-  const index = rows.findIndex(row => row.dataset.taskId === taskId);
+  if (typeof document === "undefined") return;
+  const rows = Array.from(
+    document.querySelectorAll<HTMLElement>('[data-task-row="true"]'),
+  );
+  const index = rows.findIndex((row) => row.dataset.taskId === taskId);
   if (index === -1) return;
   const nextRow = rows[index + direction];
   nextRow?.focus();
 }
 
-function getWorkspaceIdentity(cloudSession: CloudSession | null): { label: string; initial: string } {
-  const label = cloudSession?.name?.trim()
-    || cloudSession?.email?.trim()
-    || 'Emberlist';
-  const initial = label.charAt(0).toUpperCase() || 'E';
+function getWorkspaceIdentity(cloudSession: CloudSession | null): {
+  label: string;
+  initial: string;
+} {
+  const label =
+    cloudSession?.name?.trim() || cloudSession?.email?.trim() || "Emberlist";
+  const initial = label.charAt(0).toUpperCase() || "E";
   return { label, initial };
 }
 
 function getRouteTitle(pathname: string, payload: SyncPayload): string {
-  if (pathname === '/') return 'Emberlist';
-  if (pathname === '/privacy') return 'Privacy Policy';
-  if (pathname === '/terms') return 'Terms of Service';
-  if (pathname.startsWith('/search/no-due')) return 'Tasks without due dates';
-  if (pathname.startsWith('/today')) return 'Today';
-  if (pathname.startsWith('/upcoming')) return 'Upcoming';
-  if (pathname.startsWith('/search')) return 'Search';
-  if (pathname.startsWith('/settings')) return 'Settings';
-  if (pathname.startsWith('/inbox')) return 'Inbox';
-  if (pathname.startsWith('/project/')) {
-    const projectId = pathname.split('/')[2];
-    return getProjectById(payload, projectId)?.name ?? 'Project';
+  if (pathname === "/") return "Emberlist";
+  if (pathname === "/privacy") return "Privacy Policy";
+  if (pathname === "/terms") return "Terms of Service";
+  if (pathname.startsWith("/search/no-due")) return "Tasks without due dates";
+  if (pathname.startsWith("/today")) return "Today";
+  if (pathname.startsWith("/upcoming")) return "Upcoming";
+  if (pathname.startsWith("/search")) return "Search";
+  if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/inbox")) return "Inbox";
+  if (pathname.startsWith("/project/")) {
+    const projectId = pathname.split("/")[2];
+    return getProjectById(payload, projectId)?.name ?? "Project";
   }
-  if (pathname.startsWith('/task/')) {
-    const taskId = pathname.split('/')[2];
-    return getTaskById(payload, taskId)?.title ?? 'Task';
+  if (pathname.startsWith("/task/")) {
+    const taskId = pathname.split("/")[2];
+    return getTaskById(payload, taskId)?.title ?? "Task";
   }
-  return 'Workspace';
+  return "Workspace";
 }
 
 function formatTaskDate(timestamp: number, allDay: boolean): string {
   if (isToday(timestamp)) {
-    return allDay ? 'Today' : `Today · ${formatClock(timestamp)}`;
+    return allDay ? "Today" : `Today · ${formatClock(timestamp)}`;
   }
   if (isTomorrow(timestamp)) {
-    return allDay ? 'Tomorrow' : `Tomorrow · ${formatClock(timestamp)}`;
+    return allDay ? "Tomorrow" : `Tomorrow · ${formatClock(timestamp)}`;
   }
   if (isYesterday(timestamp)) {
-    return allDay ? 'Yesterday' : `Yesterday · ${formatClock(timestamp)}`;
+    return allDay ? "Yesterday" : `Yesterday · ${formatClock(timestamp)}`;
   }
-  return allDay ? format(timestamp, 'MMM d') : `${format(timestamp, 'MMM d')} · ${formatClock(timestamp)}`;
+  return allDay
+    ? format(timestamp, "MMM d")
+    : `${format(timestamp, "MMM d")} · ${formatClock(timestamp)}`;
   if (isToday(timestamp)) {
-    return allDay ? 'Today' : `Today · ${format(timestamp, 'p')}`;
+    return allDay ? "Today" : `Today · ${format(timestamp, "p")}`;
   }
   if (isTomorrow(timestamp)) {
-    return allDay ? 'Tomorrow' : `Tomorrow · ${format(timestamp, 'p')}`;
+    return allDay ? "Tomorrow" : `Tomorrow · ${format(timestamp, "p")}`;
   }
   if (isYesterday(timestamp)) {
-    return allDay ? 'Yesterday' : `Yesterday · ${format(timestamp, 'p')}`;
+    return allDay ? "Yesterday" : `Yesterday · ${format(timestamp, "p")}`;
   }
-  return allDay ? format(timestamp, 'MMM d') : format(timestamp, 'MMM d · p');
+  return allDay ? format(timestamp, "MMM d") : format(timestamp, "MMM d · p");
 }
 
 function formatDateTime(timestamp: number): string {
   return formatDateTimeValue(timestamp);
-  return format(timestamp, 'MMM d, h:mm a');
+  return format(timestamp, "MMM d, h:mm a");
 }
 
 function toInputValue(timestamp: number | null, allDay: boolean): string {
-  if (!timestamp) return '';
-  return allDay ? format(timestamp, 'yyyy-MM-dd') : format(timestamp, "yyyy-MM-dd'T'HH:mm");
+  if (!timestamp) return "";
+  return allDay
+    ? format(timestamp, "yyyy-MM-dd")
+    : format(timestamp, "yyyy-MM-dd'T'HH:mm");
 }
 
 function getWeekendDate(todayStartMs: number): Date {
@@ -9643,7 +11546,10 @@ function getWeekendDate(todayStartMs: number): Date {
   return addDays(today, 6 - dayOfWeek);
 }
 
-function getNextWeekDate(todayStartMs: number, weekStartsOn: WeekStartsOn): Date {
+function getNextWeekDate(
+  todayStartMs: number,
+  weekStartsOn: WeekStartsOn,
+): Date {
   const currentWeekStart = startOfWeek(todayStartMs, { weekStartsOn });
   return addDays(currentWeekStart, 7);
 }
@@ -9655,7 +11561,7 @@ function getPostponeDate(task: Task, todayStartMs: number): number | null {
 function parseInputValue(value: string, allDay: boolean): number | null {
   if (!value) return null;
   if (allDay) {
-    const [year, month, day] = value.split('-').map(Number);
+    const [year, month, day] = value.split("-").map(Number);
     if (!year || !month || !day) return null;
     return startOfDay(new Date(year, month - 1, day)).getTime();
   }
@@ -9664,22 +11570,25 @@ function parseInputValue(value: string, allDay: boolean): number | null {
 }
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {
-  if (typeof window === 'undefined') return fallback;
+  if (typeof window === "undefined") return fallback;
   const raw = window.localStorage.getItem(key);
   if (raw === null) return fallback;
-  return raw === 'true' || raw === '1' || raw === JSON.stringify(true);
+  return raw === "true" || raw === "1" || raw === JSON.stringify(true);
 }
 
-function readStoredWeekStartsOn(key: string, fallback: WeekStartsOn): WeekStartsOn {
-  if (typeof window === 'undefined') return fallback;
+function readStoredWeekStartsOn(
+  key: string,
+  fallback: WeekStartsOn,
+): WeekStartsOn {
+  if (typeof window === "undefined") return fallback;
   const raw = window.localStorage.getItem(key);
-  if (raw === '1') return 1;
-  if (raw === '0') return 0;
+  if (raw === "1") return 1;
+  if (raw === "0") return 0;
   return fallback;
 }
 
 function readStoredNumber(key: string): number | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(key);
   if (!raw) return null;
   const parsed = Number(raw);
@@ -9687,32 +11596,40 @@ function readStoredNumber(key: string): number | null {
 }
 
 function readStoredActivityEntries(): ActivityEntry[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem('emberlist.activityEntries');
+    const raw = window.localStorage.getItem("emberlist.activityEntries");
     if (!raw) return [];
     const parsed = JSON.parse(raw) as ActivityEntry[];
-    return Array.isArray(parsed) ? parsed.filter(entry => typeof entry?.id === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((entry) => typeof entry?.id === "string")
+      : [];
   } catch {
     return [];
   }
 }
 
 function writeStoredActivityEntries(entries: ActivityEntry[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem('emberlist.activityEntries', JSON.stringify(entries));
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    "emberlist.activityEntries",
+    JSON.stringify(entries),
+  );
 }
 
 function readStoredCloudSession(): CloudSession | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem('emberlist.cloudSession');
+    const raw = window.localStorage.getItem("emberlist.cloudSession");
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { email?: string | null; name?: string | null };
+    const parsed = JSON.parse(raw) as {
+      email?: string | null;
+      name?: string | null;
+    };
     return {
-      email: typeof parsed.email === 'string' ? parsed.email : null,
-      name: typeof parsed.name === 'string' ? parsed.name : null,
+      email: typeof parsed.email === "string" ? parsed.email : null,
+      name: typeof parsed.name === "string" ? parsed.name : null,
     };
   } catch {
     return null;
@@ -9720,12 +11637,13 @@ function readStoredCloudSession(): CloudSession | null {
 }
 
 function writeStoredCloudSession(session: CloudSession | null) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === "undefined") return;
   if (!session) {
-    window.localStorage.removeItem('emberlist.cloudSession');
+    window.localStorage.removeItem("emberlist.cloudSession");
     return;
   }
-  window.localStorage.setItem('emberlist.cloudSession', JSON.stringify(session));
+  window.localStorage.setItem(
+    "emberlist.cloudSession",
+    JSON.stringify(session),
+  );
 }
-
-
