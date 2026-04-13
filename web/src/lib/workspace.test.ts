@@ -3,8 +3,10 @@ import { createEmptySyncPayload } from './syncPayload';
 import {
   canReparentTaskAsSubtask,
   createTask as createWorkspaceTask,
+  createTaskRelative,
   createTaskDraft,
   deleteTasks,
+  duplicateTask,
   flattenTasksWithSubtasks,
   getActiveProjects,
   getInboxTasks,
@@ -460,6 +462,70 @@ describe('workspace bulk task helpers', () => {
       timeAt: new Date('2026-04-03T21:50:00').getTime(),
       offsetMinutes: null,
     });
+  });
+
+  it('inserts a task before an anchor within the same project container', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9100);
+    const payload = createPayload();
+    payload.tasks = [
+      createTask({ id: 'task-a', title: 'Task A', projectId: 'project-home', sectionId: 'section-weekend', dueAt: 1_000, order: 0 }),
+      createTask({ id: 'task-b', title: 'Task B', projectId: 'project-home', sectionId: 'section-weekend', dueAt: 1_000, order: 1 }),
+    ];
+
+    const result = createTaskRelative(payload, {
+      title: 'Inserted',
+      description: '',
+      projectId: 'project-home',
+      projectName: null,
+      sectionId: 'section-weekend',
+      sectionName: null,
+      priority: 'P4',
+      dueAt: 1_000,
+      allDay: true,
+      deadlineAt: null,
+      deadlineAllDay: false,
+      recurringRule: null,
+      deadlineRecurringRule: null,
+      parentTaskId: null,
+      reminders: [],
+    }, 'task-b', 'before');
+
+    expect(result.tasks.find(task => task.title === 'Inserted')?.order).toBe(1);
+    expect(result.tasks.find(task => task.id === 'task-b')?.order).toBe(2);
+  });
+
+  it('duplicates a task after the source and preserves reminder drafts', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9200);
+    const payload = createPayload();
+    payload.tasks = [
+      createTask({
+        id: 'task-source',
+        title: 'Source task',
+        projectId: 'project-home',
+        sectionId: 'section-weekend',
+        dueAt: 1_000,
+        allDay: false,
+        deadlineAt: 2_000,
+        deadlineAllDay: false,
+        recurringRule: 'FREQ=DAILY',
+        deadlineRecurringRule: 'FREQ=WEEKLY',
+        order: 0,
+      }),
+    ];
+    payload.reminders = [
+      createReminder({ id: 'reminder-abs', taskId: 'task-source', timeAt: 1_500 }),
+      createReminder({ id: 'reminder-offset', taskId: 'task-source', offsetMinutes: 30 }),
+    ];
+
+    const result = duplicateTask(payload, 'task-source');
+    const duplicate = result.tasks.find(task => task.id !== 'task-source' && task.title === 'Source task (copy)');
+
+    expect(duplicate).toBeTruthy();
+    expect(duplicate?.order).toBe(1);
+    expect(duplicate?.dueAt).toBe(1_000);
+    expect(duplicate?.deadlineAt).toBe(2_000);
+    expect(duplicate?.recurringRule).toBe('FREQ=DAILY');
+    expect(result.reminders.filter(reminder => reminder.taskId === duplicate?.id)).toHaveLength(2);
   });
 
   it('reparents a task as a subtask and inherits the parent project and section', () => {

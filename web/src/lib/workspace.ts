@@ -314,11 +314,50 @@ export function flattenTasksWithSubtasks(tasks: Task[]): FlattenedTask[] {
 }
 
 export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload {
+    return createTaskRelative(payload, draft, null, 'after');
+}
+
+export function createTaskRelative(
+    payload: SyncPayload,
+    draft: TaskDraft,
+    anchorTaskId: string | null,
+    position: 'before' | 'after',
+): SyncPayload {
     const now = Date.now();
     const resolvedProject = resolveProject(payload, draft, now);
     const resolvedSection = resolveSection(payload, draft, resolvedProject?.id ?? draft.projectId, now);
     const projectId = resolvedProject?.id ?? draft.projectId;
     const sectionId = resolvedSection?.id ?? draft.sectionId;
+    const anchorTask = anchorTaskId
+        ? payload.tasks.find(task => task.id === anchorTaskId && !task.deletedAt) ?? null
+        : null;
+    const canInsertRelative = Boolean(
+        anchorTask &&
+        anchorTask.projectId === projectId &&
+        anchorTask.sectionId === sectionId &&
+        anchorTask.parentTaskId === draft.parentTaskId
+    );
+    const insertOrder = canInsertRelative
+        ? anchorTask!.order + (position === 'after' ? 1 : 0)
+        : nextTaskOrder(payload, projectId, sectionId, draft.parentTaskId);
+    const nextTasks = canInsertRelative
+        ? payload.tasks.map(task => {
+            if (
+                task.deletedAt ||
+                task.projectId !== projectId ||
+                task.sectionId !== sectionId ||
+                task.parentTaskId !== draft.parentTaskId ||
+                task.order < insertOrder
+            ) {
+                return task;
+            }
+            return {
+                ...task,
+                order: task.order + 1,
+                updatedAt: now,
+            };
+        })
+        : payload.tasks;
     const task: Task = {
         id: crypto.randomUUID(),
         title: draft.title.trim(),
@@ -337,7 +376,7 @@ export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload 
         parentTaskId: draft.parentTaskId,
         locationId: null,
         locationTriggerType: null,
-        order: nextTaskOrder(payload, projectId, sectionId, draft.parentTaskId),
+        order: insertOrder,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -366,9 +405,38 @@ export function createTask(payload: SyncPayload, draft: TaskDraft): SyncPayload 
         sections: resolvedSection && !payload.sections.some(section => section.id === resolvedSection.id)
             ? [...payload.sections, resolvedSection]
             : payload.sections,
-        tasks: [...payload.tasks, task],
+        tasks: [...nextTasks, task],
         reminders: [...payload.reminders, ...reminders],
     });
+}
+
+export function duplicateTask(payload: SyncPayload, taskId: string): SyncPayload {
+    const task = payload.tasks.find(candidate => candidate.id === taskId && !candidate.deletedAt) ?? null;
+    if (!task) return payload;
+
+    const duplicateTitle = task.title.endsWith(' (copy)') ? task.title : `${task.title} (copy)`;
+    return createTaskRelative(
+        payload,
+        {
+            title: duplicateTitle,
+            description: task.description,
+            projectId: task.projectId,
+            projectName: null,
+            sectionId: task.sectionId,
+            sectionName: null,
+            priority: task.priority,
+            dueAt: task.dueAt ?? null,
+            allDay: task.allDay,
+            deadlineAt: task.deadlineAt ?? null,
+            deadlineAllDay: task.deadlineAllDay ?? false,
+            recurringRule: task.recurringRule ?? null,
+            deadlineRecurringRule: task.deadlineRecurringRule ?? null,
+            parentTaskId: task.parentTaskId,
+            reminders: getTaskReminderDrafts(payload, task.id),
+        },
+        task.id,
+        'after',
+    );
 }
 
 export function canReparentTaskAsSubtask(payload: SyncPayload, draggedTaskId: string, parentTaskId: string): boolean {

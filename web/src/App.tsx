@@ -85,12 +85,14 @@ import {
   archiveTask,
   canReparentTaskAsSubtask,
   createProject,
+  createTaskRelative,
   createSection,
   createTask,
   deleteTasks,
   deleteProject,
   deleteSection,
   deleteTask,
+  duplicateTask,
   flattenTasksWithSubtasks,
   getCompletedInboxTasks,
   getCompletedProjectTasks,
@@ -1058,6 +1060,44 @@ function App() {
     return createdTask?.id ?? null;
   }
 
+  async function handleCreateTaskRelative(
+    anchorTaskId: string,
+    position: 'before' | 'after',
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string }
+  ): Promise<string | null> {
+    if (!draft.title.trim()) {
+      showBanner('error', 'Task title is required.');
+      return null;
+    }
+
+    const current = payloadRef.current;
+    if (!current) return null;
+
+    const existingIds = new Set(current.tasks.map(task => task.id));
+    const nextPayload = createTaskRelative(current, draft, anchorTaskId, position);
+    const createdTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
+    await persistPayload(nextPayload, true);
+    const activityId = createdTask ? recordActivity([createdTask.id], 'Created task', createdTask.title) : undefined;
+    if (createdTask) {
+      undoActivityMapRef.current.set(activityId!, {
+        previousPayload: current,
+        undoMessage: `Removed "${createdTask.title}".`,
+        taskIds: [createdTask.id],
+        title: 'Created task',
+      });
+    }
+    if (!options?.silent && createdTask) {
+      showUndoBanner(
+        options?.successMessage ?? `Task "${createdTask.title}" created.`,
+        current,
+        `Removed "${createdTask.title}".`,
+        activityId
+      );
+    }
+    return createdTask?.id ?? null;
+  }
+
   async function handleSaveTask(taskId: string, draft: TaskDraft) {
     const nextPayload = await applyUndoablePayloadUpdate(
       current => updateTaskFromDraft(current, taskId, draft),
@@ -1078,6 +1118,33 @@ function App() {
         : current
       );
     }
+  }
+
+  async function handleDuplicateTask(taskId: string): Promise<string | null> {
+    const current = payloadRef.current;
+    const sourceTask = current?.tasks.find(task => task.id === taskId && !task.deletedAt) ?? null;
+    if (!current || !sourceTask) return null;
+
+    const existingIds = new Set(current.tasks.map(task => task.id));
+    const nextPayload = duplicateTask(current, taskId);
+    const duplicatedTask = nextPayload.tasks.find(task => !existingIds.has(task.id)) ?? null;
+    await persistPayload(nextPayload, true);
+    const activityId = duplicatedTask ? recordActivity([duplicatedTask.id], 'Duplicated task', duplicatedTask.title) : undefined;
+    if (duplicatedTask) {
+      undoActivityMapRef.current.set(activityId!, {
+        previousPayload: current,
+        undoMessage: `Removed "${duplicatedTask.title}".`,
+        taskIds: [duplicatedTask.id],
+        title: 'Duplicated task',
+      });
+      showUndoBanner(
+        `Duplicated "${sourceTask.title}".`,
+        current,
+        `Removed "${duplicatedTask.title}".`,
+        activityId
+      );
+    }
+    return duplicatedTask?.id ?? null;
   }
 
   function handleExportJson() {
@@ -1256,6 +1323,7 @@ function App() {
         onResetLocalCache={() => void handleResetLocalCache()}
         onImport={handleImport}
         onCreateTask={handleCreateTask}
+        onCreateTaskRelative={(anchorTaskId, position, draft, options) => handleCreateTaskRelative(anchorTaskId, position, draft, options)}
         onToggleTask={taskId => void handleToggleTask(taskId)}
         onArchiveTask={taskId => void handleArchiveTask(taskId)}
         onDeleteTask={taskId => void handleDeleteTask(taskId)}
@@ -1268,6 +1336,7 @@ function App() {
         onReparentTaskAsSubtask={(draggedTaskId, parentTaskId) => void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)}
         onPromoteSubtask={taskId => void handlePromoteSubtask(taskId)}
         onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
+        onDuplicateTask={taskId => handleDuplicateTask(taskId)}
         onCreateProject={handleCreateProject}
         onUpdateProject={(projectId, updater) => void handleUpdateProject(projectId, updater)}
         onDeleteProject={projectId => void handleDeleteProject(projectId)}
@@ -1400,6 +1469,7 @@ type WorkspaceShellProps = {
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   onCreateTask: (draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -1412,6 +1482,7 @@ type WorkspaceShellProps = {
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onPromoteSubtask: (taskId: string) => void;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
   onCreateProject: (name: string) => Promise<string | null>;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
   onDeleteProject: (projectId: string) => void;
@@ -1463,6 +1534,7 @@ function WorkspaceShell({
   onResetLocalCache,
   onImport,
   onCreateTask,
+  onCreateTaskRelative,
   onToggleTask,
   onArchiveTask,
   onDeleteTask,
@@ -1475,6 +1547,7 @@ function WorkspaceShell({
   onReparentTaskAsSubtask,
   onPromoteSubtask,
   onSaveTask,
+  onDuplicateTask,
   onCreateProject,
   onUpdateProject,
   onDeleteProject,
@@ -2081,6 +2154,8 @@ function WorkspaceShell({
                   <ProjectPage
                     payload={payload}
                     showSelectionButtons={showSelectionButtons}
+                    onCreateTaskRelative={onCreateTaskRelative}
+                    onSaveTask={onSaveTask}
                     onCreateSection={onCreateSection}
                     onUpdateProject={onUpdateProject}
                     onDeleteProject={onDeleteProject}
@@ -2090,10 +2165,12 @@ function WorkspaceShell({
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onPostponeTasks={onPostponeTasks}
+                    onMoveTasksToProject={onMoveTasksToProject}
                     onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
+                    onDuplicateTask={onDuplicateTask}
                     onOpenQuickAdd={onOpenQuickAdd}
                   />
                 }
@@ -4192,6 +4269,8 @@ function InboxPage({
 function ProjectPage({
   payload,
   showSelectionButtons,
+  onCreateTaskRelative,
+  onSaveTask,
   onCreateSection,
   onUpdateProject,
   onDeleteProject,
@@ -4201,14 +4280,18 @@ function ProjectPage({
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
+  onMoveTasksToProject,
   onMoveTasksToSection,
   onSetTasksPriority,
   onDeleteTasks,
   onPromoteSubtask,
+  onDuplicateTask,
   onOpenQuickAdd,
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onCreateSection: (projectId: string, name: string) => void;
   onUpdateProject: (projectId: string, updater: (project: Project) => Project) => void;
   onDeleteProject: (projectId: string) => void;
@@ -4218,10 +4301,12 @@ function ProjectPage({
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
+  onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
 }) {
   const navigate = useNavigate();
@@ -4237,7 +4322,7 @@ function ProjectPage({
   const [isAddSectionDialogOpen, setIsAddSectionDialogOpen] = useState(false);
   const [activeListDropSectionId, setActiveListDropSectionId] = useState<string | '__loose__' | null>(null);
   const [projectTaskActionState, setProjectTaskActionState] = useState<{
-    mode: 'reschedule' | 'priority';
+    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
     taskId: string;
   } | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -4427,12 +4512,21 @@ function ProjectPage({
     if (task.status !== 'OPEN') return null;
     return (
       <ProjectTaskRowActions
+        payload={payload}
         task={task}
+        currentProject={currentProject}
+        sections={sections}
         actionState={projectTaskActionState}
         onSetActionState={setProjectTaskActionState}
+        onCreateTaskRelative={onCreateTaskRelative}
+        onSaveTask={onSaveTask}
+        onOpenTask={taskId => navigate(`/task/${taskId}`)}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
+        onMoveTasksToProject={onMoveTasksToProject}
+        onMoveTasksToSection={onMoveTasksToSection}
         onSetTasksPriority={onSetTasksPriority}
+        onDuplicateTask={onDuplicateTask}
       />
     );
   }
@@ -6535,9 +6629,9 @@ function TaskRow({
           <span className="md:hidden">{locationLabel}</span>
         </div>
       </div>
-      <div className="mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
+      <div className="pointer-events-none mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
         {rowActions ? (
-          <div className="flex flex-wrap justify-end gap-1.5 opacity-0 pointer-events-none transition group-hover/task-row:opacity-100 group-hover/task-row:pointer-events-auto group-focus-within/task-row:opacity-100 group-focus-within/task-row:pointer-events-auto">
+          <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5 opacity-0 transition group-hover/task-row:opacity-100 group-focus-within/task-row:opacity-100">
             {rowActions(task)}
           </div>
         ) : null}
@@ -6590,6 +6684,10 @@ function ChoiceDialog({
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
 
+  function stopDialogEvent(event: ReactMouseEvent<HTMLDivElement>) {
+    event.stopPropagation();
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
@@ -6616,9 +6714,16 @@ function ChoiceDialog({
   }, []);
 
   return (
-    <div data-overlay-dialog="true" className={`fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6 ${anchorRect ? 'items-start justify-start !bg-transparent' : ''}`}>
+    <div
+      data-overlay-dialog="true"
+      onMouseDown={stopDialogEvent}
+      onClick={stopDialogEvent}
+      className={`fixed inset-0 z-40 flex items-center justify-center bg-[#241b17]/35 px-4 py-6 ${anchorRect ? 'items-start justify-start !bg-transparent' : ''}`}
+    >
       <div
         ref={dialogRef}
+        onMouseDown={stopDialogEvent}
+        onClick={stopDialogEvent}
         style={anchorRect ? {
           position: 'absolute',
           top: Math.min(anchorRect.bottom + 8, window.innerHeight - 400),
@@ -7822,6 +7927,11 @@ function OverflowMenu({
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
+  function stopTriggerEvent(event: React.MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -7849,7 +7959,9 @@ function OverflowMenu({
       <button
         type="button"
         aria-label={label}
+        onMouseDown={stopTriggerEvent}
         onClick={event => {
+          event.preventDefault();
           event.stopPropagation();
           setIsOpen(current => !current);
         }}
@@ -7863,7 +7975,9 @@ function OverflowMenu({
             <button
               key={item.label}
               type="button"
+              onMouseDown={stopTriggerEvent}
               onClick={event => {
+                event.preventDefault();
                 event.stopPropagation();
                 setIsOpen(false);
                 item.onSelect();
@@ -7884,31 +7998,122 @@ function OverflowMenu({
 }
 
 function ProjectTaskRowActions({
+  payload,
   task,
+  currentProject,
+  sections,
   actionState,
   onSetActionState,
+  onCreateTaskRelative,
+  onSaveTask,
+  onOpenTask,
   onRescheduleTasks,
   onPostponeTasks,
+  onMoveTasksToProject,
+  onMoveTasksToSection,
   onSetTasksPriority,
+  onDuplicateTask,
 }: {
+  payload: SyncPayload;
   task: Task;
-  actionState: { mode: 'reschedule' | 'priority'; taskId: string } | null;
-  onSetActionState: (state: { mode: 'reschedule' | 'priority'; taskId: string } | null) => void;
+  currentProject: Project;
+  sections: Section[];
+  actionState: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string } | null;
+  onSetActionState: (state: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string } | null) => void;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onOpenTask: (taskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
+  onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
   const isRescheduleOpen = actionState?.mode === 'reschedule' && actionState.taskId === task.id;
   const isPriorityOpen = actionState?.mode === 'priority' && actionState.taskId === task.id;
+  const isDeadlineOpen = actionState?.mode === 'deadline' && actionState.taskId === task.id;
+  const isRemindersOpen = actionState?.mode === 'reminders' && actionState.taskId === task.id;
+  const isMoveOpen = actionState?.mode === 'move' && actionState.taskId === task.id;
+  const taskReminderDrafts = useMemo(() => getTaskReminderDrafts(payload, task.id), [payload, task.id]);
+  const activeProjects = useMemo(() => getActiveProjects(payload), [payload]);
+  const [deadlineEnabled, setDeadlineEnabled] = useState(Boolean(task.deadlineAt));
+  const [deadlineAllDay, setDeadlineAllDay] = useState(task.deadlineAllDay ?? false);
+  const [deadlineInput, setDeadlineInput] = useState(toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false));
+  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(() => buildReminderEditors(taskReminderDrafts));
+
+  useEffect(() => {
+    if (!isDeadlineOpen) return;
+    setDeadlineEnabled(Boolean(task.deadlineAt));
+    setDeadlineAllDay(task.deadlineAllDay ?? false);
+    setDeadlineInput(toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false));
+  }, [isDeadlineOpen, task.deadlineAllDay, task.deadlineAt]);
+
+  useEffect(() => {
+    if (!isRemindersOpen) return;
+    setReminderEditors(buildReminderEditors(taskReminderDrafts));
+  }, [isRemindersOpen, taskReminderDrafts]);
+
+  function stopRowActionEvent(event: ReactMouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
 
   function openRescheduleDialog(event: ReactMouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
+    stopRowActionEvent(event);
     onSetActionState({ mode: 'reschedule', taskId: task.id });
   }
 
   function openPriorityDialog(event: ReactMouseEvent<HTMLButtonElement>) {
-    event.stopPropagation();
+    stopRowActionEvent(event);
     onSetActionState({ mode: 'priority', taskId: task.id });
+  }
+
+  async function handleCreateRelative(position: 'before' | 'after') {
+    const createdTaskId = await onCreateTaskRelative(
+      task.id,
+      position,
+      buildSiblingTaskDraft(task),
+      {
+        successMessage: `Created a task ${position} "${task.title}".`,
+      },
+    );
+    if (createdTaskId) {
+      onOpenTask(createdTaskId);
+    }
+  }
+
+  async function handleDuplicate() {
+    await onDuplicateTask(task.id);
+  }
+
+  function submitDeadline() {
+    const nextDeadlineAt = deadlineEnabled ? parseInputValue(deadlineInput, deadlineAllDay) : null;
+    if (deadlineEnabled && nextDeadlineAt === null) {
+      return;
+    }
+    const draft = buildTaskDraftFromTask(payload, task);
+    onSaveTask(task.id, {
+      ...draft,
+      deadlineAt: nextDeadlineAt,
+      deadlineAllDay: deadlineEnabled ? deadlineAllDay : false,
+    });
+    onSetActionState(null);
+  }
+
+  function submitReminders() {
+    if (hasIncompleteReminderEditors(reminderEditors)) {
+      return;
+    }
+    if (task.dueAt === null && reminderEditors.some(reminder => reminder.mode === 'OFFSET')) {
+      return;
+    }
+    const draft = buildTaskDraftFromTask(payload, task);
+    onSaveTask(task.id, {
+      ...draft,
+      reminders: serializeReminderEditors(reminderEditors),
+    });
+    onSetActionState(null);
   }
 
   return (
@@ -7917,6 +8122,7 @@ function ProjectTaskRowActions({
         type="button"
         title="Reschedule task"
         aria-label={`Reschedule ${task.title}`}
+        onMouseDown={stopRowActionEvent}
         onClick={openRescheduleDialog}
         className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
       >
@@ -7926,11 +8132,51 @@ function ProjectTaskRowActions({
         type="button"
         title={`Priority ${task.priority}`}
         aria-label={`Change priority for ${task.title}`}
+        onMouseDown={stopRowActionEvent}
         onClick={openPriorityDialog}
         className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
       >
         <Flag size={14} />
       </button>
+      <OverflowMenu
+        label={`More actions for ${task.title}`}
+        items={[
+          {
+            label: 'Add task above',
+            onSelect: () => {
+              void handleCreateRelative('before');
+            },
+          },
+          {
+            label: 'Add task below',
+            onSelect: () => {
+              void handleCreateRelative('after');
+            },
+          },
+          {
+            label: 'Edit task',
+            onSelect: () => onOpenTask(task.id),
+          },
+          {
+            label: task.deadlineAt ? 'Change deadline' : 'Add deadline',
+            onSelect: () => onSetActionState({ mode: 'deadline', taskId: task.id }),
+          },
+          {
+            label: taskReminderDrafts.length ? 'Change reminders' : 'Add reminders',
+            onSelect: () => onSetActionState({ mode: 'reminders', taskId: task.id }),
+          },
+          {
+            label: 'Move task',
+            onSelect: () => onSetActionState({ mode: 'move', taskId: task.id }),
+          },
+          {
+            label: 'Duplicate',
+            onSelect: () => {
+              void handleDuplicate();
+            },
+          },
+        ]}
+      />
 
       {isRescheduleOpen ? (
         <RescheduleDialog
@@ -7967,6 +8213,175 @@ function ProjectTaskRowActions({
                 {priority}
               </button>
             ))}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {isDeadlineOpen ? (
+        <ChoiceDialog
+          title={task.deadlineAt ? 'Change deadline' : 'Add deadline'}
+          description={`Update the deadline for "${task.title}".`}
+          onClose={() => onSetActionState(null)}
+          footer={(
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => onSetActionState(null)}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitDeadline}
+                disabled={deadlineEnabled && parseInputValue(deadlineInput, deadlineAllDay) === null}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Save deadline
+              </button>
+            </div>
+          )}
+        >
+          <div className="space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3">
+              <span className="text-sm font-semibold text-[#1E2D2F]">Track a separate deadline</span>
+              <input
+                data-dialog-autofocus="true"
+                type="checkbox"
+                checked={deadlineEnabled}
+                onChange={event => setDeadlineEnabled(event.target.checked)}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
+            {deadlineEnabled ? (
+              <div className="space-y-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-4">
+                <label className="flex items-center justify-between gap-4">
+                  <span className="text-sm font-semibold text-[#1E2D2F]">All day</span>
+                  <input
+                    type="checkbox"
+                    checked={deadlineAllDay}
+                    onChange={event => setDeadlineAllDay(event.target.checked)}
+                    className="h-5 w-5 accent-[#EE6A3C]"
+                  />
+                </label>
+                <input
+                  type={deadlineAllDay ? 'date' : 'datetime-local'}
+                  value={deadlineInput}
+                  onChange={event => setDeadlineInput(event.target.value)}
+                  className="w-full rounded-[14px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm text-[#1E2D2F] outline-none focus:border-[#EE6A3C]"
+                />
+              </div>
+            ) : null}
+          </div>
+        </ChoiceDialog>
+      ) : null}
+
+      {isRemindersOpen ? (
+        <ChoiceDialog
+          title={taskReminderDrafts.length ? 'Change reminders' : 'Add reminders'}
+          description={`Update reminders for "${task.title}".`}
+          onClose={() => onSetActionState(null)}
+          footer={(
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => onSetActionState(null)}
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitReminders}
+                disabled={hasIncompleteReminderEditors(reminderEditors) || (task.dueAt === null && reminderEditors.some(reminder => reminder.mode === 'OFFSET'))}
+                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Save reminders
+              </button>
+            </div>
+          )}
+        >
+          <ReminderListEditor
+            reminders={reminderEditors}
+            dueAt={task.dueAt}
+            onChange={setReminderEditors}
+          />
+        </ChoiceDialog>
+      ) : null}
+
+      {isMoveOpen ? (
+        <ChoiceDialog
+          title="Move task"
+          description={`Move "${task.title}" somewhere else.`}
+          onClose={() => onSetActionState(null)}
+        >
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Quick destinations</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  data-dialog-autofocus="true"
+                  type="button"
+                  onClick={() => {
+                    onMoveTasksToProject([task.id], null);
+                    onSetActionState(null);
+                  }}
+                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                >
+                  Inbox
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onMoveTasksToSection([task.id], null);
+                    onSetActionState(null);
+                  }}
+                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                >
+                  {currentProject.name} / Loose tasks
+                </button>
+              </div>
+            </div>
+            {sections.length ? (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Sections in {currentProject.name}</p>
+                <div className="flex flex-wrap gap-2">
+                  {sections.map(section => (
+                    <button
+                      key={section.id}
+                      type="button"
+                      onClick={() => {
+                        onMoveTasksToSection([task.id], section.id);
+                        onSetActionState(null);
+                      }}
+                      className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                    >
+                      {section.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Projects</p>
+              <div className="flex flex-wrap gap-2">
+                {activeProjects
+                  .filter(project => project.id !== currentProject.id)
+                  .map(project => (
+                    <button
+                      key={project.id}
+                      type="button"
+                      onClick={() => {
+                        onMoveTasksToProject([task.id], project.id);
+                        onSetActionState(null);
+                      }}
+                      className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                    >
+                      {project.name}
+                    </button>
+                  ))}
+              </div>
+            </div>
           </div>
         </ChoiceDialog>
       ) : null}
@@ -8823,6 +9238,46 @@ function renderReminderLabel(reminders: TaskReminderDraft[]): string {
 
 function renderReminderSourceLabel(reminders: TaskReminderDraft[]): string {
   return `Parser / context: ${reminders.length ? renderReminderLabel(reminders) : 'No reminders'}`;
+}
+
+function buildTaskDraftFromTask(payload: SyncPayload, task: Task): TaskDraft {
+  return {
+    title: task.title,
+    description: task.description,
+    projectId: task.projectId,
+    projectName: null,
+    sectionId: task.sectionId,
+    sectionName: null,
+    priority: task.priority,
+    dueAt: task.dueAt ?? null,
+    allDay: task.allDay,
+    deadlineAt: task.deadlineAt ?? null,
+    deadlineAllDay: task.deadlineAllDay ?? false,
+    recurringRule: task.recurringRule ?? null,
+    deadlineRecurringRule: task.deadlineRecurringRule ?? null,
+    parentTaskId: task.parentTaskId,
+    reminders: getTaskReminderDrafts(payload, task.id),
+  };
+}
+
+function buildSiblingTaskDraft(task: Task): TaskDraft {
+  return {
+    title: 'New task',
+    description: '',
+    projectId: task.projectId,
+    projectName: null,
+    sectionId: task.sectionId,
+    sectionName: null,
+    priority: 'P4',
+    dueAt: task.dueAt ?? null,
+    allDay: task.allDay,
+    deadlineAt: null,
+    deadlineAllDay: false,
+    recurringRule: null,
+    deadlineRecurringRule: null,
+    parentTaskId: task.parentTaskId,
+    reminders: [],
+  };
 }
 
 function renderRecurrenceLabel(rule: string): string {
