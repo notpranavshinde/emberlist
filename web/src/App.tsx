@@ -7594,10 +7594,10 @@ function RescheduleDialog({
       title={title}
       description={description}
       onClose={onClose}
-      dialogClassName="max-w-[1120px]"
+      dialogClassName="max-w-[640px]"
       childrenClassName="overflow-x-hidden pr-0"
     >
-      <div className="grid gap-6 xl:grid-cols-[190px_minmax(440px,1fr)]">
+      <div className="grid gap-6 md:grid-cols-[240px_auto]">
         <div className="space-y-1">
           {shortcutItems.map((item, index) => {
             const Icon = item.icon;
@@ -7607,20 +7607,20 @@ function RescheduleDialog({
                 data-dialog-autofocus={index === 0 ? 'true' : undefined}
                 type="button"
                 onClick={item.onSelect}
-                className="flex w-full items-center gap-3 rounded-[18px] px-3 py-2 text-left transition hover:bg-[#FBF7F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#EE6A3C]"
+                className="flex w-full items-center gap-3 rounded-[18px] px-3 py-2 text-left transition hover:bg-[#FBF7F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF1EB] text-[#EE6A3C]">
                   <Icon size={16} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-[#1E2D2F]">{item.label}</span>
+                  <span className="block truncate text-sm font-semibold text-[#1E2D2F]">{item.label}</span>
                 </span>
-                {item.meta ? <span className="text-sm text-[#6D5C50]">{item.meta}</span> : null}
+                {item.meta ? <span className="shrink-0 whitespace-nowrap text-right text-sm text-[#6D5C50]">{item.meta}</span> : null}
               </button>
             );
           })}
         </div>
-        <div className="border-t border-[#EDE3DA] pt-4 xl:min-w-[440px] xl:border-l xl:border-t-0 xl:pl-6 xl:pt-0">
+        <div className="border-t border-[#EDE3DA] pt-4 md:min-w-[280px] md:border-l md:border-t-0 md:pl-6 md:pt-0">
           <div className="flex items-center justify-between">
             <p className="text-base font-semibold text-[#1E2D2F]">{format(visibleMonthStart, 'MMM yyyy')}</p>
             <div className="flex items-center gap-1">
