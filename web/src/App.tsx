@@ -6532,7 +6532,7 @@ function TaskListBlock({
   }
 
   return (
-    <div className="overflow-hidden rounded-[14px] border border-[#ece7e3] bg-white">
+    <div className="overflow-visible rounded-[14px] border border-[#ece7e3] bg-white">
       {flattenedTasks.map(item => (
         <TaskRow
           key={item.task.id}
@@ -8156,7 +8156,7 @@ function OverflowMenu({
         <MoreHorizontal size={16} />
       </button>
       {isOpen ? (
-        <div className={`absolute right-0 z-20 min-w-[220px] overflow-hidden rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl ${openDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        <div className={`absolute right-0 z-20 max-h-[min(320px,calc(100vh-32px))] min-w-[220px] overflow-y-auto rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl ${openDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           {items.map(item => (
             <button
               key={item.label}
