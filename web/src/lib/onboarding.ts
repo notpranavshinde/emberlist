@@ -26,6 +26,19 @@ export type OnboardingSetupResult = {
   sampleTaskTitles: string[];
 };
 
+export type FirstRunOnboardingStep =
+  | "setup"
+  | "project"
+  | "quick_add"
+  | "today";
+
+export type FirstRunOnboardingState = {
+  step: FirstRunOnboardingStep;
+  presetId: OnboardingPresetId;
+  projectId: string | null;
+  quickAddExample: string | null;
+};
+
 export const ONBOARDING_PRESETS: OnboardingPreset[] = [
   {
     id: "personal",
@@ -92,6 +105,39 @@ export function getOnboardingPreset(
     ONBOARDING_PRESETS.find((preset) => preset.id === presetId) ??
     ONBOARDING_PRESETS[0]
   );
+}
+
+export function createInitialOnboardingState(
+  presetId: OnboardingPresetId = "personal",
+): FirstRunOnboardingState {
+  return {
+    step: "setup",
+    presetId,
+    projectId: null,
+    quickAddExample: null,
+  };
+}
+
+export function createOnboardingTourState(
+  presetId: OnboardingPresetId,
+  setup: OnboardingSetupResult,
+): FirstRunOnboardingState {
+  return {
+    step: "project",
+    presetId,
+    projectId: setup.projectId,
+    quickAddExample: setup.quickAddExample,
+  };
+}
+
+export function advanceOnboardingStep(
+  state: FirstRunOnboardingState,
+  step: Exclude<FirstRunOnboardingStep, "setup">,
+): FirstRunOnboardingState {
+  return {
+    ...state,
+    step,
+  };
 }
 
 export function createOnboardingSetup(

@@ -82,7 +82,11 @@ import {
 import { db } from "./lib/db";
 import { reconcileLocalPersistPayload } from "./lib/localSync";
 import {
+  advanceOnboardingStep,
+  createInitialOnboardingState,
   createOnboardingSetup,
+  createOnboardingTourState,
+  type FirstRunOnboardingState,
   ONBOARDING_PRESETS,
   type OnboardingPresetId,
   type OnboardingSetupResult,
@@ -184,6 +188,7 @@ import type {
 const syncEngine = new SyncEngine();
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
 const FIRST_RUN_WELCOME_DISMISSED_KEY = "emberlist.firstRunWelcomeDismissed";
+const FIRST_RUN_ONBOARDING_STATE_KEY = "emberlist.firstRunOnboardingState";
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: "All", value: "ALL" },
   { label: "Overdue", value: "OVERDUE" },
@@ -298,7 +303,8 @@ function App() {
   );
   const [hasDismissedFirstRunWelcome, setHasDismissedFirstRunWelcome] =
     useState(() => readStoredBoolean(FIRST_RUN_WELCOME_DISMISSED_KEY, false));
-  const [isWelcomeDialogOpen, setIsWelcomeDialogOpen] = useState(false);
+  const [firstRunOnboarding, setFirstRunOnboarding] =
+    useState<FirstRunOnboardingState | null>(() => readStoredOnboardingState());
   const [isCloudConnectDialogOpen, setIsCloudConnectDialogOpen] =
     useState(false);
 
@@ -321,6 +327,9 @@ function App() {
     hasCloudSession: Boolean(cloudSession),
   });
   const bannerIdRef = useRef(0);
+  const firstRunOnboardingRef = useRef<FirstRunOnboardingState | null>(
+    firstRunOnboarding,
+  );
   const undoActivityMapRef = useRef(
     new Map<
       string,
@@ -469,6 +478,11 @@ function App() {
       JSON.stringify(hasDismissedFirstRunWelcome),
     );
   }, [hasDismissedFirstRunWelcome]);
+
+  useEffect(() => {
+    firstRunOnboardingRef.current = firstRunOnboarding;
+    writeStoredOnboardingState(firstRunOnboarding);
+  }, [firstRunOnboarding]);
 
   useEffect(() => {
     const autoDismissMs = resolveBannerAutoDismissMs(banner);
@@ -861,8 +875,6 @@ function App() {
     }
 
     if (!cloudSessionRef.current) {
-      setHasDismissedFirstRunWelcome(true);
-      setIsWelcomeDialogOpen(false);
       setIsCloudConnectDialogOpen(true);
       return;
     }
@@ -872,8 +884,6 @@ function App() {
   }
 
   async function handleConnectCloudSync() {
-    setHasDismissedFirstRunWelcome(true);
-    setIsWelcomeDialogOpen(false);
     setIsCloudConnectDialogOpen(false);
     await runCloudSync({ interactiveAuth: true, automatic: false });
     setBootState("ready");
@@ -891,7 +901,6 @@ function App() {
       startOfDay(Date.now()).getTime(),
     );
     await persistPayload(result.payload, true);
-    setHasDismissedFirstRunWelcome(true);
     return result;
   }
 
@@ -1319,6 +1328,16 @@ function App() {
         activityId,
       );
     }
+    const onboardingState = firstRunOnboardingRef.current;
+    if (
+      createdTask &&
+      onboardingState?.step === "quick_add" &&
+      onboardingState.projectId === createdTask.projectId
+    ) {
+      setFirstRunOnboarding(advanceOnboardingStep(onboardingState, "today"));
+      setIsQuickAddOpen(false);
+      setQuickAddOverride(null);
+    }
     return createdTask?.id ?? null;
   }
 
@@ -1364,6 +1383,16 @@ function App() {
         `Removed "${createdTask.title}".`,
         activityId,
       );
+    }
+    const onboardingState = firstRunOnboardingRef.current;
+    if (
+      createdTask &&
+      onboardingState?.step === "quick_add" &&
+      onboardingState.projectId === createdTask.projectId
+    ) {
+      setFirstRunOnboarding(advanceOnboardingStep(onboardingState, "today"));
+      setIsQuickAddOpen(false);
+      setQuickAddOverride(null);
     }
     return createdTask?.id ?? null;
   }
@@ -1492,10 +1521,30 @@ function App() {
 
   useEffect(() => {
     if (bootState !== "ready") return;
-    if (hasDismissedFirstRunWelcome) return;
+    if (hasDismissedFirstRunWelcome) {
+      if (firstRunOnboarding !== null) {
+        setFirstRunOnboarding(null);
+      }
+      return;
+    }
+    if (firstRunOnboarding) return;
     if (!isWorkspaceEmpty(payload)) return;
-    setIsWelcomeDialogOpen(true);
-  }, [bootState, hasDismissedFirstRunWelcome, payload]);
+    setFirstRunOnboarding(createInitialOnboardingState());
+  }, [bootState, firstRunOnboarding, hasDismissedFirstRunWelcome, payload]);
+
+  useEffect(() => {
+    if (
+      !payload ||
+      !firstRunOnboarding?.projectId ||
+      firstRunOnboarding.step === "setup"
+    ) {
+      return;
+    }
+    if (!getProjectById(payload, firstRunOnboarding.projectId)) {
+      setFirstRunOnboarding(null);
+      setHasDismissedFirstRunWelcome(true);
+    }
+  }, [firstRunOnboarding, payload]);
 
   useEffect(() => {
     const previous = previousAutoSyncStateRef.current;
@@ -1703,24 +1752,30 @@ function App() {
           setIsQuickAddOpen(false);
           setQuickAddOverride(null);
         }}
+        onboardingQuickAddExample={
+          firstRunOnboarding?.step === "quick_add"
+            ? firstRunOnboarding.quickAddExample
+            : null
+        }
         activityEntries={activityEntries}
         onUndoActivity={(activityId) => void handleUndoActivity(activityId)}
         canUndoActivity={(activityId) =>
           undoActivityMapRef.current.has(activityId)
         }
-        isWelcomeDialogOpen={isWelcomeDialogOpen}
-        onCloseWelcomeDialog={() => {
-          setIsWelcomeDialogOpen(false);
+        firstRunOnboarding={firstRunOnboarding}
+        onSkipOnboarding={() => {
+          setFirstRunOnboarding(null);
           setHasDismissedFirstRunWelcome(true);
+          setIsQuickAddOpen(false);
+          setQuickAddOverride(null);
         }}
         onConnectGoogleWelcome={() => {
-          setHasDismissedFirstRunWelcome(true);
-          setIsWelcomeDialogOpen(false);
           setIsCloudConnectDialogOpen(true);
         }}
         onCompleteWelcomeSetup={(presetId) =>
           handleCreateOnboardingWorkspace(presetId)
         }
+        onAdvanceOnboarding={(nextState) => setFirstRunOnboarding(nextState)}
         isCloudConnectDialogOpen={isCloudConnectDialogOpen}
         onCloseCloudConnectDialog={() => setIsCloudConnectDialogOpen(false)}
         onConnectCloudDialog={() => {
@@ -1734,22 +1789,24 @@ function App() {
 export default App;
 
 type AppFrameProps = WorkspaceShellProps & {
-  isWelcomeDialogOpen: boolean;
-  onCloseWelcomeDialog: () => void;
+  firstRunOnboarding: FirstRunOnboardingState | null;
+  onSkipOnboarding: () => void;
   onConnectGoogleWelcome: () => void;
   onCompleteWelcomeSetup: (
     presetId: OnboardingPresetId,
   ) => Promise<OnboardingSetupResult | null>;
+  onAdvanceOnboarding: (state: FirstRunOnboardingState | null) => void;
   isCloudConnectDialogOpen: boolean;
   onCloseCloudConnectDialog: () => void;
   onConnectCloudDialog: () => void;
 };
 
 function AppFrame({
-  isWelcomeDialogOpen,
-  onCloseWelcomeDialog,
+  firstRunOnboarding,
+  onSkipOnboarding,
   onConnectGoogleWelcome,
   onCompleteWelcomeSetup,
+  onAdvanceOnboarding,
   isCloudConnectDialogOpen,
   onCloseCloudConnectDialog,
   onConnectCloudDialog,
@@ -1759,32 +1816,77 @@ function AppFrame({
   const navigate = useNavigate();
   const isPublicRoute = isPublicMarketingPath(location.pathname);
 
+  useEffect(() => {
+    if (isPublicRoute || !firstRunOnboarding?.projectId) return;
+
+    if (firstRunOnboarding.step === "project" || firstRunOnboarding.step === "quick_add") {
+      const projectPath = `/project/${firstRunOnboarding.projectId}`;
+      if (location.pathname !== projectPath) {
+        navigate(projectPath, { replace: true });
+      }
+      return;
+    }
+
+    if (firstRunOnboarding.step === "today" && location.pathname !== "/today") {
+      navigate("/today", { replace: true });
+    }
+  }, [firstRunOnboarding, isPublicRoute, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (isPublicRoute || firstRunOnboarding?.step !== "quick_add") return;
+    if (!firstRunOnboarding.projectId) return;
+    if (workspaceShellProps.isQuickAddOpen) return;
+
+    workspaceShellProps.onOpenQuickAdd({
+      defaultProjectId: firstRunOnboarding.projectId,
+      defaultSectionId: null,
+      defaultDueToday: false,
+    });
+  }, [
+    firstRunOnboarding,
+    isPublicRoute,
+    workspaceShellProps.isQuickAddOpen,
+    workspaceShellProps.onOpenQuickAdd,
+  ]);
+
   return (
     <>
       <WorkspaceShell {...workspaceShellProps} />
 
-      {!isPublicRoute && isWelcomeDialogOpen ? (
-        <WelcomeDialog
+      {!isPublicRoute &&
+      firstRunOnboarding?.step === "setup" &&
+      !isCloudConnectDialogOpen ? (
+        <OnboardingSetupDialog
           cloudConfigured={workspaceShellProps.cloudConfigured}
-          onClose={onCloseWelcomeDialog}
+          onSkip={onSkipOnboarding}
           onConnectGoogle={onConnectGoogleWelcome}
-          onCompleteSetup={async (presetId, action) => {
+          onStart={async (presetId) => {
             const result = await onCompleteWelcomeSetup(presetId);
             if (!result) return;
             navigate(`/project/${result.projectId}`);
-            if (action === "quick-add") {
-              workspaceShellProps.onOpenQuickAdd({
-                defaultProjectId: result.projectId,
-                defaultSectionId: null,
-                defaultDueToday: false,
-              });
-              workspaceShellProps.onShowBanner(
-                "info",
-                `Try Quick Add with: ${result.quickAddExample}`,
-              );
-            }
-            onCloseWelcomeDialog();
+            onAdvanceOnboarding(createOnboardingTourState(presetId, result));
           }}
+        />
+      ) : null}
+
+      {!isPublicRoute &&
+      firstRunOnboarding &&
+      firstRunOnboarding.step !== "setup" ? (
+        <OnboardingCoachmark
+          step={firstRunOnboarding.step}
+          quickAddExample={firstRunOnboarding.quickAddExample}
+          onNext={() => {
+            if (firstRunOnboarding.step === "project") {
+              onAdvanceOnboarding(
+                advanceOnboardingStep(firstRunOnboarding, "quick_add"),
+              );
+              return;
+            }
+            if (firstRunOnboarding.step === "today") {
+              onSkipOnboarding();
+            }
+          }}
+          onSkip={onSkipOnboarding}
         />
       ) : null}
 
@@ -1883,6 +1985,7 @@ type WorkspaceShellProps = {
   quickAddOverride: Partial<QuickAddContext> | null;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onCloseQuickAdd: () => void;
+  onboardingQuickAddExample: string | null;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
   canUndoActivity: (activityId: string) => boolean;
@@ -1948,6 +2051,7 @@ function WorkspaceShell({
   quickAddOverride,
   onOpenQuickAdd,
   onCloseQuickAdd,
+  onboardingQuickAddExample,
   activityEntries,
   onUndoActivity,
   canUndoActivity,
@@ -2754,6 +2858,7 @@ function WorkspaceShell({
           onClose={onCloseQuickAdd}
           onCreateTask={onCreateTask}
           onCreateTaskRelative={onCreateTaskRelative}
+          onboardingExample={onboardingQuickAddExample}
           onShowBanner={onShowBanner}
         />
       ) : null}
@@ -3607,23 +3712,25 @@ function TodayPage({
         />
       ) : null}
 
-      <TaskGroup
-        title="Due today"
-        subtitle="Tasks scheduled for today."
-        payload={payload}
-        todayStartMs={todayStartMs}
-        tasks={data.today}
-        emptyMessage="No tasks due today."
-        onToggleTask={onToggleTask}
-        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
-        selectionMode={selectionMode}
-        selectedTaskIds={selectedTaskIds}
-        onToggleSelection={toggleSelection}
-        onStartSelection={openSelection}
-        onPromoteSubtask={onPromoteSubtask}
-        rowActions={renderTaskRowActions}
-      />
+      <div data-onboarding-target="today-due">
+        <TaskGroup
+          title="Due today"
+          subtitle="Tasks scheduled for today."
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={data.today}
+          emptyMessage="No tasks due today."
+          onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={toggleSelection}
+          onStartSelection={openSelection}
+          onPromoteSubtask={onPromoteSubtask}
+          rowActions={renderTaskRowActions}
+        />
+      </div>
 
       {showCompletedToday ? (
         <TaskGroup
@@ -5755,40 +5862,42 @@ function ProjectPage({
           </div>
         ) : (
           <>
-            <TaskGroup
-              title="Loose tasks"
-              subtitle="Open tasks in this project without a section."
-              payload={payload}
-              todayStartMs={todayStartMs}
-              tasks={unsectionedTasks}
-              emptyMessage="No unsectioned tasks here."
-              onToggleTask={onToggleTask}
-              onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-              onPromoteSubtask={onPromoteSubtask}
-              onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
-              selectionMode={selectionMode}
-              selectedTaskIds={selectedTaskIds}
-              onToggleSelection={toggleSelection}
-              onStartSelection={openSelection}
-              rowActions={renderProjectRowActions}
-              dropTargetState={{
-                active: activeListDropSectionId === "__loose__",
-                hint: "Drop task here to move it out of a section.",
-                ...getListDropHandlers(null),
-              }}
-              headerActions={
-                <button
-                  onClick={() =>
-                    onOpenQuickAdd({ defaultProjectId: currentProject.id })
-                  }
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-                  title="Add task"
-                  aria-label="Add task"
-                >
-                  <Plus size={14} />
-                </button>
-              }
-            />
+            <div data-onboarding-target="project-task-area">
+              <TaskGroup
+                title="Loose tasks"
+                subtitle="Open tasks in this project without a section."
+                payload={payload}
+                todayStartMs={todayStartMs}
+                tasks={unsectionedTasks}
+                emptyMessage="No unsectioned tasks here."
+                onToggleTask={onToggleTask}
+                onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                onPromoteSubtask={onPromoteSubtask}
+                onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+                selectionMode={selectionMode}
+                selectedTaskIds={selectedTaskIds}
+                onToggleSelection={toggleSelection}
+                onStartSelection={openSelection}
+                rowActions={renderProjectRowActions}
+                dropTargetState={{
+                  active: activeListDropSectionId === "__loose__",
+                  hint: "Drop task here to move it out of a section.",
+                  ...getListDropHandlers(null),
+                }}
+                headerActions={
+                  <button
+                    onClick={() =>
+                      onOpenQuickAdd({ defaultProjectId: currentProject.id })
+                    }
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    title="Add task"
+                    aria-label="Add task"
+                  >
+                    <Plus size={14} />
+                  </button>
+                }
+              />
+            </div>
 
             {sections.map((section) => {
               const sectionTasks = tasks.filter(
@@ -8180,6 +8289,7 @@ function QuickAddDialog({
   onClose,
   onCreateTask,
   onCreateTaskRelative,
+  onboardingExample,
   onShowBanner,
 }: {
   payload: SyncPayload;
@@ -8195,6 +8305,7 @@ function QuickAddDialog({
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string },
   ) => Promise<string | null>;
+  onboardingExample: string | null;
   onShowBanner: (
     tone: Banner["tone"],
     message: string,
@@ -8720,6 +8831,7 @@ function QuickAddDialog({
               <textarea
                 autoFocus
                 ref={inputRef}
+                data-onboarding-target="quick-add-parser"
                 value={input}
                 onChange={(event) => {
                   setInput(event.target.value);
@@ -8735,6 +8847,19 @@ function QuickAddDialog({
               repeat rules. Example: `Pay rent every month on the 1st at 9am p1
               #bills`.
             </p>
+            {onboardingExample && !input.trim() ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInput(onboardingExample);
+                  window.setTimeout(() => inputRef.current?.focus(), 0);
+                }}
+                className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-1.5 text-xs font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
+              >
+                <span>Try example</span>
+                <span className="text-[#8A5A44]">{onboardingExample}</span>
+              </button>
+            ) : null}
 
             <label className="mt-3 block">
               <span className="sr-only">Description</span>
@@ -10403,206 +10528,258 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function WelcomeDialog({
+function OnboardingSetupDialog({
   cloudConfigured,
-  onClose,
+  onSkip,
   onConnectGoogle,
-  onCompleteSetup,
+  onStart,
 }: {
   cloudConfigured: boolean;
-  onClose: () => void;
+  onSkip: () => void;
   onConnectGoogle: () => void;
-  onCompleteSetup: (
-    presetId: OnboardingPresetId,
-    action: "finish" | "quick-add",
-  ) => Promise<void>;
+  onStart: (presetId: OnboardingPresetId) => Promise<void>;
 }) {
   const [selectedPresetId, setSelectedPresetId] =
     useState<OnboardingPresetId>("personal");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [step, setStep] = useState<"choose" | "finish">("choose");
-  const [setupSummary, setSetupSummary] = useState<Pick<
-    OnboardingSetupResult,
-    "projectName" | "quickAddExample" | "sampleTaskTitles"
-  > | null>(null);
-
-  async function completeSetup(action: "finish" | "quick-add") {
-    if (isSubmitting || !setupSummary) return;
-    setIsSubmitting(true);
-    try {
-      await onCompleteSetup(selectedPresetId, action);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function createStarterWorkspace() {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      setSetupSummary({
-        projectName: selectedPreset.projectName,
-        quickAddExample: selectedPreset.quickAddExample,
-        sampleTaskTitles: selectedPreset.sampleTasks.map((task) => task.title),
-      });
-      setStep("finish");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
 
   const selectedPreset =
     ONBOARDING_PRESETS.find((preset) => preset.id === selectedPresetId) ??
     ONBOARDING_PRESETS[0];
 
+  async function submitStart() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onStart(selectedPresetId);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <ChoiceDialog
-      title={
-        step === "choose" ? "Set up Emberlist" : "Preview your starter workspace"
-      }
-      description={
-        step === "choose"
-          ? "Pick what you want to manage first. Emberlist can create one sample project, a few realistic tasks, and then drop you into Quick Add."
-          : "This is what Emberlist will create when you continue. You can skip all of this next time."
-      }
-      onClose={onClose}
-      dialogClassName="max-w-2xl"
+      title="Start with a simple workspace"
+      description="Pick one area to manage first. Emberlist will create a sample project, seed a few realistic tasks, and then teach Quick Add in the live app."
+      onClose={onSkip}
+      dialogClassName="max-w-3xl"
     >
-      <div className="space-y-4">
-        {step === "choose" ? (
-          <>
-            <div className="grid gap-3 md:grid-cols-3">
-              {ONBOARDING_PRESETS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => setSelectedPresetId(preset.id)}
-                  className={`rounded-[22px] border px-4 py-4 text-left transition ${
-                    selectedPresetId === preset.id
-                      ? "border-[#F3B7A4] bg-[#FFF5F1]"
-                      : "border-[#E1D5CA] bg-[#FBF7F3] hover:bg-white"
-                  }`}
-                >
-                  <p className="text-base font-semibold text-[#1E2D2F]">
-                    {preset.label}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                    {preset.description}
-                  </p>
-                </button>
-              ))}
-            </div>
-            <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
-              <p className="text-sm font-semibold text-[#1E2D2F]">
-                What Emberlist will do
-              </p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
-                <li>Create a sample project called "{selectedPreset.projectName}".</li>
-                <li>Seed 4 example tasks, including one recurring task.</li>
-                <li>Teach Quick Add immediately with a real natural-language example.</li>
-              </ul>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => void createStarterWorkspace()}
-                data-dialog-autofocus="true"
-                disabled={isSubmitting}
-                className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? "Preparing..." : "Preview starter workspace"}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
-              >
-                Skip for now
-              </button>
-              <button
-                type="button"
-                onClick={onConnectGoogle}
-                disabled={!cloudConfigured}
-                className="rounded-full border border-[#E1D5CA] bg-white px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {cloudConfigured
-                  ? "Connect Google Drive first"
-                  : "Cloud sync unavailable"}
-              </button>
-            </div>
-          </>
-        ) : setupSummary ? (
-          <>
-            <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
-              <p className="text-sm font-semibold text-[#1E2D2F]">
-                Sample project
-              </p>
-              <p className="mt-2 text-sm text-[#6D5C50]">
-                Emberlist will create {setupSummary.projectName} with these tasks:
-              </p>
-              <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
-                {setupSummary.sampleTaskTitles.map((title) => (
-                  <li key={title}>{title}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
-                <p className="text-sm font-semibold text-[#1E2D2F]">Project</p>
-                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                  Start in the sample project to see how tasks are grouped.
-                </p>
-              </div>
-              <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
-                <p className="text-sm font-semibold text-[#1E2D2F]">Today</p>
-                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                  Today shows what needs attention now and what slipped.
-                </p>
-              </div>
-              <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Quick Add
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                  Use plain language to set dates, priorities, projects, and repeat rules.
-                </p>
-              </div>
-            </div>
-            <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-5 py-4">
-              <p className="text-sm font-semibold text-[#1E2D2F]">
-                Try Quick Add next
+      <div className="space-y-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          {ONBOARDING_PRESETS.map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => setSelectedPresetId(preset.id)}
+              className={`rounded-[22px] border px-4 py-4 text-left transition ${
+                selectedPresetId === preset.id
+                  ? "border-[#F3B7A4] bg-[#FFF5F1] shadow-sm"
+                  : "border-[#E1D5CA] bg-[#FBF7F3] hover:bg-white"
+              }`}
+            >
+              <p className="text-base font-semibold text-[#1E2D2F]">
+                {preset.label}
               </p>
               <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                Emberlist understands dates, priorities, projects, reminders,
-                and repeat rules from plain language.
+                {preset.description}
               </p>
-              <code className="mt-3 block rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm text-[#1E2D2F]">
-                {setupSummary.quickAddExample}
-              </code>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => void completeSetup("quick-add")}
-                data-dialog-autofocus="true"
-                disabled={isSubmitting}
-                className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSubmitting ? "Opening..." : "Open Quick Add"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void completeSetup("finish")}
-                disabled={isSubmitting}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
-              >
-                Start exploring
-              </button>
-            </div>
-          </>
-        ) : null}
+            </button>
+          ))}
+        </div>
+
+        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+          <p className="text-sm font-semibold text-[#1E2D2F]">
+            Starter project: {selectedPreset.projectName}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+            You will get four example tasks, including recurring work, and then
+            Emberlist will drop you directly into Quick Add so you can try one
+            natural-language task yourself.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="button"
+            data-dialog-autofocus="true"
+            onClick={() => void submitStart()}
+            disabled={isSubmitting}
+            className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSubmitting ? "Setting up..." : "Start with this"}
+          </button>
+          <button
+            type="button"
+            onClick={onSkip}
+            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+          >
+            Skip
+          </button>
+          {cloudConfigured ? (
+            <button
+              type="button"
+              onClick={onConnectGoogle}
+              className="rounded-full border border-[#E1D5CA] bg-white px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            >
+              Connect Google Drive first
+            </button>
+          ) : null}
+        </div>
       </div>
     </ChoiceDialog>
+  );
+}
+
+function OnboardingCoachmark({
+  step,
+  quickAddExample,
+  onNext,
+  onSkip,
+}: {
+  step: Exclude<FirstRunOnboardingState["step"], "setup">;
+  quickAddExample: string | null;
+  onNext: () => void;
+  onSkip: () => void;
+}) {
+  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
+  const stepConfig = getOnboardingCoachmarkContent(step, quickAddExample);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+
+    const updateRect = () => {
+      const target = document.querySelector<HTMLElement>(
+        stepConfig.targetSelector,
+      );
+      setTargetRect(target ? target.getBoundingClientRect() : null);
+    };
+
+    updateRect();
+    const handleChange = () => window.requestAnimationFrame(updateRect);
+
+    window.addEventListener("resize", handleChange);
+    window.addEventListener("scroll", handleChange, true);
+    return () => {
+      window.removeEventListener("resize", handleChange);
+      window.removeEventListener("scroll", handleChange, true);
+    };
+  }, [stepConfig.targetSelector]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const target = document.querySelector<HTMLElement>(stepConfig.targetSelector);
+    target?.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+  }, [stepConfig.targetSelector]);
+
+  const cardStyle = useMemo<CSSProperties>(() => {
+    if (step === "quick_add") {
+      return {
+        top: 24,
+        right: 24,
+        width: Math.min(340, window.innerWidth - 32),
+      };
+    }
+
+    if (!targetRect) {
+      return {
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+        width: Math.min(360, window.innerWidth - 32),
+      };
+    }
+
+    const cardWidth = Math.min(360, window.innerWidth - 32);
+    const canPlaceRight =
+      window.innerWidth - targetRect.right >= cardWidth + 24;
+    const canPlaceLeft = targetRect.left >= cardWidth + 24;
+
+    if (canPlaceRight || canPlaceLeft) {
+      return {
+        top: Math.min(
+          Math.max(16, targetRect.top),
+          window.innerHeight - 240,
+        ),
+        left: canPlaceRight
+          ? targetRect.right + 16
+          : Math.max(16, targetRect.left - cardWidth - 16),
+        width: cardWidth,
+      };
+    }
+
+    const placeBelow = window.innerHeight - targetRect.bottom >= 220;
+    const top = placeBelow
+      ? targetRect.bottom + 16
+      : Math.max(16, targetRect.top - 212);
+    const left = Math.min(
+      Math.max(16, targetRect.left),
+      window.innerWidth - cardWidth - 16,
+    );
+
+    return {
+      top,
+      left,
+      width: cardWidth,
+    };
+  }, [step, targetRect]);
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-[#241b17]/14" />
+      {targetRect ? (
+        <div
+          className="absolute rounded-[24px] border-2 border-[#EE6A3C] bg-transparent shadow-[0_0_0_9999px_rgba(36,27,23,0.14)]"
+          style={{
+            top: Math.max(8, targetRect.top - 8),
+            left: Math.max(8, targetRect.left - 8),
+            width: Math.min(window.innerWidth - 16, targetRect.width + 16),
+            height: Math.min(window.innerHeight - 16, targetRect.height + 16),
+          }}
+        />
+      ) : null}
+
+      <div
+        className="pointer-events-auto absolute rounded-[24px] border border-[#E1D5CA] bg-white p-5 shadow-[0_20px_60px_rgba(36,27,23,0.18)]"
+        style={cardStyle}
+      >
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#B1775C]">
+          Step {stepConfig.stepIndex} of 3
+        </p>
+        <h3 className="mt-2 text-lg font-semibold text-[#1E2D2F]">
+          {stepConfig.title}
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+          {stepConfig.description}
+        </p>
+        {stepConfig.example ? (
+          <code className="mt-3 block rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm text-[#1E2D2F]">
+            {stepConfig.example}
+          </code>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          {stepConfig.primaryLabel ? (
+            <button
+              type="button"
+              onClick={onNext}
+              className="rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
+            >
+              {stepConfig.primaryLabel}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onSkip}
+            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+          >
+            {step === "quick_add" ? "Skip practice" : "Skip"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -11800,6 +11977,103 @@ function parseInputValue(value: string, allDay: boolean): number | null {
   }
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? null : parsed;
+}
+
+function getOnboardingCoachmarkContent(
+  step: Exclude<FirstRunOnboardingState["step"], "setup">,
+  quickAddExample: string | null,
+): {
+  stepIndex: number;
+  title: string;
+  description: string;
+  targetSelector: string;
+  primaryLabel: string | null;
+  example: string | null;
+} {
+  switch (step) {
+    case "project":
+      return {
+        stepIndex: 1,
+        title: "This is your starter project",
+        description:
+          "Projects hold related tasks and sections. Start here to get oriented before you begin capturing your own work.",
+        targetSelector: '[data-onboarding-target="project-task-area"]',
+        primaryLabel: "Next",
+        example: null,
+      };
+    case "quick_add":
+      return {
+        stepIndex: 2,
+        title: "Try Quick Add once",
+        description:
+          "Use plain language here. Dates, priorities, projects, and repeat rules are all understood directly from what you type.",
+        targetSelector: '[data-onboarding-target="quick-add-parser"]',
+        primaryLabel: null,
+        example: quickAddExample,
+      };
+    case "today":
+      return {
+        stepIndex: 3,
+        title: "This is what needs attention now",
+        description:
+          "Anything due now or overdue lands here. This is where you will spend most of your time once tasks start moving.",
+        targetSelector: '[data-onboarding-target="today-due"]',
+        primaryLabel: "Finish",
+        example: null,
+      };
+  }
+}
+
+function readStoredOnboardingState(): FirstRunOnboardingState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FIRST_RUN_ONBOARDING_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<FirstRunOnboardingState> | null;
+    if (!parsed || typeof parsed !== "object") return null;
+    const validSteps = new Set<FirstRunOnboardingState["step"]>([
+      "setup",
+      "project",
+      "quick_add",
+      "today",
+    ]);
+    const validPresets = new Set<OnboardingPresetId>([
+      "personal",
+      "school",
+      "work",
+    ]);
+    if (
+      !validSteps.has(parsed.step as FirstRunOnboardingState["step"]) ||
+      !validPresets.has(parsed.presetId as OnboardingPresetId)
+    ) {
+      return null;
+    }
+    return {
+      step: parsed.step as FirstRunOnboardingState["step"],
+      presetId: parsed.presetId as OnboardingPresetId,
+      projectId: typeof parsed.projectId === "string" ? parsed.projectId : null,
+      quickAddExample:
+        typeof parsed.quickAddExample === "string"
+          ? parsed.quickAddExample
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredOnboardingState(
+  state: FirstRunOnboardingState | null,
+): void {
+  if (typeof window === "undefined") return;
+  if (!state) {
+    window.localStorage.removeItem(FIRST_RUN_ONBOARDING_STATE_KEY);
+    return;
+  }
+  window.localStorage.setItem(
+    FIRST_RUN_ONBOARDING_STATE_KEY,
+    JSON.stringify(state),
+  );
 }
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {
