@@ -52,11 +52,12 @@ export const shortcutSections: ShortcutSection[] = [
     title: 'Task Actions',
     items: [
       { keys: 'X', description: 'Select the focused task' },
-      { keys: 'Ctrl+A', description: 'Select all visible Today tasks' },
-      { keys: 'T', description: 'Reschedule the focused task or selected Today tasks' },
-      { keys: 'V', description: 'Move the focused task or selected Today tasks' },
-      { keys: 'P', description: 'Change priority for the focused task or selected Today tasks' },
-      { keys: 'Delete / Backspace', description: 'Delete the focused task or selected Today tasks' },
+      { keys: 'Ctrl+A', description: 'Select all visible tasks in the current list' },
+      { keys: 'T', description: 'Reschedule the focused task or selected tasks' },
+      { keys: 'V', description: 'Move the focused task or selected tasks' },
+      { keys: 'P', description: 'Change priority for the focused task or selected tasks' },
+      { keys: '.', description: 'Open more actions for the focused task' },
+      { keys: 'Delete / Backspace', description: 'Delete the focused task or selected tasks' },
     ],
   },
   {

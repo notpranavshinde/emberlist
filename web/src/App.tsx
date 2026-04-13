@@ -2067,14 +2067,18 @@ function WorkspaceShell({
                     payload={payload}
                     showCompletedToday={showCompletedToday}
                     showSelectionButtons={showSelectionButtons}
+                    onCreateTaskRelative={onCreateTaskRelative}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
+                    onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
+                    onSaveTask={onSaveTask}
+                    onDuplicateTask={onDuplicateTask}
                   />
                 }
               />
@@ -2084,14 +2088,18 @@ function WorkspaceShell({
                   <UpcomingPage
                     payload={payload}
                     showSelectionButtons={showSelectionButtons}
+                    onCreateTaskRelative={onCreateTaskRelative}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
+                    onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
+                    onSaveTask={onSaveTask}
+                    onDuplicateTask={onDuplicateTask}
                   />
                 }
               />
@@ -2101,14 +2109,18 @@ function WorkspaceShell({
                   <SearchPage
                     payload={payload}
                     showSelectionButtons={showSelectionButtons}
+                    onCreateTaskRelative={onCreateTaskRelative}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
+                    onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
+                    onSaveTask={onSaveTask}
+                    onDuplicateTask={onDuplicateTask}
                   />
                 }
               />
@@ -2118,14 +2130,18 @@ function WorkspaceShell({
                   <SearchPage
                     payload={payload}
                     showSelectionButtons={showSelectionButtons}
+                    onCreateTaskRelative={onCreateTaskRelative}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
+                    onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
+                    onSaveTask={onSaveTask}
+                    onDuplicateTask={onDuplicateTask}
                     forcedFilter="NO_DUE"
                   />
                 }
@@ -2137,14 +2153,18 @@ function WorkspaceShell({
                   <InboxPage
                     payload={payload}
                     showSelectionButtons={showSelectionButtons}
+                    onCreateTaskRelative={onCreateTaskRelative}
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onRescheduleTasks={onRescheduleTasks}
                     onPostponeTasks={onPostponeTasks}
                     onMoveTasksToProject={onMoveTasksToProject}
+                    onMoveTasksToSection={onMoveTasksToSection}
                     onSetTasksPriority={onSetTasksPriority}
                     onDeleteTasks={onDeleteTasks}
                     onPromoteSubtask={onPromoteSubtask}
+                    onSaveTask={onSaveTask}
+                    onDuplicateTask={onDuplicateTask}
                   />
                 }
               />
@@ -2704,26 +2724,34 @@ function TodayPage({
   payload,
   showCompletedToday,
   showSelectionButtons,
+  onCreateTaskRelative,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
+  onMoveTasksToSection,
   onSetTasksPriority,
   onDeleteTasks,
   onPromoteSubtask,
+  onSaveTask,
+  onDuplicateTask,
 }: {
   payload: SyncPayload;
   showCompletedToday: boolean;
   showSelectionButtons: boolean;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -2735,6 +2763,10 @@ function TodayPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'reschedule-overdue' | 'move' | 'priority' | 'delete'>(null);
+  const [rowActionState, setRowActionState] = useState<{
+    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    taskId: string;
+  } | null>(null);
   const visibleTasks = useMemo(
     () => (showCompletedToday ? [...data.overdue, ...data.today, ...data.completedToday] : [...data.overdue, ...data.today]),
     [data.completedToday, data.overdue, data.today, showCompletedToday]
@@ -2853,6 +2885,28 @@ function TodayPage({
     clearSelection();
   }
 
+  function renderTaskRowActions(task: Task) {
+    if (task.status !== 'OPEN') return null;
+    return (
+      <TaskRowActions
+        payload={payload}
+        task={task}
+        actionState={rowActionState}
+        onSetActionState={setRowActionState}
+        onCreateTaskRelative={onCreateTaskRelative}
+        onSaveTask={onSaveTask}
+        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onRescheduleTasks={onRescheduleTasks}
+        onPostponeTasks={onPostponeTasks}
+        onMoveTasksToProject={onMoveTasksToProject}
+        onMoveTasksToSection={onMoveTasksToSection}
+        onSetTasksPriority={onSetTasksPriority}
+        onDeleteTasks={onDeleteTasks}
+        onDuplicateTask={onDuplicateTask}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
@@ -2937,6 +2991,7 @@ function TodayPage({
           onToggleSelection={toggleSelection}
           onStartSelection={openSelection}
           onPromoteSubtask={onPromoteSubtask}
+          rowActions={renderTaskRowActions}
           headerActions={
             <button
               type="button"
@@ -2964,6 +3019,7 @@ function TodayPage({
         onToggleSelection={toggleSelection}
         onStartSelection={openSelection}
         onPromoteSubtask={onPromoteSubtask}
+        rowActions={renderTaskRowActions}
       />
 
       {showCompletedToday ? (
@@ -2984,6 +3040,7 @@ function TodayPage({
           onToggleSelection={toggleSelection}
           onStartSelection={openSelection}
           onPromoteSubtask={onPromoteSubtask}
+          rowActions={renderTaskRowActions}
         />
       ) : null}
 
@@ -3097,25 +3154,33 @@ function TodayPage({
 function UpcomingPage({
   payload,
   showSelectionButtons,
+  onCreateTaskRelative,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
+  onMoveTasksToSection,
   onSetTasksPriority,
   onDeleteTasks,
   onPromoteSubtask,
+  onSaveTask,
+  onDuplicateTask,
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -3131,6 +3196,10 @@ function UpcomingPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule-selected' | 'move' | 'priority' | 'delete'>(null);
+  const [rowActionState, setRowActionState] = useState<{
+    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    taskId: string;
+  } | null>(null);
   const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(null);
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
@@ -3252,6 +3321,28 @@ function UpcomingPage({
     clearSelection();
   }
 
+  function renderTaskRowActions(task: Task) {
+    if (task.status !== 'OPEN') return null;
+    return (
+      <TaskRowActions
+        payload={payload}
+        task={task}
+        actionState={rowActionState}
+        onSetActionState={setRowActionState}
+        onCreateTaskRelative={onCreateTaskRelative}
+        onSaveTask={onSaveTask}
+        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onRescheduleTasks={onRescheduleTasks}
+        onPostponeTasks={onPostponeTasks}
+        onMoveTasksToProject={onMoveTasksToProject}
+        onMoveTasksToSection={onMoveTasksToSection}
+        onSetTasksPriority={onSetTasksPriority}
+        onDeleteTasks={onDeleteTasks}
+        onDuplicateTask={onDuplicateTask}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
@@ -3336,6 +3427,7 @@ function UpcomingPage({
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
           onStartSelection={openSelection}
+          rowActions={renderTaskRowActions}
         />
       ) : null}
 
@@ -3379,6 +3471,7 @@ function UpcomingPage({
               selectedTaskIds={selectedTaskIds}
               onToggleSelection={toggleSelection}
               onStartSelection={openSelection}
+              rowActions={renderTaskRowActions}
               headerActions={(
                 <span className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-[11px] font-semibold text-[#6D5C50]">
                   Drag tasks here to reschedule
@@ -3406,6 +3499,7 @@ function UpcomingPage({
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
         />
@@ -3509,26 +3603,34 @@ function UpcomingPage({
 function SearchPage({
   payload,
   showSelectionButtons,
+  onCreateTaskRelative,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
+  onMoveTasksToSection,
   onSetTasksPriority,
   onDeleteTasks,
   onPromoteSubtask,
+  onSaveTask,
+  onDuplicateTask,
   forcedFilter,
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
   forcedFilter?: SearchFilter;
 }) {
   const navigate = useNavigate();
@@ -3540,6 +3642,10 @@ function SearchPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
+  const [rowActionState, setRowActionState] = useState<{
+    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    taskId: string;
+  } | null>(null);
   const deferredQuery = useDeferredValue(query);
   const filters = useMemo(() => {
     if (forcedFilter) {
@@ -3712,6 +3818,28 @@ function SearchPage({
     clearSelection();
   }
 
+  function renderTaskRowActions(task: Task) {
+    if (task.status !== 'OPEN') return null;
+    return (
+      <TaskRowActions
+        payload={payload}
+        task={task}
+        actionState={rowActionState}
+        onSetActionState={setRowActionState}
+        onCreateTaskRelative={onCreateTaskRelative}
+        onSaveTask={onSaveTask}
+        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onRescheduleTasks={onRescheduleTasks}
+        onPostponeTasks={onPostponeTasks}
+        onMoveTasksToProject={onMoveTasksToProject}
+        onMoveTasksToSection={onMoveTasksToSection}
+        onSetTasksPriority={onSetTasksPriority}
+        onDeleteTasks={onDeleteTasks}
+        onDuplicateTask={onDuplicateTask}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
@@ -3832,6 +3960,7 @@ function SearchPage({
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
         onStartSelection={openSelection}
+        rowActions={renderTaskRowActions}
       />
 
       {completedResults.length ? (
@@ -3846,6 +3975,7 @@ function SearchPage({
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
         />
@@ -3950,25 +4080,33 @@ function SearchPage({
 function InboxPage({
   payload,
   showSelectionButtons,
+  onCreateTaskRelative,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
+  onMoveTasksToSection,
   onSetTasksPriority,
   onDeleteTasks,
   onPromoteSubtask,
+  onSaveTask,
+  onDuplicateTask,
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
+  onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (draggedTaskId: string, parentTaskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
+  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
@@ -3979,6 +4117,10 @@ function InboxPage({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(() => new Set());
   const [activeDialog, setActiveDialog] = useState<null | 'reschedule' | 'move' | 'priority' | 'delete'>(null);
+  const [rowActionState, setRowActionState] = useState<{
+    mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move';
+    taskId: string;
+  } | null>(null);
   const selectedIds = useMemo(
     () => Array.from(selectedTaskIds).filter(taskId => visibleTaskIds.has(taskId)),
     [selectedTaskIds, visibleTaskIds]
@@ -4067,6 +4209,28 @@ function InboxPage({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeDialog, selectionMode, tasks]);
 
+  function renderTaskRowActions(task: Task) {
+    if (task.status !== 'OPEN') return null;
+    return (
+      <TaskRowActions
+        payload={payload}
+        task={task}
+        actionState={rowActionState}
+        onSetActionState={setRowActionState}
+        onCreateTaskRelative={onCreateTaskRelative}
+        onSaveTask={onSaveTask}
+        onOpenTask={taskId => navigate(`/task/${taskId}`)}
+        onRescheduleTasks={onRescheduleTasks}
+        onPostponeTasks={onPostponeTasks}
+        onMoveTasksToProject={onMoveTasksToProject}
+        onMoveTasksToSection={onMoveTasksToSection}
+        onSetTasksPriority={onSetTasksPriority}
+        onDeleteTasks={onDeleteTasks}
+        onDuplicateTask={onDuplicateTask}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6" data-task-selection-mode={selectionMode ? 'true' : undefined}>
       <HeroCard
@@ -4149,6 +4313,7 @@ function InboxPage({
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
         onStartSelection={openSelection}
+        rowActions={renderTaskRowActions}
       />
 
       {completedTasks.length ? (
@@ -4163,6 +4328,7 @@ function InboxPage({
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={taskId => navigate(`/task/${taskId}`)}
+          rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
         />
@@ -4511,11 +4677,9 @@ function ProjectPage({
   function renderProjectRowActions(task: Task) {
     if (task.status !== 'OPEN') return null;
     return (
-      <ProjectTaskRowActions
+      <TaskRowActions
         payload={payload}
         task={task}
-        currentProject={currentProject}
-        sections={sections}
         actionState={projectTaskActionState}
         onSetActionState={setProjectTaskActionState}
         onCreateTaskRelative={onCreateTaskRelative}
@@ -4526,6 +4690,7 @@ function ProjectPage({
         onMoveTasksToProject={onMoveTasksToProject}
         onMoveTasksToSection={onMoveTasksToSection}
         onSetTasksPriority={onSetTasksPriority}
+        onDeleteTasks={onDeleteTasks}
         onDuplicateTask={onDuplicateTask}
       />
     );
@@ -6540,6 +6705,14 @@ function TaskRow({
           onToggleSelection(task.id);
           return;
         }
+        if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === '.') {
+          const menuTrigger = event.currentTarget.querySelector<HTMLElement>('[data-task-row-menu-trigger="true"]');
+          if (menuTrigger) {
+            event.preventDefault();
+            menuTrigger.click();
+            return;
+          }
+        }
         if ((event.metaKey || event.ctrlKey) && event.key === ']') {
           event.preventDefault();
           const previousTaskId = getAdjacentTaskRowId(task.id, -1);
@@ -7925,7 +8098,9 @@ function OverflowMenu({
   items: Array<{ label: string; onSelect: () => void; tone?: 'default' | 'destructive' }>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [openDirection, setOpenDirection] = useState<'down' | 'up'>('down');
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   function stopTriggerEvent(event: React.MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
@@ -7934,6 +8109,15 @@ function OverflowMenu({
 
   useEffect(() => {
     if (!isOpen) return;
+
+    const trigger = triggerRef.current;
+    if (trigger) {
+      const rect = trigger.getBoundingClientRect();
+      const estimatedMenuHeight = items.length * 42 + 18;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setOpenDirection(spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow ? 'up' : 'down');
+    }
 
     const handlePointerDown = (event: MouseEvent) => {
       if (containerRef.current?.contains(event.target as Node | null)) return;
@@ -7952,13 +8136,15 @@ function OverflowMenu({
       window.removeEventListener('mousedown', handlePointerDown);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, items.length]);
 
   return (
     <div ref={containerRef} className="relative">
       <button
+        ref={triggerRef}
         type="button"
         aria-label={label}
+        data-task-row-menu-trigger="true"
         onMouseDown={stopTriggerEvent}
         onClick={event => {
           event.preventDefault();
@@ -7970,7 +8156,7 @@ function OverflowMenu({
         <MoreHorizontal size={16} />
       </button>
       {isOpen ? (
-        <div className="absolute right-0 top-full z-20 mt-2 min-w-[220px] overflow-hidden rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl">
+        <div className={`absolute right-0 z-20 min-w-[220px] overflow-hidden rounded-[18px] border border-[#E1D5CA] bg-white p-1.5 shadow-xl ${openDirection === 'up' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
           {items.map(item => (
             <button
               key={item.label}
@@ -7997,11 +8183,9 @@ function OverflowMenu({
   );
 }
 
-function ProjectTaskRowActions({
+function TaskRowActions({
   payload,
   task,
-  currentProject,
-  sections,
   actionState,
   onSetActionState,
   onCreateTaskRelative,
@@ -8012,12 +8196,11 @@ function ProjectTaskRowActions({
   onMoveTasksToProject,
   onMoveTasksToSection,
   onSetTasksPriority,
+  onDeleteTasks,
   onDuplicateTask,
 }: {
   payload: SyncPayload;
   task: Task;
-  currentProject: Project;
-  sections: Section[];
   actionState: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string } | null;
   onSetActionState: (state: { mode: 'reschedule' | 'priority' | 'deadline' | 'reminders' | 'move'; taskId: string } | null) => void;
   onCreateTaskRelative: (anchorTaskId: string, position: 'before' | 'after', draft: TaskDraft, options?: { silent?: boolean; successMessage?: string }) => Promise<string | null>;
@@ -8026,8 +8209,9 @@ function ProjectTaskRowActions({
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
-  onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
+  onMoveTasksToSection?: (taskIds: string[], sectionId: string | null) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
+  onDeleteTasks: (taskIds: string[]) => void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
   const isRescheduleOpen = actionState?.mode === 'reschedule' && actionState.taskId === task.id;
@@ -8037,6 +8221,11 @@ function ProjectTaskRowActions({
   const isMoveOpen = actionState?.mode === 'move' && actionState.taskId === task.id;
   const taskReminderDrafts = useMemo(() => getTaskReminderDrafts(payload, task.id), [payload, task.id]);
   const activeProjects = useMemo(() => getActiveProjects(payload), [payload]);
+  const taskProject = useMemo(() => (task.projectId ? getProjectById(payload, task.projectId) ?? null : null), [payload, task.projectId]);
+  const taskProjectSections = useMemo(
+    () => (task.projectId ? getProjectSections(payload, task.projectId) : []),
+    [payload, task.projectId]
+  );
   const [deadlineEnabled, setDeadlineEnabled] = useState(Boolean(task.deadlineAt));
   const [deadlineAllDay, setDeadlineAllDay] = useState(task.deadlineAllDay ?? false);
   const [deadlineInput, setDeadlineInput] = useState(toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false));
@@ -8173,6 +8362,13 @@ function ProjectTaskRowActions({
             label: 'Duplicate',
             onSelect: () => {
               void handleDuplicate();
+            },
+          },
+          {
+            label: 'Delete',
+            tone: 'destructive',
+            onSelect: () => {
+              onDeleteTasks([task.id]);
             },
           },
         ]}
@@ -8330,23 +8526,23 @@ function ProjectTaskRowActions({
                 >
                   Inbox
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onMoveTasksToSection([task.id], null);
+                  <button
+                    type="button"
+                    onClick={() => {
+                    onMoveTasksToSection?.([task.id], null);
                     onSetActionState(null);
                   }}
                   className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                 >
-                  {currentProject.name} / Loose tasks
+                  {taskProject?.name ?? 'Project'} / Loose tasks
                 </button>
               </div>
             </div>
-            {sections.length ? (
+            {taskProject && taskProjectSections.length && onMoveTasksToSection ? (
               <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Sections in {currentProject.name}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Sections in {taskProject.name}</p>
                 <div className="flex flex-wrap gap-2">
-                  {sections.map(section => (
+                  {taskProjectSections.map(section => (
                     <button
                       key={section.id}
                       type="button"
@@ -8366,7 +8562,7 @@ function ProjectTaskRowActions({
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9F7B63]">Projects</p>
               <div className="flex flex-wrap gap-2">
                 {activeProjects
-                  .filter(project => project.id !== currentProject.id)
+                  .filter(project => project.id !== task.projectId)
                   .map(project => (
                     <button
                       key={project.id}
