@@ -12,6 +12,8 @@ export type QuickAddContext = {
   defaultProjectId: string | null;
   defaultSectionId: string | null;
   defaultDueToday: boolean;
+  relativeAnchorTaskId?: string | null;
+  relativePosition?: 'before' | 'after' | null;
 };
 
 export function buildDraftFromParsed(

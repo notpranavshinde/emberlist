@@ -2508,7 +2508,7 @@ function WorkspaceShell({
                       payload={payload}
                       showCompletedToday={showCompletedToday}
                       showSelectionButtons={showSelectionButtons}
-                      onCreateTaskRelative={onCreateTaskRelative}
+                      onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2529,7 +2529,7 @@ function WorkspaceShell({
                     <UpcomingPage
                       payload={payload}
                       showSelectionButtons={showSelectionButtons}
-                      onCreateTaskRelative={onCreateTaskRelative}
+                      onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2550,7 +2550,7 @@ function WorkspaceShell({
                     <SearchPage
                       payload={payload}
                       showSelectionButtons={showSelectionButtons}
-                      onCreateTaskRelative={onCreateTaskRelative}
+                      onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2571,7 +2571,7 @@ function WorkspaceShell({
                     <SearchPage
                       payload={payload}
                       showSelectionButtons={showSelectionButtons}
-                      onCreateTaskRelative={onCreateTaskRelative}
+                      onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2597,7 +2597,7 @@ function WorkspaceShell({
                     <InboxPage
                       payload={payload}
                       showSelectionButtons={showSelectionButtons}
-                      onCreateTaskRelative={onCreateTaskRelative}
+                      onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2618,7 +2618,6 @@ function WorkspaceShell({
                     <ProjectPage
                       payload={payload}
                       showSelectionButtons={showSelectionButtons}
-                      onCreateTaskRelative={onCreateTaskRelative}
                       onSaveTask={onSaveTask}
                       onCreateSection={onCreateSection}
                       onUpdateProject={onUpdateProject}
@@ -2718,6 +2717,7 @@ function WorkspaceShell({
           context={quickAddContext}
           onClose={onCloseQuickAdd}
           onCreateTask={onCreateTask}
+          onCreateTaskRelative={onCreateTaskRelative}
           onShowBanner={onShowBanner}
         />
       ) : null}
@@ -3244,7 +3244,7 @@ function TodayPage({
   payload,
   showCompletedToday,
   showSelectionButtons,
-  onCreateTaskRelative,
+  onOpenQuickAdd,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -3260,12 +3260,7 @@ function TodayPage({
   payload: SyncPayload;
   showCompletedToday: boolean;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (
-    anchorTaskId: string,
-    position: "before" | "after",
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -3459,9 +3454,9 @@ function TodayPage({
         task={task}
         actionState={rowActionState}
         onSetActionState={setRowActionState}
-        onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
         onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenQuickAdd={onOpenQuickAdd}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -3725,7 +3720,7 @@ function TodayPage({
 function UpcomingPage({
   payload,
   showSelectionButtons,
-  onCreateTaskRelative,
+  onOpenQuickAdd,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -3740,12 +3735,7 @@ function UpcomingPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (
-    anchorTaskId: string,
-    position: "before" | "after",
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -3946,9 +3936,9 @@ function UpcomingPage({
         task={task}
         actionState={rowActionState}
         onSetActionState={setRowActionState}
-        onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
         onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenQuickAdd={onOpenQuickAdd}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -4240,7 +4230,7 @@ function UpcomingPage({
 function SearchPage({
   payload,
   showSelectionButtons,
-  onCreateTaskRelative,
+  onOpenQuickAdd,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -4256,12 +4246,7 @@ function SearchPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (
-    anchorTaskId: string,
-    position: "before" | "after",
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -4499,9 +4484,9 @@ function SearchPage({
         task={task}
         actionState={rowActionState}
         onSetActionState={setRowActionState}
-        onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
         onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenQuickAdd={onOpenQuickAdd}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -4762,7 +4747,7 @@ function SearchPage({
 function InboxPage({
   payload,
   showSelectionButtons,
-  onCreateTaskRelative,
+  onOpenQuickAdd,
   onToggleTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -4777,12 +4762,7 @@ function InboxPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (
-    anchorTaskId: string,
-    position: "before" | "after",
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -4934,9 +4914,9 @@ function InboxPage({
         task={task}
         actionState={rowActionState}
         onSetActionState={setRowActionState}
-        onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
         onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenQuickAdd={onOpenQuickAdd}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -5158,7 +5138,6 @@ function InboxPage({
 function ProjectPage({
   payload,
   showSelectionButtons,
-  onCreateTaskRelative,
   onSaveTask,
   onCreateSection,
   onUpdateProject,
@@ -5179,12 +5158,6 @@ function ProjectPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onCreateTaskRelative: (
-    anchorTaskId: string,
-    position: "before" | "after",
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onCreateSection: (projectId: string, name: string) => void;
   onUpdateProject: (
@@ -5515,9 +5488,9 @@ function ProjectPage({
         task={task}
         actionState={projectTaskActionState}
         onSetActionState={setProjectTaskActionState}
-        onCreateTaskRelative={onCreateTaskRelative}
         onSaveTask={onSaveTask}
         onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenQuickAdd={onOpenQuickAdd}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -8170,12 +8143,19 @@ function QuickAddDialog({
   context,
   onClose,
   onCreateTask,
+  onCreateTaskRelative,
   onShowBanner,
 }: {
   payload: SyncPayload;
   context: QuickAddContext;
   onClose: () => void;
   onCreateTask: (
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) => Promise<string | null>;
+  onCreateTaskRelative: (
+    anchorTaskId: string,
+    position: "before" | "after",
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string },
   ) => Promise<string | null>;
@@ -8204,6 +8184,9 @@ function QuickAddDialog({
   const sectionMenuRef = useRef<HTMLDivElement | null>(null);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const projectQueryRef = useRef<HTMLInputElement | null>(null);
+  const [relativeAnchorTaskId, setRelativeAnchorTaskId] = useState<string | null>(
+    context.relativeAnchorTaskId ?? null,
+  );
   const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(
     async () => undefined,
   );
@@ -8388,6 +8371,10 @@ function QuickAddDialog({
   }, [showProjectMenu]);
 
   useEffect(() => {
+    setRelativeAnchorTaskId(context.relativeAnchorTaskId ?? null);
+  }, [context.relativeAnchorTaskId]);
+
+  useEffect(() => {
     function handlePointerDown(event: globalThis.MouseEvent) {
       const target = event.target;
       if (!(target instanceof Node)) return;
@@ -8481,6 +8468,21 @@ function QuickAddDialog({
     }, 0);
   }
 
+  async function createTaskFromQuickAdd(
+    draft: TaskDraft,
+    options?: { silent?: boolean; successMessage?: string },
+  ) {
+    if (relativeAnchorTaskId && context.relativePosition) {
+      return onCreateTaskRelative(
+        relativeAnchorTaskId,
+        context.relativePosition,
+        draft,
+        options,
+      );
+    }
+    return onCreateTask(draft, options);
+  }
+
   async function submitDraft(mode: QuickAddSubmitMode = "close") {
     if (!hasInput) return;
     if (shouldPromptBulkQuickAdd(input)) {
@@ -8514,8 +8516,11 @@ function QuickAddDialog({
 
     setIsSaving(true);
     try {
-      const taskId = await onCreateTask(effectiveDraft);
+      const taskId = await createTaskFromQuickAdd(effectiveDraft);
       if (taskId) {
+        if (context.relativePosition === "after") {
+          setRelativeAnchorTaskId(taskId);
+        }
         if (shouldCloseQuickAddAfterCreate(mode)) {
           onClose();
         } else {
@@ -8566,13 +8571,19 @@ function QuickAddDialog({
           );
           return;
         }
-        const taskId = await onCreateTask(mergedDraft, {
+        const taskId = await createTaskFromQuickAdd(mergedDraft, {
           successMessage: "Combined list into 1 task.",
         });
-        if (taskId) onClose();
+        if (taskId) {
+          if (context.relativePosition === "after") {
+            setRelativeAnchorTaskId(taskId);
+          }
+          onClose();
+        }
         return;
       }
 
+      let currentAnchorTaskId = relativeAnchorTaskId;
       for (const line of bulkLines) {
         const parsedLine = parseQuickAdd(line);
         const baseDraft = buildDraftFromParsed(
@@ -8597,7 +8608,22 @@ function QuickAddDialog({
           );
           return;
         }
-        await onCreateTask(draft, { silent: true });
+        if (currentAnchorTaskId && context.relativePosition) {
+          const createdTaskId = await onCreateTaskRelative(
+            currentAnchorTaskId,
+            context.relativePosition,
+            draft,
+            { silent: true },
+          );
+          if (context.relativePosition === "after" && createdTaskId) {
+            currentAnchorTaskId = createdTaskId;
+          }
+        } else {
+          await onCreateTask(draft, { silent: true });
+        }
+      }
+      if (context.relativePosition === "after") {
+        setRelativeAnchorTaskId(currentAnchorTaskId);
       }
       onShowBanner("success", `${bulkLines.length} tasks created.`);
       onClose();
@@ -9800,9 +9826,9 @@ function TaskRowActions({
   task,
   actionState,
   onSetActionState,
-  onCreateTaskRelative,
   onSaveTask,
   onOpenTask,
+  onOpenQuickAdd,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
@@ -9825,14 +9851,9 @@ function TaskRowActions({
       anchorRect?: DOMRect | null;
     } | null,
   ) => void;
-  onCreateTaskRelative: (
-    anchorTaskId: string,
-    position: "before" | "after",
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => void;
   onOpenTask: (taskId: string) => void;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -9921,18 +9942,14 @@ function TaskRowActions({
     });
   }
 
-  async function handleCreateRelative(position: "before" | "after") {
-    const createdTaskId = await onCreateTaskRelative(
-      task.id,
-      position,
-      buildSiblingTaskDraft(task),
-      {
-        successMessage: `Created a task ${position} "${task.title}".`,
-      },
-    );
-    if (createdTaskId) {
-      onOpenTask(createdTaskId);
-    }
+  function handleCreateRelative(position: "before" | "after") {
+    onOpenQuickAdd({
+      defaultProjectId: task.projectId,
+      defaultSectionId: task.sectionId,
+      defaultDueToday: false,
+      relativeAnchorTaskId: task.id,
+      relativePosition: position,
+    });
   }
 
   async function handleDuplicate() {
@@ -11184,6 +11201,8 @@ function getQuickAddContext(
       defaultProjectId: null,
       defaultSectionId: null,
       defaultDueToday: true,
+      relativeAnchorTaskId: null,
+      relativePosition: null,
     };
   }
 
@@ -11194,6 +11213,8 @@ function getQuickAddContext(
       defaultProjectId: project?.id ?? null,
       defaultSectionId: null,
       defaultDueToday: false,
+      relativeAnchorTaskId: null,
+      relativePosition: null,
     };
   }
 
@@ -11202,6 +11223,8 @@ function getQuickAddContext(
       defaultProjectId: null,
       defaultSectionId: null,
       defaultDueToday: false,
+      relativeAnchorTaskId: null,
+      relativePosition: null,
     };
   }
 
@@ -11209,6 +11232,8 @@ function getQuickAddContext(
     defaultProjectId: null,
     defaultSectionId: null,
     defaultDueToday: false,
+    relativeAnchorTaskId: null,
+    relativePosition: null,
   };
 }
 
@@ -11337,26 +11362,6 @@ function buildTaskDraftFromTask(payload: SyncPayload, task: Task): TaskDraft {
     deadlineRecurringRule: task.deadlineRecurringRule ?? null,
     parentTaskId: task.parentTaskId,
     reminders: getTaskReminderDrafts(payload, task.id),
-  };
-}
-
-function buildSiblingTaskDraft(task: Task): TaskDraft {
-  return {
-    title: "New task",
-    description: "",
-    projectId: task.projectId,
-    projectName: null,
-    sectionId: task.sectionId,
-    sectionName: null,
-    priority: "P4",
-    dueAt: task.dueAt ?? null,
-    allDay: task.allDay,
-    deadlineAt: null,
-    deadlineAllDay: false,
-    recurringRule: null,
-    deadlineRecurringRule: null,
-    parentTaskId: task.parentTaskId,
-    reminders: [],
   };
 }
 
