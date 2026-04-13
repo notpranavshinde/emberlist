@@ -82,6 +82,12 @@ import {
 import { db } from "./lib/db";
 import { reconcileLocalPersistPayload } from "./lib/localSync";
 import {
+  createOnboardingSetup,
+  ONBOARDING_PRESETS,
+  type OnboardingPresetId,
+  type OnboardingSetupResult,
+} from "./lib/onboarding";
+import {
   buildDraftFromParsed,
   buildTaskDetailDraftFromInput,
   createMergedBulkDraft,
@@ -873,6 +879,22 @@ function App() {
     setBootState("ready");
   }
 
+  async function handleCreateOnboardingWorkspace(
+    presetId: OnboardingPresetId,
+  ): Promise<OnboardingSetupResult | null> {
+    const current = payloadRef.current;
+    if (!current) return null;
+
+    const result = createOnboardingSetup(
+      current,
+      presetId,
+      startOfDay(Date.now()).getTime(),
+    );
+    await persistPayload(result.payload, true);
+    setHasDismissedFirstRunWelcome(true);
+    return result;
+  }
+
   async function handleResetCloudSync() {
     if (!syncService) {
       const message =
@@ -1470,14 +1492,10 @@ function App() {
 
   useEffect(() => {
     if (bootState !== "ready") return;
-    if (cloudSession) {
-      setIsWelcomeDialogOpen(false);
-      return;
-    }
     if (hasDismissedFirstRunWelcome) return;
     if (!isWorkspaceEmpty(payload)) return;
     setIsWelcomeDialogOpen(true);
-  }, [bootState, cloudSession, hasDismissedFirstRunWelcome, payload]);
+  }, [bootState, hasDismissedFirstRunWelcome, payload]);
 
   useEffect(() => {
     const previous = previousAutoSyncStateRef.current;
@@ -1695,15 +1713,14 @@ function App() {
           setIsWelcomeDialogOpen(false);
           setHasDismissedFirstRunWelcome(true);
         }}
-        onContinueLocalWelcome={() => {
-          setIsWelcomeDialogOpen(false);
-          setHasDismissedFirstRunWelcome(true);
-        }}
         onConnectGoogleWelcome={() => {
           setHasDismissedFirstRunWelcome(true);
           setIsWelcomeDialogOpen(false);
           setIsCloudConnectDialogOpen(true);
         }}
+        onCompleteWelcomeSetup={(presetId) =>
+          handleCreateOnboardingWorkspace(presetId)
+        }
         isCloudConnectDialogOpen={isCloudConnectDialogOpen}
         onCloseCloudConnectDialog={() => setIsCloudConnectDialogOpen(false)}
         onConnectCloudDialog={() => {
@@ -1719,8 +1736,10 @@ export default App;
 type AppFrameProps = WorkspaceShellProps & {
   isWelcomeDialogOpen: boolean;
   onCloseWelcomeDialog: () => void;
-  onContinueLocalWelcome: () => void;
   onConnectGoogleWelcome: () => void;
+  onCompleteWelcomeSetup: (
+    presetId: OnboardingPresetId,
+  ) => Promise<OnboardingSetupResult | null>;
   isCloudConnectDialogOpen: boolean;
   onCloseCloudConnectDialog: () => void;
   onConnectCloudDialog: () => void;
@@ -1729,14 +1748,15 @@ type AppFrameProps = WorkspaceShellProps & {
 function AppFrame({
   isWelcomeDialogOpen,
   onCloseWelcomeDialog,
-  onContinueLocalWelcome,
   onConnectGoogleWelcome,
+  onCompleteWelcomeSetup,
   isCloudConnectDialogOpen,
   onCloseCloudConnectDialog,
   onConnectCloudDialog,
   ...workspaceShellProps
 }: AppFrameProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isPublicRoute = isPublicMarketingPath(location.pathname);
 
   return (
@@ -1747,8 +1767,24 @@ function AppFrame({
         <WelcomeDialog
           cloudConfigured={workspaceShellProps.cloudConfigured}
           onClose={onCloseWelcomeDialog}
-          onContinueLocal={onContinueLocalWelcome}
           onConnectGoogle={onConnectGoogleWelcome}
+          onCompleteSetup={async (presetId, action) => {
+            const result = await onCompleteWelcomeSetup(presetId);
+            if (!result) return;
+            navigate(`/project/${result.projectId}`);
+            if (action === "quick-add") {
+              workspaceShellProps.onOpenQuickAdd({
+                defaultProjectId: result.projectId,
+                defaultSectionId: null,
+                defaultDueToday: false,
+              });
+              workspaceShellProps.onShowBanner(
+                "info",
+                `Try Quick Add with: ${result.quickAddExample}`,
+              );
+            }
+            onCloseWelcomeDialog();
+          }}
         />
       ) : null}
 
@@ -10370,52 +10406,201 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
 function WelcomeDialog({
   cloudConfigured,
   onClose,
-  onContinueLocal,
   onConnectGoogle,
+  onCompleteSetup,
 }: {
   cloudConfigured: boolean;
   onClose: () => void;
-  onContinueLocal: () => void;
   onConnectGoogle: () => void;
+  onCompleteSetup: (
+    presetId: OnboardingPresetId,
+    action: "finish" | "quick-add",
+  ) => Promise<void>;
 }) {
+  const [selectedPresetId, setSelectedPresetId] =
+    useState<OnboardingPresetId>("personal");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [step, setStep] = useState<"choose" | "finish">("choose");
+  const [setupSummary, setSetupSummary] = useState<Pick<
+    OnboardingSetupResult,
+    "projectName" | "quickAddExample" | "sampleTaskTitles"
+  > | null>(null);
+
+  async function completeSetup(action: "finish" | "quick-add") {
+    if (isSubmitting || !setupSummary) return;
+    setIsSubmitting(true);
+    try {
+      await onCompleteSetup(selectedPresetId, action);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function createStarterWorkspace() {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      setSetupSummary({
+        projectName: selectedPreset.projectName,
+        quickAddExample: selectedPreset.quickAddExample,
+        sampleTaskTitles: selectedPreset.sampleTasks.map((task) => task.title),
+      });
+      setStep("finish");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const selectedPreset =
+    ONBOARDING_PRESETS.find((preset) => preset.id === selectedPresetId) ??
+    ONBOARDING_PRESETS[0];
+
   return (
     <ChoiceDialog
-      title="Welcome to Emberlist"
-      description="You can use Emberlist locally right away, or connect Google Drive now so your tasks stay in sync across devices."
+      title={
+        step === "choose" ? "Set up Emberlist" : "Preview your starter workspace"
+      }
+      description={
+        step === "choose"
+          ? "Pick what you want to manage first. Emberlist can create one sample project, a few realistic tasks, and then drop you into Quick Add."
+          : "This is what Emberlist will create when you continue. You can skip all of this next time."
+      }
       onClose={onClose}
       dialogClassName="max-w-2xl"
     >
       <div className="space-y-4">
-        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
-          <p className="text-sm font-semibold text-[#1E2D2F]">
-            What sync gives you
-          </p>
-          <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
-            <li>Keep the same tasks on every browser and device.</li>
-            <li>Store sync data in your own Google Drive app data area.</li>
-            <li>You can skip this and keep using Emberlist locally.</li>
-          </ul>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={onConnectGoogle}
-            data-dialog-autofocus="true"
-            disabled={!cloudConfigured}
-            className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {cloudConfigured
-              ? "Connect Google Drive"
-              : "Cloud sync unavailable"}
-          </button>
-          <button
-            type="button"
-            onClick={onContinueLocal}
-            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
-          >
-            Continue local-only
-          </button>
-        </div>
+        {step === "choose" ? (
+          <>
+            <div className="grid gap-3 md:grid-cols-3">
+              {ONBOARDING_PRESETS.map((preset) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setSelectedPresetId(preset.id)}
+                  className={`rounded-[22px] border px-4 py-4 text-left transition ${
+                    selectedPresetId === preset.id
+                      ? "border-[#F3B7A4] bg-[#FFF5F1]"
+                      : "border-[#E1D5CA] bg-[#FBF7F3] hover:bg-white"
+                  }`}
+                >
+                  <p className="text-base font-semibold text-[#1E2D2F]">
+                    {preset.label}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+                    {preset.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+            <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+              <p className="text-sm font-semibold text-[#1E2D2F]">
+                What Emberlist will do
+              </p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
+                <li>Create a sample project called "{selectedPreset.projectName}".</li>
+                <li>Seed 4 example tasks, including one recurring task.</li>
+                <li>Teach Quick Add immediately with a real natural-language example.</li>
+              </ul>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void createStarterWorkspace()}
+                data-dialog-autofocus="true"
+                disabled={isSubmitting}
+                className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Preparing..." : "Preview starter workspace"}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                onClick={onConnectGoogle}
+                disabled={!cloudConfigured}
+                className="rounded-full border border-[#E1D5CA] bg-white px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cloudConfigured
+                  ? "Connect Google Drive first"
+                  : "Cloud sync unavailable"}
+              </button>
+            </div>
+          </>
+        ) : setupSummary ? (
+          <>
+            <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+              <p className="text-sm font-semibold text-[#1E2D2F]">
+                Sample project
+              </p>
+              <p className="mt-2 text-sm text-[#6D5C50]">
+                Emberlist will create {setupSummary.projectName} with these tasks:
+              </p>
+              <ul className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
+                {setupSummary.sampleTaskTitles.map((title) => (
+                  <li key={title}>{title}</li>
+                ))}
+              </ul>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-[#1E2D2F]">Project</p>
+                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+                  Start in the sample project to see how tasks are grouped.
+                </p>
+              </div>
+              <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-[#1E2D2F]">Today</p>
+                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+                  Today shows what needs attention now and what slipped.
+                </p>
+              </div>
+              <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Quick Add
+                </p>
+                <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+                  Use plain language to set dates, priorities, projects, and repeat rules.
+                </p>
+              </div>
+            </div>
+            <div className="rounded-[22px] border border-[#E1D5CA] bg-white px-5 py-4">
+              <p className="text-sm font-semibold text-[#1E2D2F]">
+                Try Quick Add next
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
+                Emberlist understands dates, priorities, projects, reminders,
+                and repeat rules from plain language.
+              </p>
+              <code className="mt-3 block rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm text-[#1E2D2F]">
+                {setupSummary.quickAddExample}
+              </code>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void completeSetup("quick-add")}
+                data-dialog-autofocus="true"
+                disabled={isSubmitting}
+                className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmitting ? "Opening..." : "Open Quick Add"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void completeSetup("finish")}
+                disabled={isSubmitting}
+                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              >
+                Start exploring
+              </button>
+            </div>
+          </>
+        ) : null}
       </div>
     </ChoiceDialog>
   );
