@@ -8518,7 +8518,6 @@ function QuickAddDialog({
       ),
     [activeProjects, deferredProjectQuery],
   );
-  const recurrencePreset = getRecurrencePreset(effectiveRecurrenceRule);
   const dueSummaryLabel =
     effectiveDraft.dueAt !== null
       ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
@@ -9158,100 +9157,17 @@ function QuickAddDialog({
                   </div>
 
                   <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-[#1E2D2F]">
-                            Repeat schedule
-                          </p>
-                          <p className="mt-1 text-sm text-[#6D5C50]">
-                            Set a repeat rule without relying only on the
-                            parser.
-                          </p>
-                        </div>
-                        {recurrenceOverride !== undefined ? (
-                          <button
-                            type="button"
-                            onClick={() => setRecurrenceOverride(undefined)}
-                            className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-                          >
-                            Use parser
-                          </button>
-                        ) : null}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {[
-                          {
-                            label: "No repeat",
-                            preset: "NONE" as RecurrencePreset,
-                          },
-                          {
-                            label: "Daily",
-                            preset: "DAILY" as RecurrencePreset,
-                          },
-                          {
-                            label: "Weekdays",
-                            preset: "WEEKDAYS" as RecurrencePreset,
-                          },
-                          {
-                            label: "Weekly",
-                            preset: "WEEKLY" as RecurrencePreset,
-                          },
-                          {
-                            label: "Monthly",
-                            preset: "MONTHLY" as RecurrencePreset,
-                          },
-                          {
-                            label: "Yearly",
-                            preset: "YEARLY" as RecurrencePreset,
-                          },
-                          {
-                            label: "Custom",
-                            preset: "CUSTOM" as RecurrencePreset,
-                          },
-                        ].map((option) => (
-                          <button
-                            key={option.preset}
-                            type="button"
-                            onClick={() => {
-                              if (option.preset === "NONE") {
-                                setRecurrenceOverride(null);
-                                return;
-                              }
-                              if (option.preset === "CUSTOM") {
-                                setRecurrenceOverride(
-                                  effectiveRecurrenceRule &&
-                                    recurrencePreset === "CUSTOM"
-                                    ? effectiveRecurrenceRule
-                                    : "FREQ=DAILY",
-                                );
-                                return;
-                              }
-                              setRecurrenceOverride(
-                                getRuleForRecurrencePreset(option.preset),
-                              );
-                            }}
-                            className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
-                              recurrencePreset === option.preset
-                                ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]"
-                                : "border-[#E1D5CA] bg-[var(--app-surface-soft)] text-[#1E2D2F] hover:bg-[var(--app-surface)]"
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                      {recurrencePreset === "CUSTOM" ? (
-                        <input
-                          value={effectiveRecurrenceRule ?? ""}
-                          onChange={(event) =>
-                            setRecurrenceOverride(
-                              event.target.value.trim() || null,
-                            )
-                          }
-                          placeholder="FREQ=WEEKLY;INTERVAL=2"
-                          className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-                        />
-                      ) : null}
+                    <RecurrenceField
+                      label="Repeat schedule"
+                      value={effectiveRecurrenceRule}
+                      onChange={setRecurrenceOverride}
+                      description="Set a repeat rule without relying only on the parser."
+                      onReset={
+                        recurrenceOverride !== undefined
+                          ? () => setRecurrenceOverride(undefined)
+                          : undefined
+                      }
+                    />
                   </div>
                 </div>
               </section>
