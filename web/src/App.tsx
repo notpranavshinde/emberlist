@@ -2437,10 +2437,10 @@ function WorkspaceShell({
   }
 
   return (
-    <div className="min-h-screen bg-[#faf8f6] text-[#202020]">
+    <div className="min-h-screen bg-[#FFE2AD] text-[#202020]">
       <div className="flex min-h-screen flex-col md:flex-row">
         <aside
-          className={`hidden shrink-0 border-r border-[#ece7e3] bg-[#fdfcfb] px-3 py-3 transition-[width] duration-200 md:flex md:flex-col ${isSidebarCollapsed ? "w-[92px]" : "w-[300px]"}`}
+          className={`hidden shrink-0 border-r border-[#E9D2A5] bg-[#FFF0CB] px-3 py-3 transition-[width] duration-200 md:flex md:flex-col ${isSidebarCollapsed ? "w-[92px]" : "w-[300px]"}`}
         >
           <div className="flex items-center justify-between rounded-[16px] px-2 py-2">
             <div className="flex items-center gap-3">
@@ -2587,7 +2587,7 @@ function WorkspaceShell({
             {cloudSession ? (
               <button
                 onClick={onDisconnectCloud}
-                className="mt-2 w-full rounded-lg border border-[#ece7e3] bg-[#faf8f6] px-4 py-2.5 text-sm font-semibold text-[#2b2b2b] transition hover:bg-white"
+                className="mt-2 w-full rounded-lg border border-[#E9D2A5] bg-[#FFF4DA] px-4 py-2.5 text-sm font-semibold text-[#2b2b2b] transition hover:bg-white"
               >
                 Disconnect
               </button>
@@ -2608,7 +2608,7 @@ function WorkspaceShell({
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="sticky top-0 z-20 border-b border-[#ece7e3] bg-[#faf8f6]/95 px-4 py-4 backdrop-blur md:px-8">
+          <header className="sticky top-0 z-20 border-b border-[#E9D2A5] bg-[#FFE2AD]/95 px-4 py-4 backdrop-blur md:px-8">
             <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">
