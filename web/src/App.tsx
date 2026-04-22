@@ -2875,7 +2875,7 @@ function WorkspaceShell({
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F6EBDD]/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#FFE2AD]/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           <BottomLink to="/today" icon={Home} label="Today" />
           <BottomLink to="/inbox" icon={ListTodo} label="Inbox" />
@@ -8840,7 +8840,7 @@ function QuickAddDialog({
       data-overlay-dialog="true"
       className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm"
     >
-      <div className="w-full max-w-xl rounded-2xl border border-[#E7DDD4] bg-[#F6EBDD] p-4 shadow-2xl">
+      <div className="w-full max-w-xl rounded-2xl border border-[#E7DDD4] bg-[#FFE2AD] p-4 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">
@@ -11391,7 +11391,7 @@ function EmptyState({
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F6EBDD] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-[#FFE2AD] px-6">
       <div className="rounded-[28px] border border-[#E1D5CA] bg-white px-6 py-5 text-sm font-medium text-[#6D5C50] shadow-sm">
         {label}
       </div>
@@ -12250,4 +12250,5 @@ function writeStoredCloudSession(session: CloudSession | null) {
     JSON.stringify(session),
   );
 }
+
 
