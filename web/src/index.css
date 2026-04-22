@@ -2,11 +2,14 @@
 
 :root {
   /* Change this one value to try different warm shell colors. */
-  --app-shell-bg: #FFE2AD;
+  --app-shell-bg: #FFF6E3;
   --app-shell-bg-soft: color-mix(in srgb, var(--app-shell-bg) 38%, white);
-  --app-shell-bg-sidebar: color-mix(in srgb, var(--app-shell-bg) 52%, white);
+  --app-shell-bg-sidebar: color-mix(in srgb, var(--app-shell-bg) 80%, white);
   --app-shell-bg-card: color-mix(in srgb, var(--app-shell-bg) 72%, white);
   --app-shell-border: color-mix(in srgb, var(--app-shell-bg) 42%, #c29a63);
+  --app-surface: color-mix(in srgb, var(--app-shell-bg) 16%, white);
+  --app-surface-soft: color-mix(in srgb, var(--app-shell-bg) 34%, white);
+  --app-surface-muted: color-mix(in srgb, var(--app-shell-bg) 52%, white);
 }
 
 html, body, #root {
