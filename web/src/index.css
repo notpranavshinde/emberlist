@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+:root {
+  /* Change this one value to try different warm shell colors. */
+  --app-shell-bg: #FFE2AD;
+  --app-shell-bg-soft: color-mix(in srgb, var(--app-shell-bg) 38%, white);
+  --app-shell-bg-sidebar: color-mix(in srgb, var(--app-shell-bg) 52%, white);
+  --app-shell-bg-card: color-mix(in srgb, var(--app-shell-bg) 72%, white);
+  --app-shell-border: color-mix(in srgb, var(--app-shell-bg) 42%, #c29a63);
+}
+
 html, body, #root {
   height: 100%;
   margin: 0;
@@ -7,7 +16,7 @@ html, body, #root {
 }
 
 body {
-  background: #FFE2AD;
+  background: var(--app-shell-bg);
   color: #221E1C;
   font-family: "Lekton", "Aptos", "Segoe UI", sans-serif;
   font-weight: 500;
