@@ -9960,6 +9960,20 @@ function OverflowMenu({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
+  function updateOpenDirection() {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const estimatedMenuHeight = items.length * 42 + 18;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    setOpenDirection(
+      spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow
+        ? "up"
+        : "down",
+    );
+  }
+
   function stopTriggerEvent(event: React.MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -9967,19 +9981,6 @@ function OverflowMenu({
 
   useEffect(() => {
     if (!isOpen) return;
-
-    const trigger = triggerRef.current;
-    if (trigger) {
-      const rect = trigger.getBoundingClientRect();
-      const estimatedMenuHeight = items.length * 42 + 18;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setOpenDirection(
-        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow
-          ? "up"
-          : "down",
-      );
-    }
 
     const handlePointerDown = (event: MouseEvent) => {
       if (containerRef.current?.contains(event.target as Node | null)) return;
@@ -10011,7 +10012,13 @@ function OverflowMenu({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          setIsOpen((current) => !current);
+          setIsOpen((current) => {
+            const next = !current;
+            if (!current && next) {
+              updateOpenDirection();
+            }
+            return next;
+          });
         }}
         className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
       >
@@ -10112,33 +10119,6 @@ function TaskRowActions({
     () => (task.projectId ? getProjectSections(payload, task.projectId) : []),
     [payload, task.projectId],
   );
-  const [deadlineEnabled, setDeadlineEnabled] = useState(
-    Boolean(task.deadlineAt),
-  );
-  const [deadlineAllDay, setDeadlineAllDay] = useState(
-    task.deadlineAllDay ?? false,
-  );
-  const [deadlineInput, setDeadlineInput] = useState(
-    toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
-  );
-  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(
-    () => buildReminderEditors(taskReminderDrafts),
-  );
-
-  useEffect(() => {
-    if (!isDeadlineOpen) return;
-    setDeadlineEnabled(Boolean(task.deadlineAt));
-    setDeadlineAllDay(task.deadlineAllDay ?? false);
-    setDeadlineInput(
-      toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
-    );
-  }, [isDeadlineOpen, task.deadlineAllDay, task.deadlineAt]);
-
-  useEffect(() => {
-    if (!isRemindersOpen) return;
-    setReminderEditors(buildReminderEditors(taskReminderDrafts));
-  }, [isRemindersOpen, taskReminderDrafts]);
-
   function stopRowActionEvent(event: ReactMouseEvent<HTMLButtonElement>) {
     event.preventDefault();
     event.stopPropagation();
@@ -10180,40 +10160,6 @@ function TaskRowActions({
 
   async function handleDuplicate() {
     await onDuplicateTask(task.id);
-  }
-
-  function submitDeadline() {
-    const nextDeadlineAt = deadlineEnabled
-      ? parseInputValue(deadlineInput, deadlineAllDay)
-      : null;
-    if (deadlineEnabled && nextDeadlineAt === null) {
-      return;
-    }
-    const draft = buildTaskDraftFromTask(payload, task);
-    onSaveTask(task.id, {
-      ...draft,
-      deadlineAt: nextDeadlineAt,
-      deadlineAllDay: deadlineEnabled ? deadlineAllDay : false,
-    });
-    onSetActionState(null);
-  }
-
-  function submitReminders() {
-    if (hasIncompleteReminderEditors(reminderEditors)) {
-      return;
-    }
-    if (
-      task.dueAt === null &&
-      reminderEditors.some((reminder) => reminder.mode === "OFFSET")
-    ) {
-      return;
-    }
-    const draft = buildTaskDraftFromTask(payload, task);
-    onSaveTask(task.id, {
-      ...draft,
-      reminders: serializeReminderEditors(reminderEditors),
-    });
-    onSetActionState(null);
   }
 
   return (
@@ -10331,112 +10277,22 @@ function TaskRowActions({
       ) : null}
 
       {isDeadlineOpen ? (
-        <ChoiceDialog
-          title={task.deadlineAt ? "Change deadline" : "Add deadline"}
-          description={`Update the deadline for "${task.title}".`}
+        <TaskDeadlineDialog
+          task={task}
+          payload={payload}
+          onSaveTask={onSaveTask}
           onClose={() => onSetActionState(null)}
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => onSetActionState(null)}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitDeadline}
-                disabled={
-                  deadlineEnabled &&
-                  parseInputValue(deadlineInput, deadlineAllDay) === null
-                }
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Save deadline
-              </button>
-            </div>
-          }
-        >
-          <div className="space-y-4">
-            <label className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3">
-              <span className="text-sm font-semibold text-[#1E2D2F]">
-                Track a separate deadline
-              </span>
-              <input
-                data-dialog-autofocus="true"
-                type="checkbox"
-                checked={deadlineEnabled}
-                onChange={(event) => setDeadlineEnabled(event.target.checked)}
-                className="h-5 w-5 accent-[#EE6A3C]"
-              />
-            </label>
-            {deadlineEnabled ? (
-              <div className="space-y-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-4">
-                <label className="flex items-center justify-between gap-4">
-                  <span className="text-sm font-semibold text-[#1E2D2F]">
-                    All day
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={deadlineAllDay}
-                    onChange={(event) =>
-                      setDeadlineAllDay(event.target.checked)
-                    }
-                    className="h-5 w-5 accent-[#EE6A3C]"
-                  />
-                </label>
-                <input
-                  type={deadlineAllDay ? "date" : "datetime-local"}
-                  value={deadlineInput}
-                  onChange={(event) => setDeadlineInput(event.target.value)}
-                  className="w-full rounded-[14px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm text-[#1E2D2F] outline-none focus:border-[#EE6A3C]"
-                />
-              </div>
-            ) : null}
-          </div>
-        </ChoiceDialog>
+        />
       ) : null}
 
       {isRemindersOpen ? (
-        <ChoiceDialog
-          title={
-            taskReminderDrafts.length ? "Change reminders" : "Add reminders"
-          }
-          description={`Update reminders for "${task.title}".`}
+        <TaskRemindersDialog
+          task={task}
+          initialReminders={taskReminderDrafts}
+          payload={payload}
+          onSaveTask={onSaveTask}
           onClose={() => onSetActionState(null)}
-          footer={
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => onSetActionState(null)}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitReminders}
-                disabled={
-                  hasIncompleteReminderEditors(reminderEditors) ||
-                  (task.dueAt === null &&
-                    reminderEditors.some(
-                      (reminder) => reminder.mode === "OFFSET",
-                    ))
-                }
-                className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Save reminders
-              </button>
-            </div>
-          }
-        >
-          <ReminderListEditor
-            reminders={reminderEditors}
-            dueAt={task.dueAt}
-            onChange={setReminderEditors}
-          />
-        </ChoiceDialog>
+        />
       ) : null}
 
       {isMoveOpen ? (
@@ -10524,6 +10380,183 @@ function TaskRowActions({
         </ChoiceDialog>
       ) : null}
     </>
+  );
+}
+
+function TaskDeadlineDialog({
+  task,
+  payload,
+  onSaveTask,
+  onClose,
+}: {
+  task: Task;
+  payload: SyncPayload;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onClose: () => void;
+}) {
+  const [deadlineEnabled, setDeadlineEnabled] = useState(
+    Boolean(task.deadlineAt),
+  );
+  const [deadlineAllDay, setDeadlineAllDay] = useState(
+    task.deadlineAllDay ?? false,
+  );
+  const [deadlineInput, setDeadlineInput] = useState(
+    toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
+  );
+
+  function submitDeadline() {
+    const nextDeadlineAt = deadlineEnabled
+      ? parseInputValue(deadlineInput, deadlineAllDay)
+      : null;
+    if (deadlineEnabled && nextDeadlineAt === null) {
+      return;
+    }
+    const draft = buildTaskDraftFromTask(payload, task);
+    onSaveTask(task.id, {
+      ...draft,
+      deadlineAt: nextDeadlineAt,
+      deadlineAllDay: deadlineEnabled ? deadlineAllDay : false,
+    });
+    onClose();
+  }
+
+  return (
+    <ChoiceDialog
+      title={task.deadlineAt ? "Change deadline" : "Add deadline"}
+      description={`Update the deadline for "${task.title}".`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submitDeadline}
+            disabled={
+              deadlineEnabled &&
+              parseInputValue(deadlineInput, deadlineAllDay) === null
+            }
+            className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Save deadline
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <label className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3">
+          <span className="text-sm font-semibold text-[#1E2D2F]">
+            Track a separate deadline
+          </span>
+          <input
+            data-dialog-autofocus="true"
+            type="checkbox"
+            checked={deadlineEnabled}
+            onChange={(event) => setDeadlineEnabled(event.target.checked)}
+            className="h-5 w-5 accent-[#EE6A3C]"
+          />
+        </label>
+        {deadlineEnabled ? (
+          <div className="space-y-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-4">
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm font-semibold text-[#1E2D2F]">
+                All day
+              </span>
+              <input
+                type="checkbox"
+                checked={deadlineAllDay}
+                onChange={(event) => setDeadlineAllDay(event.target.checked)}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
+            <input
+              type={deadlineAllDay ? "date" : "datetime-local"}
+              value={deadlineInput}
+              onChange={(event) => setDeadlineInput(event.target.value)}
+              className="w-full rounded-[14px] border border-[#E1D5CA] bg-white px-3 py-2 text-sm text-[#1E2D2F] outline-none focus:border-[#EE6A3C]"
+            />
+          </div>
+        ) : null}
+      </div>
+    </ChoiceDialog>
+  );
+}
+
+function TaskRemindersDialog({
+  task,
+  initialReminders,
+  payload,
+  onSaveTask,
+  onClose,
+}: {
+  task: Task;
+  initialReminders: TaskReminderDraft[];
+  payload: SyncPayload;
+  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onClose: () => void;
+}) {
+  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(
+    () => buildReminderEditors(initialReminders),
+  );
+
+  function submitReminders() {
+    if (hasIncompleteReminderEditors(reminderEditors)) {
+      return;
+    }
+    if (
+      task.dueAt === null &&
+      reminderEditors.some((reminder) => reminder.mode === "OFFSET")
+    ) {
+      return;
+    }
+    const draft = buildTaskDraftFromTask(payload, task);
+    onSaveTask(task.id, {
+      ...draft,
+      reminders: serializeReminderEditors(reminderEditors),
+    });
+    onClose();
+  }
+
+  return (
+    <ChoiceDialog
+      title={initialReminders.length ? "Change reminders" : "Add reminders"}
+      description={`Update reminders for "${task.title}".`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submitReminders}
+            disabled={
+              hasIncompleteReminderEditors(reminderEditors) ||
+              (task.dueAt === null &&
+                reminderEditors.some((reminder) => reminder.mode === "OFFSET"))
+            }
+            className="rounded-full bg-[#EE6A3C] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Save reminders
+          </button>
+        </div>
+      }
+    >
+      <ReminderListEditor
+        reminders={reminderEditors}
+        dueAt={task.dueAt}
+        onChange={setReminderEditors}
+      />
+    </ChoiceDialog>
   );
 }
 
