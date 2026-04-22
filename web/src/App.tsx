@@ -8359,10 +8359,8 @@ function QuickAddDialog({
   const [showDueDialog, setShowDueDialog] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
-  const [showSectionMenu, setShowSectionMenu] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
-  const sectionMenuRef = useRef<HTMLDivElement | null>(null);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const projectQueryRef = useRef<HTMLInputElement | null>(null);
   const [relativeAnchorTaskId, setRelativeAnchorTaskId] = useState<string | null>(
@@ -8428,9 +8426,6 @@ function QuickAddDialog({
       : projectOverrideId;
   const effectiveProjectName =
     projectOverrideId === undefined ? previewDraft.projectName : null;
-  const quickAddSectionOptions = effectiveProjectId
-    ? getProjectSections(payload, effectiveProjectId)
-    : [];
   const effectiveSectionId = effectiveProjectId
     ? sectionOverrideId === undefined
       ? previewDraft.sectionId
@@ -8562,9 +8557,6 @@ function QuickAddDialog({
       if (projectMenuRef.current && !projectMenuRef.current.contains(target)) {
         setShowProjectMenu(false);
       }
-      if (sectionMenuRef.current && !sectionMenuRef.current.contains(target)) {
-        setShowSectionMenu(false);
-      }
       if (
         priorityMenuRef.current &&
         !priorityMenuRef.current.contains(target)
@@ -8632,7 +8624,6 @@ function QuickAddDialog({
     setShowDueDialog(false);
     setShowPriorityMenu(false);
     setShowProjectMenu(false);
-    setShowSectionMenu(false);
     setProjectQuery("");
     setProjectOverrideId(undefined);
     setSectionOverrideId(undefined);
@@ -8913,7 +8904,6 @@ function QuickAddDialog({
                   setShowDueDialog(true);
                   setShowPriorityMenu(false);
                   setShowProjectMenu(false);
-                  setShowSectionMenu(false);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-[var(--app-surface)] px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
               >
@@ -8941,7 +8931,6 @@ function QuickAddDialog({
                   onClick={() => {
                     setShowPriorityMenu((current) => !current);
                     setShowProjectMenu(false);
-                    setShowSectionMenu(false);
                   }}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-[var(--app-surface)] px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
                 >
@@ -9016,7 +9005,6 @@ function QuickAddDialog({
                   setShowAdvancedFields((current) => !current);
                   setShowProjectMenu(false);
                   setShowPriorityMenu(false);
-                  setShowSectionMenu(false);
                 }}
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                   showAdvancedFields || hasManualMetadataOverrides
@@ -9085,8 +9073,7 @@ function QuickAddDialog({
                       More options
                     </p>
                     <p className="mt-1 text-sm text-[#6D5C50]">
-                      Use deadline, section, or repeat settings only when you
-                      need them.
+                      Use deadline or repeat settings only when you need them.
                     </p>
                   </div>
                   {hasManualMetadataOverrides ? (
@@ -9170,81 +9157,7 @@ function QuickAddDialog({
                     ) : null}
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div
-                      ref={sectionMenuRef}
-                      className="relative rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4"
-                    >
-                      <p className="text-sm font-semibold text-[#1E2D2F]">
-                        Section
-                      </p>
-                      <p className="mt-1 text-sm text-[#6D5C50]">
-                        Place the task directly into a section.
-                      </p>
-                      <button
-                        type="button"
-                        disabled={!effectiveProjectId}
-                        onClick={() => {
-                          setShowSectionMenu((current) => !current);
-                          setShowProjectMenu(false);
-                          setShowPriorityMenu(false);
-                        }}
-                        className="mt-3 inline-flex w-full items-center justify-between rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-[var(--app-surface)] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <span>
-                          {describeQuickAddSection(payload, effectiveDraft)}
-                        </span>
-                        <ChevronDown size={14} className="text-[#8A8076]" />
-                      </button>
-                      {!effectiveProjectId ? (
-                        <p className="mt-2 text-xs text-[#8A8076]">
-                          Pick a project first.
-                        </p>
-                      ) : null}
-                      {showSectionMenu && effectiveProjectId ? (
-                        <div className="absolute left-4 right-4 top-[calc(100%+8px)] z-20 rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-2 shadow-xl">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSectionOverrideId(null);
-                              setShowSectionMenu(false);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                              effectiveSectionId === null
-                                ? "bg-[#FFF1EB] text-[#B64B28]"
-                                : "text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                            }`}
-                          >
-                            <span>No section</span>
-                            {effectiveSectionId === null ? (
-                              <Check size={14} />
-                            ) : null}
-                          </button>
-                          {quickAddSectionOptions.map((section) => (
-                            <button
-                              key={section.id}
-                              type="button"
-                              onClick={() => {
-                                setSectionOverrideId(section.id);
-                                setShowSectionMenu(false);
-                              }}
-                              className={`mt-1 flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
-                                effectiveSectionId === section.id
-                                  ? "bg-[#FFF1EB] text-[#B64B28]"
-                                  : "text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                              }`}
-                            >
-                              <span>{section.name}</span>
-                              {effectiveSectionId === section.id ? (
-                                <Check size={14} />
-                              ) : null}
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
+                  <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -9339,7 +9252,6 @@ function QuickAddDialog({
                           className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                         />
                       ) : null}
-                    </div>
                   </div>
                 </div>
               </section>
@@ -9436,7 +9348,6 @@ function QuickAddDialog({
                 onClick={() => {
                   setShowProjectMenu((current) => !current);
                   setShowPriorityMenu(false);
-                  setShowSectionMenu(false);
                 }}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-[var(--app-surface)] px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
               >
