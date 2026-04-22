@@ -2531,7 +2531,7 @@ function WorkspaceShell({
             <button
               type="button"
               onClick={() => requestCreateProject()}
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:border-[#EE6A3C]/40 hover:bg-[#FBF7F3] hover:text-[#1E2D2F]"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:border-[#EE6A3C]/40 hover:bg-[#FCF1E6] hover:text-[#1E2D2F]"
               title="Create project"
               aria-label="Create project"
             >
@@ -2875,7 +2875,7 @@ function WorkspaceShell({
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F7F4F0]/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[#E7DDD4] bg-[#F6EBDD]/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           <BottomLink to="/today" icon={Home} label="Today" />
           <BottomLink to="/inbox" icon={ListTodo} label="Inbox" />
@@ -2979,7 +2979,7 @@ function WorkspaceShell({
               data-dialog-autofocus="true"
               type="button"
               onClick={() => submitFocusedTaskMove(null)}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
             >
               Inbox
             </button>
@@ -2988,7 +2988,7 @@ function WorkspaceShell({
                 key={project.id}
                 type="button"
                 onClick={() => submitFocusedTaskMove(project.id)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {project.name}
               </button>
@@ -3011,7 +3011,7 @@ function WorkspaceShell({
                 data-dialog-autofocus={priority === "P1" ? "true" : undefined}
                 type="button"
                 onClick={() => submitFocusedTaskPriority(priority)}
-                className="rounded-lg border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-1.5 font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-lg border border-[#E1D5CA] bg-[#FCF1E6] px-3 py-1.5 font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -3030,7 +3030,7 @@ function WorkspaceShell({
               <button
                 type="button"
                 onClick={() => closeFocusedTaskActionDialog()}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 Cancel
               </button>
@@ -3663,14 +3663,14 @@ function TodayPage({
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   selectionMode
                     ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
-              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              <span className="rounded-full bg-[#FCF1E6] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
               </span>
             ) : null}
@@ -3685,7 +3685,7 @@ function TodayPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => openDateDialog("reschedule-selected")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
             </button>
@@ -3693,7 +3693,7 @@ function TodayPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("move")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
             </button>
@@ -3701,7 +3701,7 @@ function TodayPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("priority")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
             </button>
@@ -3738,7 +3738,7 @@ function TodayPage({
             <button
               type="button"
               onClick={() => openDateDialog("reschedule-overdue")}
-              className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
             >
               Reschedule overdue
             </button>
@@ -3826,7 +3826,7 @@ function TodayPage({
             <button
               type="button"
               onClick={() => submitMove(null)}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
             >
               Inbox
             </button>
@@ -3835,7 +3835,7 @@ function TodayPage({
                 key={project.id}
                 type="button"
                 onClick={() => submitMove(project.id)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {project.name}
               </button>
@@ -3856,7 +3856,7 @@ function TodayPage({
                 key={priority}
                 type="button"
                 onClick={() => submitPriority(priority)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -3875,7 +3875,7 @@ function TodayPage({
               <button
                 type="button"
                 onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 Cancel
               </button>
@@ -4147,14 +4147,14 @@ function UpcomingPage({
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   selectionMode
                     ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
-              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              <span className="rounded-full bg-[#FCF1E6] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
               </span>
             ) : null}
@@ -4169,7 +4169,7 @@ function UpcomingPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={openDateDialog}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
             </button>
@@ -4177,7 +4177,7 @@ function UpcomingPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("move")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
             </button>
@@ -4185,7 +4185,7 @@ function UpcomingPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("priority")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
             </button>
@@ -4336,7 +4336,7 @@ function UpcomingPage({
             <button
               type="button"
               onClick={() => submitMove(null)}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
             >
               Inbox
             </button>
@@ -4345,7 +4345,7 @@ function UpcomingPage({
                 key={project.id}
                 type="button"
                 onClick={() => submitMove(project.id)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {project.name}
               </button>
@@ -4366,7 +4366,7 @@ function UpcomingPage({
                 key={priority}
                 type="button"
                 onClick={() => submitPriority(priority)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -4385,7 +4385,7 @@ function UpcomingPage({
               <button
                 type="button"
                 onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 Cancel
               </button>
@@ -4701,14 +4701,14 @@ function SearchPage({
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   selectionMode
                     ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
-              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              <span className="rounded-full bg-[#FCF1E6] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
               </span>
             ) : null}
@@ -4717,7 +4717,7 @@ function SearchPage({
       />
 
       <section className="rounded-[28px] border border-[#E1D5CA] bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-3 rounded-[22px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3">
+        <div className="flex items-center gap-3 rounded-[22px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-3">
           <Search size={18} className="text-[#9F7B63]" />
           <input
             ref={inputRef}
@@ -4741,7 +4741,7 @@ function SearchPage({
                 className={`rounded-full px-3 py-2 text-sm font-medium transition ${
                   active
                     ? "bg-[#EE6A3C] text-white"
-                    : "border border-[#E1D5CA] bg-[#FBF7F3] text-[#6D5C50] hover:bg-white"
+                    : "border border-[#E1D5CA] bg-[#FCF1E6] text-[#6D5C50] hover:bg-white"
                 } ${forcedFilter === filter.value ? "cursor-default opacity-90" : ""}`}
               >
                 {filter.label}
@@ -4758,7 +4758,7 @@ function SearchPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={openDateDialog}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
             </button>
@@ -4766,7 +4766,7 @@ function SearchPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("move")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
             </button>
@@ -4774,7 +4774,7 @@ function SearchPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("priority")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
             </button>
@@ -4853,7 +4853,7 @@ function SearchPage({
             <button
               type="button"
               onClick={() => submitMove(null)}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
             >
               Inbox
             </button>
@@ -4862,7 +4862,7 @@ function SearchPage({
                 key={project.id}
                 type="button"
                 onClick={() => submitMove(project.id)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {project.name}
               </button>
@@ -4883,7 +4883,7 @@ function SearchPage({
                 key={priority}
                 type="button"
                 onClick={() => submitPriority(priority)}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -4902,7 +4902,7 @@ function SearchPage({
               <button
                 type="button"
                 onClick={closeDialog}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 Cancel
               </button>
@@ -5125,14 +5125,14 @@ function InboxPage({
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   selectionMode
                     ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
-              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              <span className="rounded-full bg-[#FCF1E6] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
               </span>
             ) : null}
@@ -5147,7 +5147,7 @@ function InboxPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("reschedule")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
             </button>
@@ -5155,7 +5155,7 @@ function InboxPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("move")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
             </button>
@@ -5163,7 +5163,7 @@ function InboxPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("priority")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
             </button>
@@ -5246,7 +5246,7 @@ function InboxPage({
                 closeDialog();
                 clearSelection();
               }}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
             >
               Inbox
             </button>
@@ -5259,7 +5259,7 @@ function InboxPage({
                   closeDialog();
                   clearSelection();
                 }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {project.name}
               </button>
@@ -5285,7 +5285,7 @@ function InboxPage({
                   closeDialog();
                   clearSelection();
                 }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -5726,14 +5726,14 @@ function ProjectPage({
                 className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                   selectionMode
                     ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 {selectionMode ? "Cancel selection" : "Select tasks"}
               </button>
             ) : null}
             {selectionMode ? (
-              <span className="rounded-full bg-[#FBF7F3] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              <span className="rounded-full bg-[#FCF1E6] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
                 {selectedCount} selected
               </span>
             ) : null}
@@ -5783,7 +5783,7 @@ function ProjectPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("reschedule")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Reschedule
             </button>
@@ -5791,7 +5791,7 @@ function ProjectPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("move")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Move
             </button>
@@ -5799,7 +5799,7 @@ function ProjectPage({
               type="button"
               disabled={selectedCount === 0}
               onClick={() => setActiveDialog("priority")}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
             >
               Priority
             </button>
@@ -5923,7 +5923,7 @@ function ProjectPage({
                     onClick={() =>
                       onOpenQuickAdd({ defaultProjectId: currentProject.id })
                     }
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                     title="Add task"
                     aria-label="Add task"
                   >
@@ -6145,7 +6145,7 @@ function ProjectPage({
                 setActiveDialog(null);
                 clearSelection();
               }}
-              className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+              className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
             >
               Loose tasks
             </button>
@@ -6158,7 +6158,7 @@ function ProjectPage({
                   setActiveDialog(null);
                   clearSelection();
                 }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {section.name}
               </button>
@@ -6184,7 +6184,7 @@ function ProjectPage({
                   setActiveDialog(null);
                   clearSelection();
                 }}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 {priority}
               </button>
@@ -6792,13 +6792,13 @@ function TaskEditor({
           <div className="flex flex-wrap gap-2">
             <button
               onClick={goBack}
-              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
             >
               Back
             </button>
             <button
               onClick={() => onArchiveTask(task.id)}
-              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
             >
               {task.status === "ARCHIVED" ? "Unarchive" : "Archive"}
             </button>
@@ -6822,7 +6822,7 @@ function TaskEditor({
               You have unsaved changes.
             </p>
           ) : null}
-          <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+          <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
             <p className="text-sm font-semibold text-[#1E2D2F]">
               Live task summary
             </p>
@@ -6850,7 +6850,7 @@ function TaskEditor({
               onChange={(event) => setParserLine(event.target.value)}
               rows={2}
               placeholder="Try: pay rent p1 tomorrow #bills/home"
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-2">
@@ -6868,7 +6868,7 @@ function TaskEditor({
               <button
                 type="button"
                 onClick={applyParserLine}
-                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 Apply parser line
               </button>
@@ -6880,7 +6880,7 @@ function TaskEditor({
               autoFocus
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
           </Field>
 
@@ -6889,7 +6889,7 @@ function TaskEditor({
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               rows={6}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
           </Field>
 
@@ -6901,7 +6901,7 @@ function TaskEditor({
                   setProjectId(event.target.value);
                   setSectionId("");
                 }}
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
               >
                 <option value="">Inbox</option>
                 {projects.map((projectOption) => (
@@ -6917,7 +6917,7 @@ function TaskEditor({
                 value={sectionId}
                 onChange={(event) => setSectionId(event.target.value)}
                 disabled={!projectId}
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">No section</option>
                 {sectionOptions.map((section) => (
@@ -6936,7 +6936,7 @@ function TaskEditor({
               ref={prioritySelectRef}
               value={priority}
               onChange={(event) => setPriority(event.target.value as Priority)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             >
               <option value="P1">P1 · Critical</option>
               <option value="P2">P2 · High</option>
@@ -6945,7 +6945,7 @@ function TaskEditor({
             </select>
           </Field>
 
-          <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
+          <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
             <input
               type="checkbox"
               checked={allDay}
@@ -6961,27 +6961,27 @@ function TaskEditor({
               type={allDay ? "date" : "datetime-local"}
               value={dueAt}
               onChange={(event) => setDueAt(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
             />
             <div className="mt-2 flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setDueDateQuick(0)}
-                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FCF1E6]"
               >
                 Today
               </button>
               <button
                 type="button"
                 onClick={() => setDueDateQuick(1)}
-                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FCF1E6]"
               >
                 Tomorrow
               </button>
               <button
                 type="button"
                 onClick={() => setDueDateQuick(7)}
-                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FCF1E6]"
               >
                 Next week
               </button>
@@ -7004,7 +7004,7 @@ function TaskEditor({
             description="Turn this into a repeating task or clear the rule entirely."
           />
 
-          <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
+          <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
             <input
               type="checkbox"
               checked={deadlineEnabled}
@@ -7016,7 +7016,7 @@ function TaskEditor({
 
           {deadlineEnabled ? (
             <>
-              <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
+              <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
                 <input
                   type="checkbox"
                   checked={deadlineAllDay}
@@ -7031,27 +7031,27 @@ function TaskEditor({
                   type={deadlineAllDay ? "date" : "datetime-local"}
                   value={deadlineAt}
                   onChange={(event) => setDeadlineAt(event.target.value)}
-                  className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                  className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                 />
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setDeadlineQuick(0)}
-                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FCF1E6]"
                   >
                     Today
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeadlineQuick(1)}
-                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FCF1E6]"
                   >
                     Tomorrow
                   </button>
                   <button
                     type="button"
                     onClick={() => setDeadlineQuick(7)}
-                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                    className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[#FCF1E6]"
                   >
                     Next week
                   </button>
@@ -7066,7 +7066,7 @@ function TaskEditor({
             </>
           ) : null}
 
-          <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+          <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
             <p className="text-sm font-semibold text-[#1E2D2F]">Reminders</p>
             <p className="mt-1 text-sm text-[#6D5C50]">
               Add fixed-time reminders or relative reminders before the due
@@ -7104,7 +7104,7 @@ function TaskEditor({
               schedule state.
             </p>
           </div>
-          <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
+          <span className="rounded-full bg-[#FCF1E6] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
             {taskTimeline.length} event{taskTimeline.length === 1 ? "" : "s"}
           </span>
         </div>
@@ -7112,7 +7112,7 @@ function TaskEditor({
           {taskTimeline.map((entry) => (
             <div
               key={entry.id}
-              className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4"
+              className="rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -7133,7 +7133,7 @@ function TaskEditor({
                     <button
                       type="button"
                       onClick={() => onUndoActivity(entry.activityId!)}
-                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                     >
                       Undo
                     </button>
@@ -7159,7 +7159,7 @@ function TaskEditor({
               section, and support pasted lists.
             </p>
           </div>
-          <span className="rounded-full bg-[#FBF7F3] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
+          <span className="rounded-full bg-[#FCF1E6] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
             {subtasks.length} subtask{subtasks.length === 1 ? "" : "s"}
           </span>
         </div>
@@ -7190,7 +7190,7 @@ function TaskEditor({
               }}
               rows={3}
               placeholder="Add a subtask or paste one task per line"
-              className="w-full rounded-[20px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
+              className="w-full rounded-[20px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
             />
             <p className="mt-2 text-xs text-[#8A8076]">
               Quick Add parsing works here too: dates, priorities, projects,
@@ -7211,7 +7211,7 @@ function TaskEditor({
                 <button
                   type="button"
                   onClick={() => setShowBulkSubtaskChoices(false)}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                 >
                   Cancel
                 </button>
@@ -7219,7 +7219,7 @@ function TaskEditor({
                   type="button"
                   disabled={isCreatingSubtasks}
                   onClick={() => void createSubtaskDrafts("single")}
-                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isCreatingSubtasks ? "Adding..." : "Add 1 subtask"}
                 </button>
@@ -7437,7 +7437,7 @@ function SettingsPage({
               label="Auto sync"
               value={autoSyncEnabled ? "Enabled" : "Manual only"}
             />
-            <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
+            <p className="rounded-[18px] bg-[#FCF1E6] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
               {cloudStatus.detail}
             </p>
             {lastSyncError ? (
@@ -7449,7 +7449,7 @@ function SettingsPage({
               {cloudSession ? (
                 <button
                   onClick={onDisconnectCloud}
-                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                  className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                 >
                   Disconnect
                 </button>
@@ -7464,7 +7464,7 @@ function SettingsPage({
                   : "Reset cloud sync"}
               </button>
             </div>
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
                   Run cloud sync automatically
@@ -7504,24 +7504,24 @@ function SettingsPage({
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={onSaveBrowserBackupNow}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 Save browser backup
               </button>
               <button
                 onClick={onRestoreBrowserBackup}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 Restore browser backup
               </button>
               <button
                 onClick={onExportJson}
-                className="inline-flex items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="inline-flex items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 <Download size={16} />
                 Export JSON
               </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white">
                 <Import size={16} />
                 Import JSON
                 <input
@@ -7534,14 +7534,14 @@ function SettingsPage({
               <button
                 onClick={onResetLocalCache}
                 disabled={isResettingCache}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isResettingCache
                   ? "Resetting web cache..."
                   : "Reset web cache"}
               </button>
             </div>
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
                   Maintain browser backups automatically
@@ -7567,7 +7567,7 @@ function SettingsPage({
           defaultOpen
         >
           <div className="space-y-4">
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
                   Show completed tasks in Today
@@ -7584,7 +7584,7 @@ function SettingsPage({
                 className="h-5 w-5 accent-[#EE6A3C]"
               />
             </label>
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
                   Show Select tasks buttons on list pages
@@ -7600,7 +7600,7 @@ function SettingsPage({
                 className="h-5 w-5 accent-[#EE6A3C]"
               />
             </label>
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
                   Use 24-hour time
@@ -7617,7 +7617,7 @@ function SettingsPage({
                 className="h-5 w-5 accent-[#EE6A3C]"
               />
             </label>
-            <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+            <div className="rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -7664,7 +7664,7 @@ function SettingsPage({
             <div className="flex flex-wrap gap-3">
               <a
                 href={feedbackHref}
-                className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
               >
                 Send feedback
               </a>
@@ -7675,7 +7675,7 @@ function SettingsPage({
                 Report issue
               </a>
             </div>
-            <p className="rounded-[18px] bg-[#FBF7F3] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
+            <p className="rounded-[18px] bg-[#FCF1E6] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
               Support inbox: {SUPPORT_EMAIL}
             </p>
           </div>
@@ -8093,7 +8093,7 @@ function TaskRow({
           onDragEnd={handleDragEnd}
           onClick={(event) => event.stopPropagation()}
           aria-label={`Drag ${task.title}`}
-          className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[#FBF7F3] active:cursor-grabbing"
+          className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[#FCF1E6] active:cursor-grabbing"
         >
           <GripVertical size={14} />
         </button>
@@ -8299,7 +8299,7 @@ function ChoiceDialog({
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-2 text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+            className="rounded-lg p-2 text-[#6D5C50] transition hover:bg-[#FCF1E6]"
           >
             <X size={16} />
           </button>
@@ -8840,7 +8840,7 @@ function QuickAddDialog({
       data-overlay-dialog="true"
       className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm"
     >
-      <div className="w-full max-w-xl rounded-2xl border border-[#E7DDD4] bg-[#F7F4F0] p-4 shadow-2xl">
+      <div className="w-full max-w-xl rounded-2xl border border-[#E7DDD4] bg-[#F6EBDD] p-4 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">
@@ -8852,7 +8852,7 @@ function QuickAddDialog({
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg border border-[#E1D5CA] bg-white p-1.5 text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-lg border border-[#E1D5CA] bg-white p-1.5 text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
           >
             <X size={16} />
           </button>
@@ -8915,7 +8915,7 @@ function QuickAddDialog({
                   setShowProjectMenu(false);
                   setShowSectionMenu(false);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 <CalendarDays size={14} className="text-[#4E9A57]" />
                 <span>{dueSummaryLabel}</span>
@@ -8943,7 +8943,7 @@ function QuickAddDialog({
                     setShowProjectMenu(false);
                     setShowSectionMenu(false);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                 >
                   <Flag size={14} className="text-[#6D5C50]" />
                   <span>{prioritySummaryLabel}</span>
@@ -8963,7 +8963,7 @@ function QuickAddDialog({
                           className={`flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium transition ${
                             effectivePriority === priority
                               ? "bg-[#FFF1EB] text-[#B64B28]"
-                              : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                              : "text-[#1E2D2F] hover:bg-[#FCF1E6]"
                           }`}
                         >
                           <span>{priority}</span>
@@ -8979,7 +8979,7 @@ function QuickAddDialog({
                         setPriorityOverride(undefined);
                         setShowPriorityMenu(false);
                       }}
-                      className="mt-1 flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                      className="mt-1 flex w-full items-center justify-between rounded-md px-2.5 py-1.5 text-left text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                     >
                       <span>Use parser</span>
                       {priorityOverride === undefined ? (
@@ -8996,7 +8996,7 @@ function QuickAddDialog({
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                   showReminderEditor || effectiveDraft.reminders.length
                     ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 <Bell
@@ -9021,7 +9021,7 @@ function QuickAddDialog({
                 className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
                   showAdvancedFields || hasManualMetadataOverrides
                     ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                    : "border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                 }`}
               >
                 <MoreHorizontal
@@ -9037,7 +9037,7 @@ function QuickAddDialog({
             </div>
 
             {showReminderEditor ? (
-              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] p-4">
+              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FCF1E6] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -9051,7 +9051,7 @@ function QuickAddDialog({
                     <button
                       type="button"
                       onClick={() => setReminderEditorsOverride(undefined)}
-                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                     >
                       Use parser
                     </button>
@@ -9078,7 +9078,7 @@ function QuickAddDialog({
             ) : null}
 
             {showAdvancedFields ? (
-              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] p-4">
+              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[#FCF1E6] p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -9104,7 +9104,7 @@ function QuickAddDialog({
                         setDeadlineAllDayOverride(undefined);
                         setDeadlineInputOverride(undefined);
                       }}
-                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                      className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                     >
                       Use parser values
                     </button>
@@ -9137,7 +9137,7 @@ function QuickAddDialog({
                         className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                           effectiveDeadlineEnabled
                             ? "bg-[#EE6A3C] text-white hover:bg-[#d75e33]"
-                            : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                            : "border border-[#E1D5CA] bg-white text-[#1E2D2F] hover:bg-[#FCF1E6]"
                         }`}
                       >
                         {effectiveDeadlineEnabled ? "Enabled" : "Add deadline"}
@@ -9164,7 +9164,7 @@ function QuickAddDialog({
                           onChange={(event) =>
                             setDeadlineInputOverride(event.target.value)
                           }
-                          className="w-full rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                          className="w-full rounded-[16px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                         />
                       </div>
                     ) : null}
@@ -9189,7 +9189,7 @@ function QuickAddDialog({
                           setShowProjectMenu(false);
                           setShowPriorityMenu(false);
                         }}
-                        className="mt-3 inline-flex w-full items-center justify-between rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mt-3 inline-flex w-full items-center justify-between rounded-[16px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-left text-sm font-medium text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <span>
                           {describeQuickAddSection(payload, effectiveDraft)}
@@ -9212,7 +9212,7 @@ function QuickAddDialog({
                             className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
                               effectiveSectionId === null
                                 ? "bg-[#FFF1EB] text-[#B64B28]"
-                                : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                                : "text-[#1E2D2F] hover:bg-[#FCF1E6]"
                             }`}
                           >
                             <span>No section</span>
@@ -9231,7 +9231,7 @@ function QuickAddDialog({
                               className={`mt-1 flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
                                 effectiveSectionId === section.id
                                   ? "bg-[#FFF1EB] text-[#B64B28]"
-                                  : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                                  : "text-[#1E2D2F] hover:bg-[#FCF1E6]"
                               }`}
                             >
                               <span>{section.name}</span>
@@ -9259,7 +9259,7 @@ function QuickAddDialog({
                           <button
                             type="button"
                             onClick={() => setRecurrenceOverride(undefined)}
-                            className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                            className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                           >
                             Use parser
                           </button>
@@ -9320,7 +9320,7 @@ function QuickAddDialog({
                             className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
                               recurrencePreset === option.preset
                                 ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]"
-                                : "border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
+                                : "border-[#E1D5CA] bg-[#FCF1E6] text-[#1E2D2F] hover:bg-white"
                             }`}
                           >
                             {option.label}
@@ -9336,7 +9336,7 @@ function QuickAddDialog({
                             )
                           }
                           placeholder="FREQ=WEEKLY;INTERVAL=2"
-                          className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                          className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                         />
                       ) : null}
                     </div>
@@ -9346,7 +9346,7 @@ function QuickAddDialog({
             ) : null}
 
             {bulkLines.length > 1 ? (
-              <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-4">
+              <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -9405,7 +9405,7 @@ function QuickAddDialog({
                 <button
                   type="button"
                   onClick={() => setShowBulkChoices(false)}
-                  className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                  className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
                 >
                   Cancel
                 </button>
@@ -9413,7 +9413,7 @@ function QuickAddDialog({
                   type="button"
                   disabled={isSaving || bulkLines.length === 0}
                   onClick={() => void createBulkTasks("single")}
-                  className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3] disabled:cursor-not-allowed disabled:opacity-70"
+                  className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {isSaving ? "Adding..." : "Combine into 1 task"}
                 </button>
@@ -9438,7 +9438,7 @@ function QuickAddDialog({
                   setShowPriorityMenu(false);
                   setShowSectionMenu(false);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#E1D5CA] bg-white px-2.5 py-1.5 text-xs font-medium text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 <Folder size={14} className="text-[#6D5C50]" />
                 <span>{describeQuickAddLocation(payload, effectiveDraft)}</span>
@@ -9463,8 +9463,8 @@ function QuickAddDialog({
                       }}
                       className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
                         effectiveProjectId === null
-                          ? "bg-[#FBF7F3] text-[#1E2D2F]"
-                          : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                          ? "bg-[#FCF1E6] text-[#1E2D2F]"
+                          : "text-[#1E2D2F] hover:bg-[#FCF1E6]"
                       }`}
                     >
                       <span>Inbox</span>
@@ -9487,8 +9487,8 @@ function QuickAddDialog({
                           className={`flex w-full items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm font-medium transition ${
                             effectiveProjectId === project.id &&
                             effectiveSectionId === null
-                              ? "bg-[#FBF7F3] text-[#1E2D2F]"
-                              : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                              ? "bg-[#FCF1E6] text-[#1E2D2F]"
+                              : "text-[#1E2D2F] hover:bg-[#FCF1E6]"
                           }`}
                         >
                           <span>{project.name}</span>
@@ -9511,7 +9511,7 @@ function QuickAddDialog({
                                   className={`ml-4 flex w-[calc(100%-1rem)] items-center justify-between rounded-[14px] px-3 py-2 text-left text-sm transition ${
                                     effectiveSectionId === section.id
                                       ? "bg-[#FFF1EB] text-[#B64B28]"
-                                      : "text-[#6D5C50] hover:bg-[#FBF7F3]"
+                                      : "text-[#6D5C50] hover:bg-[#FCF1E6]"
                                   }`}
                                 >
                                   <span>{section.name}</span>
@@ -9541,7 +9541,7 @@ function QuickAddDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+                className="rounded-lg border border-[#E1D5CA] bg-white px-3 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
               >
                 Cancel
               </button>
@@ -9560,7 +9560,7 @@ function QuickAddDialog({
                 type="button"
                 disabled={isSaving || !hasInput || bulkLines.length > 1}
                 onClick={() => void submitDraft("continue")}
-                className="rounded-lg border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
+                className="rounded-lg border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSaving ? "Creating..." : "Create & add another"}
               </button>
@@ -9740,7 +9740,7 @@ function RescheduleDialog({
                 data-dialog-autofocus={index === 0 ? "true" : undefined}
                 type="button"
                 onClick={item.onSelect}
-                className="flex w-full items-center gap-3 rounded-[18px] px-3 py-2 text-left transition hover:bg-[#FBF7F3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]"
+                className="flex w-full items-center gap-3 rounded-[18px] px-3 py-2 text-left transition hover:bg-[#FCF1E6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]"
               >
                 <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#FFF1EB] text-[#EE6A3C]">
                   <Icon size={16} />
@@ -9770,7 +9770,7 @@ function RescheduleDialog({
                 onClick={() =>
                   setVisibleMonthStart((current) => subMonths(current, 1))
                 }
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FCF1E6]"
                 aria-label="Previous month"
               >
                 <ChevronLeft size={16} />
@@ -9780,7 +9780,7 @@ function RescheduleDialog({
                 onClick={() =>
                   setVisibleMonthStart((current) => addMonths(current, 1))
                 }
-                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[#6D5C50] transition hover:bg-[#FCF1E6]"
                 aria-label="Next month"
               >
                 <ChevronRight size={16} />
@@ -9810,8 +9810,8 @@ function RescheduleDialog({
                     isSelected
                       ? "border-[#EE6A3C] bg-[#FFF1EB] font-semibold text-[#B64B28]"
                       : inCurrentMonth
-                        ? "border-[#E1D5CA] text-[#1E2D2F] hover:bg-[#FBF7F3]"
-                        : "border-transparent text-[#C5B5A8] hover:bg-[#FBF7F3]"
+                        ? "border-[#E1D5CA] text-[#1E2D2F] hover:bg-[#FCF1E6]"
+                        : "border-transparent text-[#C5B5A8] hover:bg-[#FCF1E6]"
                   } ${isToday(dayStart) ? "ring-2 ring-[#F4B79F] ring-offset-2 ring-offset-white" : ""}`}
                 >
                   {format(day, "d")}
@@ -9852,7 +9852,7 @@ function ConfirmDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
           >
             Cancel
           </button>
@@ -9910,7 +9910,7 @@ function TextInputDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
           >
             Cancel
           </button>
@@ -9936,7 +9936,7 @@ function TextInputDialog({
             ref={inputRef}
             value={value}
             onChange={(event) => onChange(event.target.value)}
-            className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
           />
         </Field>
       </form>
@@ -10020,7 +10020,7 @@ function OverflowMenu({
             return next;
           });
         }}
-        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FCF1E6]"
       >
         <MoreHorizontal size={16} />
       </button>
@@ -10042,7 +10042,7 @@ function OverflowMenu({
               className={`flex w-full items-center rounded-[14px] px-3 py-2.5 text-left text-sm font-medium transition ${
                 item.tone === "destructive"
                   ? "text-[#B64B28] hover:bg-[#FFF1EB]"
-                  : "text-[#1E2D2F] hover:bg-[#FBF7F3]"
+                  : "text-[#1E2D2F] hover:bg-[#FCF1E6]"
               }`}
             >
               {item.label}
@@ -10170,7 +10170,7 @@ function TaskRowActions({
         aria-label={`Reschedule ${task.title}`}
         onMouseDown={stopRowActionEvent}
         onClick={openRescheduleDialog}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FCF1E6]"
       >
         <CalendarDays size={14} />
       </button>
@@ -10180,7 +10180,7 @@ function TaskRowActions({
         aria-label={`Change priority for ${task.title}`}
         onMouseDown={stopRowActionEvent}
         onClick={openPriorityDialog}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FBF7F3]"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-[#E1D5CA] bg-white text-[#6D5C50] transition hover:bg-[#FCF1E6]"
       >
         <Flag size={14} />
       </button>
@@ -10266,7 +10266,7 @@ function TaskRowActions({
                 className={`rounded-lg border px-3 py-1.5 font-semibold transition ${
                   task.priority === priority
                     ? "border-[#EE6A3C] bg-[#FFF1EB] text-[#B64B28]"
-                    : "border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
+                    : "border-[#E1D5CA] bg-[#FCF1E6] text-[#1E2D2F] hover:bg-white"
                 }`}
               >
                 {priority}
@@ -10314,7 +10314,7 @@ function TaskRowActions({
                     onMoveTasksToProject([task.id], null);
                     onSetActionState(null);
                   }}
-                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                  className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                 >
                   Inbox
                 </button>
@@ -10324,7 +10324,7 @@ function TaskRowActions({
                     onMoveTasksToSection?.([task.id], null);
                     onSetActionState(null);
                   }}
-                  className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                  className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                 >
                   {taskProject?.name ?? "Project"} / Loose tasks
                 </button>
@@ -10346,7 +10346,7 @@ function TaskRowActions({
                         onMoveTasksToSection([task.id], section.id);
                         onSetActionState(null);
                       }}
-                      className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                      className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                     >
                       {section.name}
                     </button>
@@ -10369,7 +10369,7 @@ function TaskRowActions({
                         onMoveTasksToProject([task.id], project.id);
                         onSetActionState(null);
                       }}
-                      className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+                      className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
                     >
                       {project.name}
                     </button>
@@ -10430,7 +10430,7 @@ function TaskDeadlineDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
           >
             Cancel
           </button>
@@ -10449,7 +10449,7 @@ function TaskDeadlineDialog({
       }
     >
       <div className="space-y-4">
-        <label className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3">
+        <label className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3">
           <span className="text-sm font-semibold text-[#1E2D2F]">
             Track a separate deadline
           </span>
@@ -10462,7 +10462,7 @@ function TaskDeadlineDialog({
           />
         </label>
         {deadlineEnabled ? (
-          <div className="space-y-3 rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-4">
+          <div className="space-y-3 rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-4">
             <label className="flex items-center justify-between gap-4">
               <span className="text-sm font-semibold text-[#1E2D2F]">
                 All day
@@ -10532,7 +10532,7 @@ function TaskRemindersDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-full border border-[#E1D5CA] bg-white px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
           >
             Cancel
           </button>
@@ -10577,7 +10577,7 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
               {section.items.map((item) => (
                 <div
                   key={`${section.title}-${item.keys}`}
-                  className="flex items-start justify-between gap-4 rounded-[16px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3"
+                  className="flex items-start justify-between gap-4 rounded-[16px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-3"
                 >
                   <span className="text-sm font-semibold text-[#1E2D2F]">
                     {item.keys}
@@ -10641,7 +10641,7 @@ function OnboardingSetupDialog({
               className={`rounded-[22px] border px-4 py-4 text-left transition ${
                 selectedPresetId === preset.id
                   ? "border-[#F3B7A4] bg-[#FFF5F1] shadow-sm"
-                  : "border-[#E1D5CA] bg-[#FBF7F3] hover:bg-white"
+                  : "border-[#E1D5CA] bg-[#FCF1E6] hover:bg-white"
               }`}
             >
               <p className="text-base font-semibold text-[#1E2D2F]">
@@ -10654,7 +10654,7 @@ function OnboardingSetupDialog({
           ))}
         </div>
 
-        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FCF1E6] px-5 py-4">
           <p className="text-sm font-semibold text-[#1E2D2F]">
             Starter project: {selectedPreset.projectName}
           </p>
@@ -10678,7 +10678,7 @@ function OnboardingSetupDialog({
           <button
             type="button"
             onClick={onSkip}
-            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
           >
             Skip
           </button>
@@ -10686,7 +10686,7 @@ function OnboardingSetupDialog({
             <button
               type="button"
               onClick={onConnectGoogle}
-              className="rounded-full border border-[#E1D5CA] bg-white px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              className="rounded-full border border-[#E1D5CA] bg-white px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
             >
               Connect Google Drive first
             </button>
@@ -10832,7 +10832,7 @@ function OnboardingCoachmark({
           {stepConfig.description}
         </p>
         {stepConfig.example ? (
-          <code className="mt-3 block rounded-[16px] border border-[#E1D5CA] bg-[#FBF7F3] px-3 py-2 text-sm text-[#1E2D2F]">
+          <code className="mt-3 block rounded-[16px] border border-[#E1D5CA] bg-[#FCF1E6] px-3 py-2 text-sm text-[#1E2D2F]">
             {stepConfig.example}
           </code>
         ) : null}
@@ -10849,7 +10849,7 @@ function OnboardingCoachmark({
           <button
             type="button"
             onClick={onSkip}
-            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
           >
             {step === "quick_add" ? "Skip practice" : "Skip"}
           </button>
@@ -10887,7 +10887,7 @@ function CloudConnectDialog({
             configuration data before continuing.
           </div>
         ) : null}
-        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-4">
+        <div className="rounded-[22px] border border-[#E1D5CA] bg-[#FCF1E6] px-5 py-4">
           <p className="text-sm font-semibold text-[#1E2D2F]">What to expect</p>
           <ol className="mt-3 space-y-2 text-sm leading-6 text-[#6D5C50]">
             <li>1. Google will ask you to pick an account.</li>
@@ -10913,7 +10913,7 @@ function CloudConnectDialog({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+            className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
           >
             Not now
           </button>
@@ -11051,7 +11051,7 @@ function ProjectSwitcherDialog({
               setActiveIndex(0);
             }}
             placeholder="Search or create a project"
-            className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+            className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
           />
         </Field>
         <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
@@ -11066,7 +11066,7 @@ function ProjectSwitcherDialog({
               className={`flex w-full items-center justify-between rounded-[18px] border px-4 py-3 text-left text-sm transition ${
                 index === boundedActiveIndex
                   ? "border-[#EE6A3C] bg-[#FFF3EE] text-[#1E2D2F]"
-                  : "border-[#E7DDD4] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
+                  : "border-[#E7DDD4] bg-[#FCF1E6] text-[#1E2D2F] hover:bg-white"
               }`}
             >
               <span className="font-semibold">{project.name}</span>
@@ -11076,7 +11076,7 @@ function ProjectSwitcherDialog({
             </button>
           ))}
           {!filteredProjects.length ? (
-            <div className="rounded-[18px] border border-dashed border-[#E1D5CA] bg-[#FBF7F3] px-4 py-5 text-sm text-[#6D5C50]">
+            <div className="rounded-[18px] border border-dashed border-[#E1D5CA] bg-[#FCF1E6] px-4 py-5 text-sm text-[#6D5C50]">
               {canCreate
                 ? `Press Enter to create "${query.trim()}".`
                 : "No matching projects."}
@@ -11155,7 +11155,7 @@ function RecurrenceField({
           <button
             type="button"
             onClick={onReset}
-            className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+            className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
           >
             Use parser
           </button>
@@ -11176,7 +11176,7 @@ function RecurrenceField({
           }
           onChange(getRuleForRecurrencePreset(nextPreset));
         }}
-        className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+        className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
       >
         <option value="NONE">Does not repeat</option>
         <option value="DAILY">Every day</option>
@@ -11228,7 +11228,7 @@ function ReminderListEditor({
             <button
               type="button"
               onClick={onReset}
-              className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FBF7F3]"
+              className="rounded-full border border-[#E1D5CA] bg-white px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[#FCF1E6]"
             >
               Use parser
             </button>
@@ -11282,7 +11282,7 @@ function ReminderListEditor({
                         className={`rounded-full border px-3 py-2 text-sm font-medium transition ${
                           reminder.mode === option.mode
                             ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]"
-                            : "border-[#E1D5CA] bg-[#FBF7F3] text-[#1E2D2F] hover:bg-white"
+                            : "border-[#E1D5CA] bg-[#FCF1E6] text-[#1E2D2F] hover:bg-white"
                         }`}
                       >
                         {option.label}
@@ -11305,7 +11305,7 @@ function ReminderListEditor({
                           ),
                         );
                       }}
-                      className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                      className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                     />
                   </Field>
                 ) : (
@@ -11331,7 +11331,7 @@ function ReminderListEditor({
                           ),
                         );
                       }}
-                      className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
+                      className="w-full rounded-[18px] border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
                     />
                   </Field>
                 )}
@@ -11352,7 +11352,7 @@ function ReminderListEditor({
           ))}
         </div>
       ) : (
-        <div className="rounded-[18px] border border-dashed border-[#D9CABC] bg-[#FBF7F3] px-4 py-4 text-sm text-[#6D5C50]">
+        <div className="rounded-[18px] border border-dashed border-[#D9CABC] bg-[#FCF1E6] px-4 py-4 text-sm text-[#6D5C50]">
           No reminders yet.
         </div>
       )}
@@ -11366,7 +11366,7 @@ function ReminderListEditor({
       <button
         type="button"
         onClick={() => onChange([...reminders, createReminderEditor(dueAt)])}
-        className="rounded-full border border-[#E1D5CA] bg-[#FBF7F3] px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
+        className="rounded-full border border-[#E1D5CA] bg-[#FCF1E6] px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-white"
       >
         Add reminder
       </button>
@@ -11391,7 +11391,7 @@ function EmptyState({
 
 function LoadingScreen({ label }: { label: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F7F4F0] px-6">
+    <div className="flex min-h-screen items-center justify-center bg-[#F6EBDD] px-6">
       <div className="rounded-[28px] border border-[#E1D5CA] bg-white px-6 py-5 text-sm font-medium text-[#6D5C50] shadow-sm">
         {label}
       </div>
@@ -11471,7 +11471,7 @@ function BottomLink({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E7DDD4] bg-[#FBF7F3] px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-[18px] border border-[#E7DDD4] bg-[#FCF1E6] px-4 py-3">
       <span className="text-sm font-medium text-[#6D5C50]">{label}</span>
       <span className="text-sm font-semibold text-[#1E2D2F]">{value}</span>
     </div>
@@ -12250,3 +12250,4 @@ function writeStoredCloudSession(session: CloudSession | null) {
     JSON.stringify(session),
   );
 }
+
