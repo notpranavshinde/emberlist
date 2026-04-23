@@ -8,8 +8,8 @@
   --app-shell-bg-card: color-mix(in srgb, var(--app-shell-bg) 72%, white);
   --app-shell-border: color-mix(in srgb, var(--app-shell-bg) 42%, #fde6c6);
   --app-surface: color-mix(in srgb, var(--app-shell-bg) 16%, #f7f7f6e8);
-  --app-surface-soft: color-mix(in srgb, var(--app-shell-bg) 34%, #fcedd2);
-  --app-surface-muted: color-mix(in srgb, var(--app-shell-bg) 52%, #fcedd2);
+  --app-surface-soft: color-mix(in srgb, var(--app-shell-bg) 34%, #faf3e6);
+  --app-surface-muted: color-mix(in srgb, var(--app-shell-bg) 52%, #fffaf0);
 }
 
 html, body, #root {
