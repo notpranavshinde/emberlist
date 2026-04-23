@@ -9114,9 +9114,6 @@ function QuickAddDialog({
                     <p className="text-sm font-semibold text-[#1E2D2F]">
                       More options
                     </p>
-                    <p className="mt-1 text-sm text-[#6D5C50]">
-                      Use deadline or repeat settings only when you need them.
-                    </p>
                   </div>
                   {hasManualMetadataOverrides ? (
                     <button
@@ -9226,7 +9223,7 @@ function QuickAddDialog({
                     <textarea
                       value={subtaskInput}
                       onChange={(event) => setSubtaskInput(event.target.value)}
-                      rows={4}
+                      rows={3}
                       placeholder={"Draft outline\nCollect links\nSend final version"}
                       className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
                     />
