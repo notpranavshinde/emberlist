@@ -2,7 +2,7 @@
 
 :root {
   /* Change this one value to try different warm shell colors. */
-  --app-shell-bg: #fdf6e5d8;
+  --app-shell-bg: #fdf8ec;
   --app-shell-bg-soft: color-mix(in srgb, var(--app-shell-bg) 38%, white);
   --app-shell-bg-sidebar: color-mix(in srgb, var(--app-shell-bg) 80%, white);
   --app-shell-bg-card: color-mix(in srgb, var(--app-shell-bg) 72%, white);
