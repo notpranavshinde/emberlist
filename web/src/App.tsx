@@ -8359,6 +8359,7 @@ function QuickAddDialog({
   const [showDueDialog, setShowDueDialog] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
+  const [subtaskInput, setSubtaskInput] = useState("");
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
@@ -8518,6 +8519,14 @@ function QuickAddDialog({
       ),
     [activeProjects, deferredProjectQuery],
   );
+  const quickAddSubtaskLines = useMemo(
+    () =>
+      subtaskInput
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    [subtaskInput],
+  );
   const dueSummaryLabel =
     effectiveDraft.dueAt !== null
       ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
@@ -8617,6 +8626,7 @@ function QuickAddDialog({
   function resetDialogFields() {
     setInput("");
     setDescription("");
+    setSubtaskInput("");
     setShowBulkChoices(false);
     setShowAdvancedFields(false);
     setShowReminderEditor(false);
@@ -8687,8 +8697,41 @@ function QuickAddDialog({
 
     setIsSaving(true);
     try {
-      const taskId = await createTaskFromQuickAdd(effectiveDraft);
+      const shouldCreateSubtasks = quickAddSubtaskLines.length > 0;
+      const taskId = await createTaskFromQuickAdd(effectiveDraft, {
+        silent: shouldCreateSubtasks,
+      });
       if (taskId) {
+        if (shouldCreateSubtasks) {
+          let createdSubtasks = 0;
+
+          for (const line of quickAddSubtaskLines) {
+            const subtaskDraft = {
+              ...buildDraftFromParsed(
+                payload,
+                parseQuickAdd(line, new Date(todayStartMs)),
+                "",
+                {
+                  defaultProjectId: effectiveDraft.projectId,
+                  defaultSectionId: effectiveDraft.sectionId,
+                  defaultDueToday: false,
+                },
+                todayStartMs,
+              ),
+              parentTaskId: taskId,
+            };
+            const createdSubtaskId = await onCreateTask(subtaskDraft, {
+              silent: true,
+            });
+            if (createdSubtaskId) {
+              createdSubtasks += 1;
+            }
+          }
+          onShowBanner(
+            "success",
+            `Task "${effectiveDraft.title.trim()}" created${createdSubtasks > 0 ? ` with ${createdSubtasks} subtask${createdSubtasks === 1 ? "" : "s"}` : ""}.`,
+          );
+        }
         if (context.relativePosition === "after") {
           setRelativeAnchorTaskId(taskId);
         }
@@ -9168,6 +9211,32 @@ function QuickAddDialog({
                           : undefined
                       }
                     />
+                  </div>
+
+                  <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1E2D2F]">
+                        Subtasks
+                      </p>
+                      <p className="mt-1 text-sm text-[#6D5C50]">
+                        Add one subtask per line. Quick Add parsing works here
+                        too.
+                      </p>
+                    </div>
+                    <textarea
+                      value={subtaskInput}
+                      onChange={(event) => setSubtaskInput(event.target.value)}
+                      rows={4}
+                      placeholder={"Draft outline\nCollect links\nSend final version"}
+                      className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
+                    />
+                    {quickAddSubtaskLines.length > 0 ? (
+                      <p className="mt-2 text-xs font-semibold text-[#8A8076]">
+                        {quickAddSubtaskLines.length} subtask
+                        {quickAddSubtaskLines.length === 1 ? "" : "s"} will be
+                        created with this task.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </section>
