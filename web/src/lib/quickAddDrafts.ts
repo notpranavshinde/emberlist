@@ -14,6 +14,7 @@ export type QuickAddContext = {
   defaultDueToday: boolean;
   relativeAnchorTaskId?: string | null;
   relativePosition?: 'before' | 'after' | null;
+  editTaskId?: string | null;
 };
 
 export function buildDraftFromParsed(

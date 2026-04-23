@@ -105,11 +105,6 @@ import {
 } from "./lib/quickAddFlow";
 import { parseQuickAdd } from "./lib/quickParser";
 import {
-  buildBulkSubtaskDrafts,
-  buildCombinedSubtaskDraft,
-  buildSubtaskDraft,
-} from "./lib/subtaskDrafts";
-import {
   buildReminderEditors,
   createReminderEditor,
   getRecurrencePreset,
@@ -141,7 +136,6 @@ import {
   deleteTasks,
   deleteProject,
   deleteSection,
-  deleteTask,
   duplicateTask,
   flattenTasksWithSubtasks,
   getCompletedInboxTasks,
@@ -151,7 +145,6 @@ import {
   getProjectById,
   getProjectSections,
   getProjectTasks,
-  getSubtasks,
   getTaskPostponeDueAt,
   getTaskReminderDrafts,
   getTaskById,
@@ -216,10 +209,6 @@ type CloudStatusTone = "ready" | "idle" | "warning" | "muted";
 type FocusedTaskActionMode = "reschedule" | "move" | "priority" | "delete";
 
 let activeDraggedTaskId: string | null = null;
-
-function normalizeInternalHref(href: string) {
-  return href.startsWith("#") ? href.slice(1) : href;
-}
 
 function isPublicMarketingPath(pathname: string) {
   return pathname === "/privacy" || pathname === "/terms";
@@ -1080,22 +1069,6 @@ function App() {
     );
   }
 
-  async function handleDeleteTask(taskId: string) {
-    const task = payloadRef.current?.tasks.find(
-      (currentTask) => currentTask.id === taskId && !currentTask.deletedAt,
-    );
-    if (!task) return;
-    await applyUndoablePayloadUpdate((current) => deleteTask(current, taskId), {
-      message: `Deleted "${task.title}".`,
-      undoMessage: `Restored "${task.title}".`,
-      activity: {
-        taskIds: [taskId],
-        title: "Deleted task",
-        detail: task.title,
-      },
-    });
-  }
-
   async function handleRescheduleTasks(
     taskIds: string[],
     dueAt: number | null,
@@ -1405,7 +1378,7 @@ function App() {
         undoMessage: "Reverted task edits.",
         activity: {
           taskIds: [taskId],
-          title: "Saved from task detail",
+          title: "Saved task",
           detail: draft.title.trim(),
         },
       },
@@ -1677,7 +1650,6 @@ function App() {
         }
         onToggleTask={(taskId) => void handleToggleTask(taskId)}
         onArchiveTask={(taskId) => void handleArchiveTask(taskId)}
-        onDeleteTask={(taskId) => void handleDeleteTask(taskId)}
         onRescheduleTasks={(taskIds, dueAt) =>
           void handleRescheduleTasks(taskIds, dueAt)
         }
@@ -1696,7 +1668,7 @@ function App() {
           void handleReparentTaskAsSubtask(draggedTaskId, parentTaskId)
         }
         onPromoteSubtask={(taskId) => void handlePromoteSubtask(taskId)}
-        onSaveTask={(taskId, draft) => void handleSaveTask(taskId, draft)}
+        onSaveTask={handleSaveTask}
         onDuplicateTask={(taskId) => handleDuplicateTask(taskId)}
         onCreateProject={handleCreateProject}
         onUpdateProject={(projectId, updater) =>
@@ -1962,7 +1934,6 @@ type WorkspaceShellProps = {
   ) => Promise<string | null>;
   onToggleTask: (taskId: string) => void;
   onArchiveTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -1974,7 +1945,7 @@ type WorkspaceShellProps = {
     parentTaskId: string,
   ) => void;
   onPromoteSubtask: (taskId: string) => void;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
   onCreateProject: (name: string) => Promise<string | null>;
   onUpdateProject: (
@@ -2037,7 +2008,6 @@ function WorkspaceShell({
   onCreateTaskRelative,
   onToggleTask,
   onArchiveTask,
-  onDeleteTask,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
@@ -2684,6 +2654,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
                       onPostponeTasks={onPostponeTasks}
@@ -2705,6 +2676,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
                       onPostponeTasks={onPostponeTasks}
@@ -2726,6 +2698,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
                       onPostponeTasks={onPostponeTasks}
@@ -2747,6 +2720,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
                       onPostponeTasks={onPostponeTasks}
@@ -2773,6 +2747,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
                       onPostponeTasks={onPostponeTasks}
@@ -2793,6 +2768,7 @@ function WorkspaceShell({
                       payload={payload}
                       showSelectionButtons={showSelectionButtons}
                       onSaveTask={onSaveTask}
+                      onArchiveTask={onArchiveTask}
                       onCreateSection={onCreateSection}
                       onUpdateProject={onUpdateProject}
                       onDeleteProject={onDeleteProject}
@@ -2815,16 +2791,19 @@ function WorkspaceShell({
                 <Route
                   path="/task/:taskId"
                   element={
-                    <TaskDetailPage
+                    <LegacyTaskRouteRedirect
                       payload={payload}
-                      onCreateTask={onCreateTask}
-                      onSaveTask={onSaveTask}
-                      onShowBanner={onShowBanner}
-                      onArchiveTask={onArchiveTask}
-                      onDeleteTask={onDeleteTask}
-                      onToggleTask={onToggleTask}
-                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-                      onPromoteSubtask={onPromoteSubtask}
+                      todayStartMs={todayStartMs}
+                      onOpenQuickAdd={onOpenQuickAdd}
+                    />
+                  }
+                />
+                <Route
+                  path="/task/:taskId/activity"
+                  element={
+                    <TaskActivityPage
+                      payload={payload}
+                      todayStartMs={todayStartMs}
                       activityEntries={activityEntries}
                       onUndoActivity={onUndoActivity}
                       canUndoActivity={canUndoActivity}
@@ -2892,6 +2871,7 @@ function WorkspaceShell({
           onClose={onCloseQuickAdd}
           onCreateTask={onCreateTask}
           onCreateTaskRelative={onCreateTaskRelative}
+          onSaveTask={onSaveTask}
           onboardingExample={onboardingQuickAddExample}
           onShowBanner={onShowBanner}
         />
@@ -3421,6 +3401,7 @@ function TodayPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
@@ -3437,6 +3418,7 @@ function TodayPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -3448,11 +3430,12 @@ function TodayPage({
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
-  const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
+  const openTaskEditor = (taskId: string) =>
+    onOpenQuickAdd({ editTaskId: taskId });
   const data = useMemo(
     () =>
       getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
@@ -3630,8 +3613,8 @@ function TodayPage({
         actionState={rowActionState}
         onSetActionState={setRowActionState}
         onSaveTask={onSaveTask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onOpenQuickAdd={onOpenQuickAdd}
+        onArchiveTask={onArchiveTask}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -3727,7 +3710,7 @@ function TodayPage({
           emptyMessage="Nothing overdue."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
@@ -3756,7 +3739,7 @@ function TodayPage({
           emptyMessage="No tasks due today."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
@@ -3776,7 +3759,7 @@ function TodayPage({
           emptyMessage="Nothing completed yet today."
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           collapsible
           defaultCollapsed
           selectionMode={selectionMode}
@@ -3899,6 +3882,7 @@ function UpcomingPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
@@ -3914,6 +3898,7 @@ function UpcomingPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -3925,11 +3910,12 @@ function UpcomingPage({
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
-  const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
+  const openTaskEditor = (taskId: string) =>
+    onOpenQuickAdd({ editTaskId: taskId });
   const todayData = useMemo(
     () =>
       getTodayViewData(payload, todayStartMs, endOfDay(todayStartMs).getTime()),
@@ -4114,8 +4100,8 @@ function UpcomingPage({
         actionState={rowActionState}
         onSetActionState={setRowActionState}
         onSaveTask={onSaveTask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onOpenQuickAdd={onOpenQuickAdd}
+        onArchiveTask={onArchiveTask}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -4212,7 +4198,7 @@ function UpcomingPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           selectionMode={selectionMode}
           selectedTaskIds={selectedTaskIds}
           onToggleSelection={toggleSelection}
@@ -4270,7 +4256,7 @@ function UpcomingPage({
               onToggleTask={onToggleTask}
               onReparentTaskAsSubtask={onReparentTaskAsSubtask}
               onPromoteSubtask={onPromoteSubtask}
-              onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+              onOpenTask={openTaskEditor}
               selectionMode={selectionMode}
               selectedTaskIds={selectedTaskIds}
               onToggleSelection={toggleSelection}
@@ -4302,7 +4288,7 @@ function UpcomingPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
@@ -4409,6 +4395,7 @@ function SearchPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
@@ -4425,6 +4412,7 @@ function SearchPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -4436,13 +4424,14 @@ function SearchPage({
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
   forcedFilter?: SearchFilter;
 }) {
-  const navigate = useNavigate();
   const location = useLocation();
   const todayStartMs = useTodayStartMs();
+  const openTaskEditor = (taskId: string) =>
+    onOpenQuickAdd({ editTaskId: taskId });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [query, setQuery] = useState("");
   const [userFilters, setUserFilters] = useState<Set<SearchFilter>>(new Set());
@@ -4662,8 +4651,8 @@ function SearchPage({
         actionState={rowActionState}
         onSetActionState={setRowActionState}
         onSaveTask={onSaveTask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onOpenQuickAdd={onOpenQuickAdd}
+        onArchiveTask={onArchiveTask}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -4800,7 +4789,7 @@ function SearchPage({
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onPromoteSubtask={onPromoteSubtask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenTask={openTaskEditor}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
@@ -4819,7 +4808,7 @@ function SearchPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
@@ -4926,6 +4915,7 @@ function InboxPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
@@ -4941,6 +4931,7 @@ function InboxPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -4952,11 +4943,12 @@ function InboxPage({
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onPromoteSubtask: (taskId: string) => void;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
-  const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
+  const openTaskEditor = (taskId: string) =>
+    onOpenQuickAdd({ editTaskId: taskId });
   const tasks = getInboxTasks(payload);
   const completedTasks = getCompletedInboxTasks(payload);
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
@@ -5092,8 +5084,8 @@ function InboxPage({
         actionState={rowActionState}
         onSetActionState={setRowActionState}
         onSaveTask={onSaveTask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onOpenQuickAdd={onOpenQuickAdd}
+        onArchiveTask={onArchiveTask}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -5188,7 +5180,7 @@ function InboxPage({
         onToggleTask={onToggleTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onPromoteSubtask={onPromoteSubtask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+        onOpenTask={openTaskEditor}
         selectionMode={selectionMode}
         selectedTaskIds={selectedTaskIds}
         onToggleSelection={toggleSelection}
@@ -5207,7 +5199,7 @@ function InboxPage({
           onToggleTask={onToggleTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
-          onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+          onOpenTask={openTaskEditor}
           rowActions={renderTaskRowActions}
           collapsible
           defaultCollapsed
@@ -5316,6 +5308,7 @@ function ProjectPage({
   payload,
   showSelectionButtons,
   onSaveTask,
+  onArchiveTask,
   onCreateSection,
   onUpdateProject,
   onDeleteProject,
@@ -5335,7 +5328,8 @@ function ProjectPage({
 }: {
   payload: SyncPayload;
   showSelectionButtons: boolean;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
+  onArchiveTask: (taskId: string) => void;
   onCreateSection: (projectId: string, name: string) => void;
   onUpdateProject: (
     projectId: string,
@@ -5364,6 +5358,8 @@ function ProjectPage({
 }) {
   const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
+  const openTaskEditor = (taskId: string) =>
+    onOpenQuickAdd({ editTaskId: taskId });
   const { projectId } = useParams();
   const [sectionName, setSectionName] = useState("");
   const [activeBoardDropSectionId, setActiveBoardDropSectionId] = useState<
@@ -5666,8 +5662,8 @@ function ProjectPage({
         actionState={projectTaskActionState}
         onSetActionState={setProjectTaskActionState}
         onSaveTask={onSaveTask}
-        onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
         onOpenQuickAdd={onOpenQuickAdd}
+        onArchiveTask={onArchiveTask}
         onRescheduleTasks={onRescheduleTasks}
         onPostponeTasks={onPostponeTasks}
         onMoveTasksToProject={onMoveTasksToProject}
@@ -5884,7 +5880,7 @@ function ProjectPage({
                   onToggleTask={onToggleTask}
                   onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                   onPromoteSubtask={onPromoteSubtask}
-                  onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+                  onOpenTask={openTaskEditor}
                   selectionMode={selectionMode}
                   selectedTaskIds={selectedTaskIds}
                   onToggleSelection={toggleSelection}
@@ -5907,7 +5903,7 @@ function ProjectPage({
                 onToggleTask={onToggleTask}
                 onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                 onPromoteSubtask={onPromoteSubtask}
-                onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+                onOpenTask={openTaskEditor}
                 selectionMode={selectionMode}
                 selectedTaskIds={selectedTaskIds}
                 onToggleSelection={toggleSelection}
@@ -6011,7 +6007,7 @@ function ProjectPage({
                     onToggleTask={onToggleTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onPromoteSubtask={onPromoteSubtask}
-                    onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+                    onOpenTask={openTaskEditor}
                     selectionMode={selectionMode}
                     selectedTaskIds={selectedTaskIds}
                     onToggleSelection={toggleSelection}
@@ -6035,7 +6031,7 @@ function ProjectPage({
             onToggleTask={onToggleTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onPromoteSubtask={onPromoteSubtask}
-            onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
+            onOpenTask={openTaskEditor}
             collapsible
             defaultCollapsed
           />
@@ -6211,896 +6207,99 @@ function ProjectPage({
   );
 }
 
-function TaskDetailPage({
+function LegacyTaskRouteRedirect({
   payload,
-  onCreateTask,
-  onSaveTask,
-  onShowBanner,
-  onArchiveTask,
-  onDeleteTask,
-  onToggleTask,
-  onReparentTaskAsSubtask,
-  onPromoteSubtask,
+  todayStartMs,
+  onOpenQuickAdd,
+}: {
+  payload: SyncPayload;
+  todayStartMs: number;
+  onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
+}) {
+  const { taskId } = useParams();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!taskId) {
+      navigate("/today", { replace: true });
+      return;
+    }
+    const task = getTaskById(payload, taskId);
+    if (!task) {
+      navigate("/today", { replace: true });
+      return;
+    }
+    onOpenQuickAdd({ editTaskId: taskId });
+    navigate(getTaskWorkspacePath(task, todayStartMs), {
+      replace: true,
+    });
+  }, [navigate, onOpenQuickAdd, payload, taskId, todayStartMs]);
+
+  return (
+    <section className="rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
+      <p className="text-sm text-[#6D5C50]">Opening task editor?</p>
+    </section>
+  );
+}
+
+function TaskActivityPage({
+  payload,
+  todayStartMs,
   activityEntries,
   onUndoActivity,
   canUndoActivity,
 }: {
   payload: SyncPayload;
-  onCreateTask: (
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
-  onShowBanner: (
-    tone: Banner["tone"],
-    message: string,
-    options?: Pick<
-      Banner,
-      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
-    >,
-  ) => void;
-  onArchiveTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
-  onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (
-    draggedTaskId: string,
-    parentTaskId: string,
-  ) => void;
-  onPromoteSubtask: (taskId: string) => void;
+  todayStartMs: number;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
   canUndoActivity: (activityId: string) => boolean;
 }) {
   const { taskId } = useParams();
-  const task = taskId ? getTaskById(payload, taskId) : undefined;
-
-  if (!taskId || !task) {
-    return (
-      <EmptyState
-        title="Task not found"
-        description="This task may have been deleted or archived elsewhere."
-      />
-    );
-  }
-
-  return (
-    <TaskEditor
-      key={task.id}
-      payload={payload}
-      task={task}
-      returnPath={task.projectId ? `/project/${task.projectId}` : "/inbox"}
-      onCreateTask={onCreateTask}
-      onSaveTask={onSaveTask}
-      onShowBanner={onShowBanner}
-      onArchiveTask={onArchiveTask}
-      onDeleteTask={onDeleteTask}
-      onToggleTask={onToggleTask}
-      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-      onPromoteSubtask={onPromoteSubtask}
-      activityEntries={activityEntries}
-      onUndoActivity={onUndoActivity}
-      canUndoActivity={canUndoActivity}
-    />
-  );
-}
-
-function TaskEditor({
-  payload,
-  task,
-  returnPath,
-  onCreateTask,
-  onSaveTask,
-  onShowBanner,
-  onArchiveTask,
-  onDeleteTask,
-  onToggleTask,
-  onReparentTaskAsSubtask,
-  onPromoteSubtask,
-  activityEntries,
-  onUndoActivity,
-  canUndoActivity,
-}: {
-  payload: SyncPayload;
-  task: Task;
-  returnPath: string;
-  onCreateTask: (
-    draft: TaskDraft,
-    options?: { silent?: boolean; successMessage?: string },
-  ) => Promise<string | null>;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
-  onShowBanner: (
-    tone: Banner["tone"],
-    message: string,
-    options?: Pick<
-      Banner,
-      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
-    >,
-  ) => void;
-  onArchiveTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
-  onToggleTask: (taskId: string) => void;
-  onReparentTaskAsSubtask: (
-    draggedTaskId: string,
-    parentTaskId: string,
-  ) => void;
-  onPromoteSubtask: (taskId: string) => void;
-  activityEntries: ActivityEntry[];
-  onUndoActivity: (activityId: string) => void;
-  canUndoActivity: (activityId: string) => boolean;
-}) {
   const navigate = useNavigate();
-  const projects = getActiveProjects(payload, true);
-  const todayStartMs = useTodayStartMs();
-  const subtasks = useMemo(
-    () => getSubtasks(payload, task.id),
-    [payload, task.id],
-  );
-  const taskReminders = useMemo(
-    () => getTaskReminderDrafts(payload, task.id),
-    [payload, task.id],
-  );
-  const taskReminderRecords = useMemo(
-    () =>
-      payload.reminders.filter(
-        (reminder) => reminder.taskId === task.id && !reminder.deletedAt,
-      ),
-    [payload.reminders, task.id],
-  );
-  const titleInputRef = useRef<HTMLInputElement | null>(null);
-  const prioritySelectRef = useRef<HTMLSelectElement | null>(null);
-  const dueInputRef = useRef<HTMLInputElement | null>(null);
-  const deadlineInputRef = useRef<HTMLInputElement | null>(null);
-  const [parserLine, setParserLine] = useState(task.title);
-  const [title, setTitle] = useState(task.title);
-  const [description, setDescription] = useState(task.description);
-  const [projectId, setProjectId] = useState<string>(task.projectId ?? "");
-  const [sectionId, setSectionId] = useState<string>(task.sectionId ?? "");
-  const [priority, setPriority] = useState<Priority>(task.priority);
-  const [allDay, setAllDay] = useState(task.allDay);
-  const [dueAt, setDueAt] = useState(
-    toInputValue(task.dueAt ?? null, task.allDay),
-  );
-  const [deadlineEnabled, setDeadlineEnabled] = useState(
-    Boolean(task.deadlineAt),
-  );
-  const [deadlineAllDay, setDeadlineAllDay] = useState(
-    task.deadlineAllDay ?? false,
-  );
-  const [deadlineAt, setDeadlineAt] = useState(
-    toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false),
-  );
-  const [recurringRule, setRecurringRule] = useState<string | null>(
-    task.recurringRule ?? null,
-  );
-  const [deadlineRecurringRule, setDeadlineRecurringRule] = useState<
-    string | null
-  >(task.deadlineRecurringRule ?? null);
-  const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(
-    () => buildReminderEditors(taskReminders),
-  );
-  const [newSubtask, setNewSubtask] = useState("");
-  const [showBulkSubtaskChoices, setShowBulkSubtaskChoices] = useState(false);
-  const [isCreatingSubtasks, setIsCreatingSubtasks] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [pendingExitPath, setPendingExitPath] = useState<string | null>(null);
-  const sectionOptions = projectId
-    ? getProjectSections(payload, projectId)
-    : [];
-  const bulkSubtaskLines = useMemo(
-    () => extractBulkQuickAddLines(newSubtask),
-    [newSubtask],
-  );
-  const reminderDrafts = useMemo(
-    () => serializeReminderEditors(reminderEditors),
-    [reminderEditors],
-  );
-  const initialReminderSignature = useMemo(
-    () => JSON.stringify(taskReminders),
-    [taskReminders],
-  );
-  const currentReminderSignature = useMemo(
-    () => JSON.stringify(reminderDrafts),
-    [reminderDrafts],
-  );
-  const parsedDueAt = useMemo(
-    () => parseInputValue(dueAt, allDay),
-    [allDay, dueAt],
-  );
-  const parsedDeadlineAt = useMemo(
-    () =>
-      deadlineEnabled ? parseInputValue(deadlineAt, deadlineAllDay) : null,
-    [deadlineAllDay, deadlineAt, deadlineEnabled],
-  );
-  const parserPreviewDraft = useMemo(
-    () =>
-      buildDraftFromParsed(
-        payload,
-        parseQuickAdd(parserLine),
-        description,
-        {
-          defaultProjectId: task.projectId,
-          defaultSectionId: task.sectionId,
-          defaultDueToday: false,
-        },
-        todayStartMs,
-      ),
-    [
-      description,
-      parserLine,
-      payload,
-      task.projectId,
-      task.sectionId,
-      todayStartMs,
-    ],
-  );
-  const taskTimeline = useMemo(
-    () => buildTaskTimeline(task, taskReminderRecords, activityEntries),
-    [activityEntries, task, taskReminderRecords],
-  );
-  const editorDraftPreview = useMemo<TaskDraft>(
-    () => ({
-      title: title.trim() || task.title,
-      description: description.trim(),
-      projectId: projectId || null,
-      projectName: null,
-      sectionId: projectId ? sectionId || null : null,
-      sectionName: null,
-      priority,
-      dueAt: parsedDueAt,
-      allDay,
-      deadlineAt: parsedDeadlineAt,
-      deadlineAllDay,
-      recurringRule,
-      deadlineRecurringRule,
-      parentTaskId: task.parentTaskId,
-      reminders: reminderDrafts,
-    }),
-    [
-      allDay,
-      deadlineAllDay,
-      description,
-      parsedDeadlineAt,
-      parsedDueAt,
-      priority,
-      projectId,
-      recurringRule,
-      reminderDrafts,
-      sectionId,
-      task.parentTaskId,
-      task.title,
-      title,
-      deadlineRecurringRule,
-    ],
-  );
-  const isDirty =
-    title.trim() !== task.title ||
-    description.trim() !== task.description ||
-    (projectId || null) !== task.projectId ||
-    (projectId ? sectionId || null : null) !== task.sectionId ||
-    priority !== task.priority ||
-    allDay !== task.allDay ||
-    dueAt !== toInputValue(task.dueAt ?? null, task.allDay) ||
-    deadlineEnabled !== Boolean(task.deadlineAt) ||
-    deadlineAllDay !== (task.deadlineAllDay ?? false) ||
-    deadlineAt !==
-      toInputValue(task.deadlineAt ?? null, task.deadlineAllDay ?? false) ||
-    recurringRule !== (task.recurringRule ?? null) ||
-    deadlineRecurringRule !== (task.deadlineRecurringRule ?? null) ||
-    currentReminderSignature !== initialReminderSignature;
-  useEffect(() => {
-    if (!isDirty) return;
+  const task = taskId ? getTaskById(payload, taskId) : null;
 
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-
-    const handleDocumentClick = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-        return;
-
-      const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
-
-      const anchor = target.closest("a[href]");
-      if (!(anchor instanceof HTMLAnchorElement)) return;
-      if (anchor.target && anchor.target !== "_self") return;
-
-      const href = anchor.getAttribute("href");
-      if (!href || href === "#" || href === window.location.hash) return;
-      if (!href.startsWith("#/") && !href.startsWith("/")) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      setPendingExitPath(normalizeInternalHref(href));
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    document.addEventListener("click", handleDocumentClick, true);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      document.removeEventListener("click", handleDocumentClick, true);
-    };
-  }, [isDirty]);
-
-  function saveTask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) return;
-    if (hasIncompleteReminderEditors(reminderEditors)) {
-      onShowBanner(
-        "error",
-        "Complete each reminder row or remove it before saving.",
-      );
-      return;
-    }
-    if (
-      reminderEditors.some((editor) => editor.mode === "OFFSET") &&
-      parsedDueAt === null
-    ) {
-      onShowBanner(
-        "error",
-        "Relative reminders need a due date. Add a due date or switch them to a fixed time.",
-      );
-      return;
-    }
-
-    onSaveTask(task.id, {
-      title: trimmedTitle,
-      description: description.trim(),
-      projectId: projectId || null,
-      projectName: null,
-      sectionId: projectId ? sectionId || null : null,
-      sectionName: null,
-      priority,
-      dueAt: parsedDueAt,
-      allDay,
-      deadlineAt: parsedDeadlineAt,
-      deadlineAllDay: deadlineEnabled ? deadlineAllDay : false,
-      recurringRule,
-      deadlineRecurringRule,
-      parentTaskId: task.parentTaskId,
-      reminders: reminderDrafts,
-    });
+  if (!task) {
+    return <Navigate to="/today" replace />;
   }
 
-  function deleteCurrentTask() {
-    setIsDeleteDialogOpen(true);
-  }
-
-  function confirmDeleteCurrentTask() {
-    onDeleteTask(task.id);
-    setIsDeleteDialogOpen(false);
-    navigate(returnPath);
-  }
-
-  function requestNavigation(targetPath: string) {
-    if (isDirty) {
-      setPendingExitPath(targetPath);
-      return;
-    }
-    navigate(targetPath);
-  }
-
-  function goBack() {
-    requestNavigation(returnPath);
-  }
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const lowerKey = event.key.toLowerCase();
-      const typing = isTypingTarget(event.target);
-      const attemptGoBack = () => {
-        if (isDirty) {
-          setPendingExitPath(returnPath);
-          return;
-        }
-        navigate(returnPath);
-      };
-
-      if ((event.metaKey || event.ctrlKey) && lowerKey === "s") {
-        event.preventDefault();
-        titleInputRef.current?.form?.requestSubmit();
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        attemptGoBack();
-        return;
-      }
-      if (typing) return;
-      if (
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        lowerKey === "e"
-      ) {
-        event.preventDefault();
-        onToggleTask(task.id);
-        return;
-      }
-      if (
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        lowerKey === "p"
-      ) {
-        event.preventDefault();
-        prioritySelectRef.current?.focus();
-        return;
-      }
-      if (
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        lowerKey === "t"
-      ) {
-        event.preventDefault();
-        if (event.shiftKey) {
-          setDueAt("");
-          return;
-        }
-        dueInputRef.current?.focus();
-        return;
-      }
-      if (
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        lowerKey === "d"
-      ) {
-        event.preventDefault();
-        if (event.shiftKey) {
-          setDeadlineEnabled(false);
-          setDeadlineAt("");
-          setDeadlineRecurringRule(null);
-          return;
-        }
-        if (!deadlineEnabled) {
-          setDeadlineEnabled(true);
-          window.setTimeout(() => deadlineInputRef.current?.focus(), 0);
-          return;
-        }
-        deadlineInputRef.current?.focus();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [deadlineEnabled, isDirty, navigate, onToggleTask, returnPath, task.id]);
-
-  async function createSubtaskDrafts(mode: "single" | "many") {
-    setIsCreatingSubtasks(true);
-    try {
-      if (mode === "single") {
-        const mergedDraft = buildCombinedSubtaskDraft(
-          payload,
-          task,
-          bulkSubtaskLines,
-          todayStartMs,
-        );
-        const createdTaskId = await onCreateTask(mergedDraft, {
-          successMessage: "Combined list into 1 subtask.",
-        });
-        if (createdTaskId) {
-          setNewSubtask("");
-        }
-        return;
-      }
-
-      let createdCount = 0;
-      for (const draft of buildBulkSubtaskDrafts(
-        payload,
-        task,
-        bulkSubtaskLines,
-        todayStartMs,
-      )) {
-        const createdTaskId = await onCreateTask(draft, { silent: true });
-        if (createdTaskId) {
-          createdCount += 1;
-        }
-      }
-      if (createdCount > 0) {
-        onShowBanner(
-          "success",
-          `${createdCount} subtask${createdCount === 1 ? "" : "s"} created.`,
-        );
-        setNewSubtask("");
-      }
-    } finally {
-      setIsCreatingSubtasks(false);
-      setShowBulkSubtaskChoices(false);
-    }
-  }
-
-  async function submitSubtask(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!newSubtask.trim()) return;
-    if (shouldPromptBulkQuickAdd(newSubtask)) {
-      setShowBulkSubtaskChoices(true);
-      return;
-    }
-
-    const draft = buildSubtaskDraft(payload, task, newSubtask, todayStartMs);
-
-    setIsCreatingSubtasks(true);
-    try {
-      const createdTaskId = await onCreateTask(draft, {
-        successMessage: `Created subtask "${draft.title}".`,
-      });
-      if (createdTaskId) {
-        setNewSubtask("");
-      }
-    } finally {
-      setIsCreatingSubtasks(false);
-    }
-  }
-
-  function applyParserLine() {
-    if (!parserLine.trim()) return;
-    const parsedDraft = buildTaskDetailDraftFromInput(
-      payload,
-      parserLine,
-      description,
-      {
-        defaultProjectId: projectId || null,
-        defaultSectionId: sectionId || null,
-        defaultDueToday: false,
-      },
-      todayStartMs,
-    );
-
-    setTitle(parsedDraft.title);
-    setProjectId(parsedDraft.projectId ?? "");
-    setSectionId(parsedDraft.sectionId ?? "");
-    setPriority(parsedDraft.priority);
-    setAllDay(parsedDraft.allDay);
-    setDueAt(toInputValue(parsedDraft.dueAt, parsedDraft.allDay));
-    setRecurringRule(parsedDraft.recurringRule);
-    setReminderEditors(buildReminderEditors(parsedDraft.reminders));
-    setDeadlineEnabled(Boolean(parsedDraft.deadlineAt));
-    setDeadlineAllDay(parsedDraft.deadlineAllDay);
-    setDeadlineAt(
-      toInputValue(parsedDraft.deadlineAt, parsedDraft.deadlineAllDay),
-    );
-    setDeadlineRecurringRule(parsedDraft.deadlineRecurringRule);
-    onShowBanner("info", "Applied parser changes into the task editor.");
-  }
-
-  function setDueDateQuick(daysFromToday: number) {
-    const nextDate = addDays(todayStartMs, daysFromToday).getTime();
-    setAllDay(true);
-    setDueAt(toInputValue(nextDate, true));
-  }
-
-  function setDeadlineQuick(daysFromToday: number) {
-    const nextDate = addDays(todayStartMs, daysFromToday).getTime();
-    setDeadlineEnabled(true);
-    setDeadlineAllDay(true);
-    setDeadlineAt(toInputValue(nextDate, true));
-  }
+  const taskReminderRecords = payload.reminders.filter(
+    (reminder) => reminder.taskId === task.id && !reminder.deletedAt,
+  );
+  const taskTimeline = buildTaskTimeline(
+    task,
+    taskReminderRecords,
+    activityEntries,
+  );
+  const backPath = getTaskWorkspacePath(task, todayStartMs);
 
   return (
     <div className="space-y-6">
       <HeroCard
-        eyebrow="Task"
-        title={title.trim() || task.title}
-        description="Edit the task details that sync between Android and web."
+        eyebrow="Activity"
+        title={task.title}
+        description="Review the recorded history for this task."
         actions={
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={goBack}
-              className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-            >
-              Back
-            </button>
-            <button
-              onClick={() => onArchiveTask(task.id)}
-              className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-            >
-              {task.status === "ARCHIVED" ? "Unarchive" : "Archive"}
-            </button>
-            <button
-              onClick={deleteCurrentTask}
-              className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
-            >
-              Delete
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate(backPath)}
+            className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
+          >
+            Back
+          </button>
         }
       />
-
-      <form
-        onSubmit={saveTask}
-        className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"
-      >
-        <section className="space-y-4 rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
-          {isDirty ? (
-            <p className="rounded-[18px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-3 text-sm text-[#A24628]">
-              You have unsaved changes.
-            </p>
-          ) : null}
-          <div className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-            <p className="text-sm font-semibold text-[#1E2D2F]">
-              Live task summary
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {renderQuickAddMetadata(payload, editorDraftPreview).map(
-                (item) => (
-                  <span
-                    key={item}
-                    className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
-                  >
-                    {item}
-                  </span>
-                ),
-              )}
-              {deadlineRecurringRule ? (
-                <span className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
-                  Deadline {renderRecurrenceLabel(deadlineRecurringRule)}
-                </span>
-              ) : null}
-            </div>
-          </div>
-          <Field label="Task line">
-            <textarea
-              value={parserLine}
-              onChange={(event) => setParserLine(event.target.value)}
-              rows={2}
-              placeholder="Try: pay rent p1 tomorrow #bills/home"
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap gap-2">
-                {renderQuickAddMetadata(payload, parserPreviewDraft).map(
-                  (item) => (
-                    <span
-                      key={item}
-                      className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]"
-                    >
-                      {item}
-                    </span>
-                  ),
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={applyParserLine}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-              >
-                Apply parser line
-              </button>
-            </div>
-          </Field>
-          <Field label="Title">
-            <input
-              ref={titleInputRef}
-              autoFocus
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-
-          <Field label="Description">
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              rows={6}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-          </Field>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Project">
-              <select
-                value={projectId}
-                onChange={(event) => {
-                  setProjectId(event.target.value);
-                  setSectionId("");
-                }}
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-              >
-                <option value="">Inbox</option>
-                {projects.map((projectOption) => (
-                  <option key={projectOption.id} value={projectOption.id}>
-                    {projectOption.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-
-            <Field label="Section">
-              <select
-                value={sectionId}
-                onChange={(event) => setSectionId(event.target.value)}
-                disabled={!projectId}
-                className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <option value="">No section</option>
-                {sectionOptions.map((section) => (
-                  <option key={section.id} value={section.id}>
-                    {section.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </section>
-
-        <section className="space-y-4 rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
-          <Field label="Priority">
-            <select
-              ref={prioritySelectRef}
-              value={priority}
-              onChange={(event) => setPriority(event.target.value as Priority)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            >
-              <option value="P1">P1 · Critical</option>
-              <option value="P2">P2 · High</option>
-              <option value="P3">P3 · Medium</option>
-              <option value="P4">P4 · Low</option>
-            </select>
-          </Field>
-
-          <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
-            <input
-              type="checkbox"
-              checked={allDay}
-              onChange={(event) => setAllDay(event.target.checked)}
-              className="h-4 w-4 accent-[#EE6A3C]"
-            />
-            Due date is all day
-          </label>
-
-          <Field label="Due date">
-            <input
-              ref={dueInputRef}
-              type={allDay ? "date" : "datetime-local"}
-              value={dueAt}
-              onChange={(event) => setDueAt(event.target.value)}
-              className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-            />
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setDueDateQuick(0)}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
-              >
-                Today
-              </button>
-              <button
-                type="button"
-                onClick={() => setDueDateQuick(1)}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
-              >
-                Tomorrow
-              </button>
-              <button
-                type="button"
-                onClick={() => setDueDateQuick(7)}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
-              >
-                Next week
-              </button>
-              {dueAt ? (
-                <button
-                  type="button"
-                  onClick={() => setDueAt("")}
-                  className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-1.5 text-xs font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
-                >
-                  Clear due date
-                </button>
-              ) : null}
-            </div>
-          </Field>
-
-          <RecurrenceField
-            label="Repeat schedule"
-            value={recurringRule}
-            onChange={setRecurringRule}
-            description="Turn this into a repeating task or clear the rule entirely."
-          />
-
-          <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
-            <input
-              type="checkbox"
-              checked={deadlineEnabled}
-              onChange={(event) => setDeadlineEnabled(event.target.checked)}
-              className="h-4 w-4 accent-[#EE6A3C]"
-            />
-            Track a deadline separately
-          </label>
-
-          {deadlineEnabled ? (
-            <>
-              <label className="flex items-center gap-3 rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-medium text-[#1E2D2F]">
-                <input
-                  type="checkbox"
-                  checked={deadlineAllDay}
-                  onChange={(event) => setDeadlineAllDay(event.target.checked)}
-                  className="h-4 w-4 accent-[#EE6A3C]"
-                />
-                Deadline is all day
-              </label>
-              <Field label="Deadline">
-                <input
-                  ref={deadlineInputRef}
-                  type={deadlineAllDay ? "date" : "datetime-local"}
-                  value={deadlineAt}
-                  onChange={(event) => setDeadlineAt(event.target.value)}
-                  className="w-full rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm outline-none transition focus:border-[#EE6A3C]"
-                />
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeadlineQuick(0)}
-                    className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
-                  >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeadlineQuick(1)}
-                    className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
-                  >
-                    Tomorrow
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeadlineQuick(7)}
-                    className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
-                  >
-                    Next week
-                  </button>
-                </div>
-              </Field>
-              <RecurrenceField
-                label="Deadline recurrence"
-                value={deadlineRecurringRule}
-                onChange={setDeadlineRecurringRule}
-                description="Repeat a deadline separately from the main task schedule."
-              />
-            </>
-          ) : null}
-
-          <div className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-            <p className="text-sm font-semibold text-[#1E2D2F]">Reminders</p>
-            <p className="mt-1 text-sm text-[#6D5C50]">
-              Add fixed-time reminders or relative reminders before the due
-              date.
-            </p>
-            <div className="mt-4">
-              <ReminderListEditor
-                reminders={reminderEditors}
-                dueAt={parsedDueAt}
-                onChange={setReminderEditors}
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-          >
-            Save task
-          </button>
-        </section>
-      </form>
-
       <section className="rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
-              Activity
+              Timeline
             </p>
             <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">
               Recent changes for this task
             </h3>
             <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-              Local web activity appears here alongside the task's saved
+              Local web activity appears here alongside the task&apos;s saved
               schedule state.
             </p>
           </div>
@@ -7109,177 +6308,47 @@ function TaskEditor({
           </span>
         </div>
         <div className="mt-5 space-y-3">
-          {taskTimeline.map((entry) => (
-            <div
-              key={entry.id}
-              className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#1E2D2F]">
-                    {entry.title}
-                  </p>
-                  {entry.detail ? (
-                    <p className="mt-1 text-sm text-[#6D5C50]">
-                      {entry.detail}
+          {taskTimeline.length ? (
+            taskTimeline.map((entry) => (
+              <div
+                key={entry.id}
+                className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1E2D2F]">
+                      {entry.title}
                     </p>
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-[#8A8076]">
-                    {formatDateTime(entry.at)}
-                  </span>
-                  {entry.activityId && canUndoActivity(entry.activityId) ? (
-                    <button
-                      type="button"
-                      onClick={() => onUndoActivity(entry.activityId!)}
-                      className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-                    >
-                      Undo
-                    </button>
-                  ) : null}
+                    {entry.detail ? (
+                      <p className="mt-1 text-sm text-[#6D5C50]">
+                        {entry.detail}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[#8A8076]">
+                      {formatDateTime(entry.at)}
+                    </span>
+                    {entry.activityId && canUndoActivity(entry.activityId) ? (
+                      <button
+                        type="button"
+                        onClick={() => onUndoActivity(entry.activityId!)}
+                        className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
+                      >
+                        Undo
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4 text-sm text-[#6D5C50]">
+              No task activity has been recorded yet.
+            </p>
+          )}
         </div>
       </section>
-
-      <section className="rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
-              Subtasks
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">
-              Break this task down
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-              Subtasks stay linked to this task, inherit its current project and
-              section, and support pasted lists.
-            </p>
-          </div>
-          <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
-            {subtasks.length} subtask{subtasks.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        <div className="mt-5">
-          <TaskListBlock
-            payload={payload}
-            todayStartMs={todayStartMs}
-            tasks={subtasks}
-            emptyMessage="No subtasks yet."
-            onToggleTask={onToggleTask}
-            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-            onPromoteSubtask={onPromoteSubtask}
-            onOpenTask={(taskId) => navigate(`/task/${taskId}`)}
-            baseDepth={1}
-          />
-        </div>
-
-        <form onSubmit={submitSubtask} className="mt-5 space-y-4">
-          <Field label="Add subtask">
-            <textarea
-              value={newSubtask}
-              onChange={(event) => {
-                setNewSubtask(event.target.value);
-                if (showBulkSubtaskChoices) {
-                  setShowBulkSubtaskChoices(false);
-                }
-              }}
-              rows={3}
-              placeholder="Add a subtask or paste one task per line"
-              className="w-full rounded-[20px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
-            />
-            <p className="mt-2 text-xs text-[#8A8076]">
-              Quick Add parsing works here too: dates, priorities, projects,
-              sections, recurrence, and reminders.
-            </p>
-          </Field>
-
-          {showBulkSubtaskChoices && bulkSubtaskLines.length > 1 ? (
-            <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
-              <p className="text-sm font-semibold text-[#A24628]">
-                Add {bulkSubtaskLines.length} subtasks?
-              </p>
-              <p className="mt-1 text-sm text-[#8A5A44]">
-                Combine the pasted list into one subtask or create one subtask
-                per line.
-              </p>
-              <div className="mt-4 flex flex-wrap justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowBulkSubtaskChoices(false)}
-                  className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={isCreatingSubtasks}
-                  onClick={() => void createSubtaskDrafts("single")}
-                  className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isCreatingSubtasks ? "Adding..." : "Add 1 subtask"}
-                </button>
-                <button
-                  type="button"
-                  disabled={isCreatingSubtasks}
-                  onClick={() => void createSubtaskDrafts("many")}
-                  className="rounded-full bg-[#EE6A3C] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {isCreatingSubtasks
-                    ? "Adding..."
-                    : `Add all ${bulkSubtaskLines.length}`}
-                </button>
-              </div>
-            </section>
-          ) : null}
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={isCreatingSubtasks || !newSubtask.trim()}
-              className="rounded-full bg-[#EE6A3C] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              {isCreatingSubtasks
-                ? "Adding..."
-                : bulkSubtaskLines.length > 1
-                  ? `Review ${bulkSubtaskLines.length} subtasks`
-                  : "Add subtask"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {isDeleteDialogOpen ? (
-        <ConfirmDialog
-          title="Delete task"
-          description={`Delete "${task.title}"? This will sync as a deletion tombstone.`}
-          confirmLabel="Delete task"
-          tone="destructive"
-          onClose={() => setIsDeleteDialogOpen(false)}
-          onConfirm={confirmDeleteCurrentTask}
-        />
-      ) : null}
-
-      {pendingExitPath ? (
-        <ConfirmDialog
-          title="Discard changes"
-          description="Discard your unsaved task changes and leave this task?"
-          confirmLabel="Discard changes"
-          tone="destructive"
-          onClose={() => setPendingExitPath(null)}
-          onConfirm={() => {
-            const nextPath = pendingExitPath;
-            setPendingExitPath(null);
-            if (nextPath) {
-              navigate(nextPath);
-            }
-          }}
-        />
-      ) : null}
     </div>
   );
 }
@@ -8323,6 +7392,7 @@ function QuickAddDialog({
   onClose,
   onCreateTask,
   onCreateTaskRelative,
+  onSaveTask,
   onboardingExample,
   onShowBanner,
 }: {
@@ -8339,6 +7409,7 @@ function QuickAddDialog({
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string },
   ) => Promise<string | null>;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onboardingExample: string | null;
   onShowBanner: (
     tone: Banner["tone"],
@@ -8350,8 +7421,23 @@ function QuickAddDialog({
   ) => void;
 }) {
   const todayStartMs = useTodayStartMs();
-  const [input, setInput] = useState("");
-  const [description, setDescription] = useState("");
+  const editTask = useMemo(
+    () => (context.editTaskId ? getTaskById(payload, context.editTaskId) : null),
+    [context.editTaskId, payload],
+  );
+  const editReminderDrafts = useMemo(
+    () => (editTask ? getTaskReminderDrafts(payload, editTask.id) : []),
+    [editTask, payload],
+  );
+  const isEditMode = editTask !== null;
+  const [input, setInput] = useState(() =>
+    editTask
+      ? serializeTaskToQuickAddInput(payload, editTask, editReminderDrafts)
+      : "",
+  );
+  const [description, setDescription] = useState(
+    () => editTask?.description ?? "",
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [showBulkChoices, setShowBulkChoices] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
@@ -8364,8 +7450,9 @@ function QuickAddDialog({
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const priorityMenuRef = useRef<HTMLDivElement | null>(null);
   const projectQueryRef = useRef<HTMLInputElement | null>(null);
+  const lastAppliedContextKeyRef = useRef<string | null>(null);
   const [relativeAnchorTaskId, setRelativeAnchorTaskId] = useState<string | null>(
-    context.relativeAnchorTaskId ?? null,
+    isEditMode ? null : (context.relativeAnchorTaskId ?? null),
   );
   const submitDraftRef = useRef<(mode?: QuickAddSubmitMode) => Promise<void>>(
     async () => undefined,
@@ -8376,16 +7463,46 @@ function QuickAddDialog({
   const bulkLines = useMemo(() => extractBulkQuickAddLines(input), [input]);
   const parsedPreview = useMemo(() => parseQuickAdd(input), [input]);
   const hasInput = input.trim().length > 0;
+  const parserContext = useMemo<QuickAddContext>(
+    () =>
+      isEditMode
+        ? {
+            defaultProjectId: null,
+            defaultSectionId: null,
+            defaultDueToday: false,
+            relativeAnchorTaskId: null,
+            relativePosition: null,
+            editTaskId: context.editTaskId ?? null,
+          }
+        : context,
+    [context, isEditMode],
+  );
   const previewDraft = useMemo(
     () =>
-      buildDraftFromParsed(
-        payload,
-        parsedPreview,
-        description,
-        context,
-        todayStartMs,
-      ),
-    [context, description, parsedPreview, payload, todayStartMs],
+      isEditMode
+        ? buildTaskDetailDraftFromInput(
+            payload,
+            input,
+            description,
+            parserContext,
+            todayStartMs,
+          )
+        : buildDraftFromParsed(
+            payload,
+            parsedPreview,
+            description,
+            parserContext,
+            todayStartMs,
+          ),
+    [
+      description,
+      input,
+      isEditMode,
+      parsedPreview,
+      parserContext,
+      payload,
+      todayStartMs,
+    ],
   );
   const [projectOverrideId, setProjectOverrideId] = useState<
     string | null | undefined
@@ -8398,25 +7515,29 @@ function QuickAddDialog({
   >(undefined);
   const [recurrenceOverride, setRecurrenceOverride] = useState<
     string | null | undefined
-  >(undefined);
+  >(
+    editTask && editTask.recurringRule && !recurrenceRuleToQuickAddPhrase(editTask.recurringRule)
+      ? editTask.recurringRule
+      : undefined,
+  );
   const [reminderEditorsOverride, setReminderEditorsOverride] = useState<
     ReminderEditorDraft[] | undefined
-  >(undefined);
-  const [dueOverrideAt, setDueOverrideAt] = useState<number | null | undefined>(
-    undefined,
+  >(
+    editTask && editReminderDrafts.length > 1
+      ? buildReminderEditors(editReminderDrafts)
+      : undefined,
   );
-  const [dueOverrideAllDay, setDueOverrideAllDay] = useState<
-    boolean | undefined
-  >(undefined);
+  const [dueOverrideAt, setDueOverrideAt] = useState<number | null | undefined>();
+  const [dueOverrideAllDay, setDueOverrideAllDay] = useState<boolean | undefined>();
   const [deadlineEnabledOverride, setDeadlineEnabledOverride] = useState<
     boolean | undefined
-  >(undefined);
+  >();
   const [deadlineAllDayOverride, setDeadlineAllDayOverride] = useState<
     boolean | undefined
-  >(undefined);
+  >();
   const [deadlineInputOverride, setDeadlineInputOverride] = useState<
     string | undefined
-  >(undefined);
+  >();
   const [projectQuery, setProjectQuery] = useState("");
   const deferredProjectQuery = useDeferredValue(
     projectQuery.trim().toLowerCase(),
@@ -8487,6 +7608,7 @@ function QuickAddDialog({
         : false,
       recurringRule: effectiveRecurrenceRule,
       reminders: effectiveReminderDrafts,
+      parentTaskId: editTask?.parentTaskId ?? previewDraft.parentTaskId,
     }),
     [
       effectiveAllDay,
@@ -8501,6 +7623,7 @@ function QuickAddDialog({
       effectiveReminderDrafts,
       effectiveSectionId,
       effectiveSectionName,
+      editTask,
       previewDraft,
     ],
   );
@@ -8530,7 +7653,9 @@ function QuickAddDialog({
   const dueSummaryLabel =
     effectiveDraft.dueAt !== null
       ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
-      : "Today";
+      : isEditMode
+        ? "No date"
+        : "Today";
   const reminderSummaryLabel = effectiveDraft.reminders.length
     ? renderReminderLabel(effectiveDraft.reminders)
     : "Reminders";
@@ -8548,15 +7673,19 @@ function QuickAddDialog({
     priorityOverride !== undefined ||
     recurrenceOverride !== undefined ||
     reminderEditorsOverride !== undefined;
+  const dialogContextKey = [
+    context.editTaskId ?? "",
+    context.defaultProjectId ?? "",
+    context.defaultSectionId ?? "",
+    context.defaultDueToday ? "today" : "none",
+    context.relativeAnchorTaskId ?? "",
+    context.relativePosition ?? "",
+  ].join("|");
 
   useEffect(() => {
     if (!showProjectMenu) return;
     window.setTimeout(() => projectQueryRef.current?.focus(), 0);
   }, [showProjectMenu]);
-
-  useEffect(() => {
-    setRelativeAnchorTaskId(context.relativeAnchorTaskId ?? null);
-  }, [context.relativeAnchorTaskId]);
 
   useEffect(() => {
     function handlePointerDown(event: globalThis.MouseEvent) {
@@ -8649,6 +7778,64 @@ function QuickAddDialog({
     }, 0);
   }
 
+  useEffect(() => {
+    if (lastAppliedContextKeyRef.current === dialogContextKey) {
+      return;
+    }
+    lastAppliedContextKeyRef.current = dialogContextKey;
+    if (editTask) {
+      setInput(serializeTaskToQuickAddInput(payload, editTask, editReminderDrafts));
+      setDescription(editTask.description);
+      setSubtaskInput("");
+      setShowBulkChoices(false);
+      setShowAdvancedFields(false);
+      setShowReminderEditor(false);
+      setShowDueDialog(false);
+      setShowPriorityMenu(false);
+      setShowProjectMenu(false);
+      setProjectQuery("");
+      setRelativeAnchorTaskId(null);
+      setProjectOverrideId(undefined);
+      setSectionOverrideId(undefined);
+      setPriorityOverride(undefined);
+      setRecurrenceOverride(
+        editTask.recurringRule &&
+          !recurrenceRuleToQuickAddPhrase(editTask.recurringRule)
+          ? editTask.recurringRule
+          : undefined,
+      );
+      setReminderEditorsOverride(
+        editReminderDrafts.length > 1
+          ? buildReminderEditors(editReminderDrafts)
+          : undefined,
+      );
+      setDueOverrideAt(undefined);
+      setDueOverrideAllDay(undefined);
+      setDeadlineEnabledOverride(undefined);
+      setDeadlineAllDayOverride(undefined);
+      setDeadlineInputOverride(undefined);
+      window.setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.setSelectionRange(0, inputRef.current.value.length);
+      }, 0);
+      return;
+    }
+    resetDialogFields();
+    setRelativeAnchorTaskId(context.relativeAnchorTaskId ?? null);
+  }, [
+    dialogContextKey,
+    context.editTaskId,
+    context.defaultDueToday,
+    context.defaultProjectId,
+    context.defaultSectionId,
+    context.relativeAnchorTaskId,
+    context.relativePosition,
+    editReminderDrafts,
+    editTask?.id,
+    editTask,
+    payload,
+  ]);
+
   async function createTaskFromQuickAdd(
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string },
@@ -8664,9 +7851,41 @@ function QuickAddDialog({
     return onCreateTask(draft, options);
   }
 
+  async function createQuickAddSubtasks(parentTaskId: string) {
+    let createdSubtasks = 0;
+
+    for (const line of quickAddSubtaskLines) {
+      const subtaskDraft = {
+        ...buildDraftFromParsed(
+          payload,
+          parseQuickAdd(line, new Date(todayStartMs)),
+          "",
+          {
+            defaultProjectId: effectiveDraft.projectId,
+            defaultSectionId: effectiveDraft.sectionId,
+            defaultDueToday: false,
+            relativeAnchorTaskId: null,
+            relativePosition: null,
+            editTaskId: null,
+          },
+          todayStartMs,
+        ),
+        parentTaskId,
+      };
+      const createdSubtaskId = await onCreateTask(subtaskDraft, {
+        silent: true,
+      });
+      if (createdSubtaskId) {
+        createdSubtasks += 1;
+      }
+    }
+
+    return createdSubtasks;
+  }
+
   async function submitDraft(mode: QuickAddSubmitMode = "close") {
     if (!hasInput) return;
-    if (shouldPromptBulkQuickAdd(input)) {
+    if (!isEditMode && shouldPromptBulkQuickAdd(input)) {
       setShowBulkChoices(true);
       return;
     }
@@ -8698,35 +7917,20 @@ function QuickAddDialog({
     setIsSaving(true);
     try {
       const shouldCreateSubtasks = quickAddSubtaskLines.length > 0;
+      if (editTask) {
+        await Promise.resolve(onSaveTask(editTask.id, effectiveDraft));
+        if (shouldCreateSubtasks) {
+          await createQuickAddSubtasks(editTask.id);
+        }
+        onClose();
+        return;
+      }
       const taskId = await createTaskFromQuickAdd(effectiveDraft, {
         silent: shouldCreateSubtasks,
       });
       if (taskId) {
         if (shouldCreateSubtasks) {
-          let createdSubtasks = 0;
-
-          for (const line of quickAddSubtaskLines) {
-            const subtaskDraft = {
-              ...buildDraftFromParsed(
-                payload,
-                parseQuickAdd(line, new Date(todayStartMs)),
-                "",
-                {
-                  defaultProjectId: effectiveDraft.projectId,
-                  defaultSectionId: effectiveDraft.sectionId,
-                  defaultDueToday: false,
-                },
-                todayStartMs,
-              ),
-              parentTaskId: taskId,
-            };
-            const createdSubtaskId = await onCreateTask(subtaskDraft, {
-              silent: true,
-            });
-            if (createdSubtaskId) {
-              createdSubtasks += 1;
-            }
-          }
+          const createdSubtasks = await createQuickAddSubtasks(taskId);
           onShowBanner(
             "success",
             `Task "${effectiveDraft.title.trim()}" created${createdSubtasks > 0 ? ` with ${createdSubtasks} subtask${createdSubtasks === 1 ? "" : "s"}` : ""}.`,
@@ -8880,7 +8084,7 @@ function QuickAddDialog({
               Quick add
             </p>
             <h3 className="mt-1 text-xl font-semibold text-[#1E2D2F]">
-              Create a task
+              {isEditMode ? "Edit task" : "Create a task"}
             </h3>
           </div>
           <button
@@ -9239,7 +8443,7 @@ function QuickAddDialog({
               </section>
             ) : null}
 
-            {bulkLines.length > 1 ? (
+            {!isEditMode && bulkLines.length > 1 ? (
               <section className="mt-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -9444,19 +8648,25 @@ function QuickAddDialog({
                 className="rounded-lg bg-[#EE6A3C] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#d75e33] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isSaving
-                  ? "Creating..."
-                  : bulkLines.length > 1
+                  ? isEditMode
+                    ? "Saving..."
+                    : "Creating..."
+                  : !isEditMode && bulkLines.length > 1
                     ? `Review ${bulkLines.length} tasks`
-                    : "Create task"}
+                    : isEditMode
+                      ? "Save changes"
+                      : "Create task"}
               </button>
-              <button
-                type="button"
-                disabled={isSaving || !hasInput || bulkLines.length > 1}
-                onClick={() => void submitDraft("continue")}
-                className="rounded-lg border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isSaving ? "Creating..." : "Create & add another"}
-              </button>
+              {!isEditMode ? (
+                <button
+                  type="button"
+                  disabled={isSaving || !hasInput || bulkLines.length > 1}
+                  onClick={() => void submitDraft("continue")}
+                  className="rounded-lg border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-2 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isSaving ? "Creating..." : "Create & add another"}
+                </button>
+              ) : null}
             </div>
           </div>
         </form>
@@ -9953,8 +9163,8 @@ function TaskRowActions({
   actionState,
   onSetActionState,
   onSaveTask,
-  onOpenTask,
   onOpenQuickAdd,
+  onArchiveTask,
   onRescheduleTasks,
   onPostponeTasks,
   onMoveTasksToProject,
@@ -9977,9 +9187,9 @@ function TaskRowActions({
       anchorRect?: DOMRect | null;
     } | null,
   ) => void;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
-  onOpenTask: (taskId: string) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
+  onArchiveTask: (taskId: string) => void;
   onRescheduleTasks: (taskIds: string[], dueAt: number | null) => void;
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
@@ -9988,6 +9198,7 @@ function TaskRowActions({
   onDeleteTasks: (taskIds: string[]) => void;
   onDuplicateTask: (taskId: string) => Promise<string | null>;
 }) {
+  const navigate = useNavigate();
   const isRescheduleOpen =
     actionState?.mode === "reschedule" && actionState.taskId === task.id;
   const isPriorityOpen =
@@ -10093,8 +9304,8 @@ function TaskRowActions({
             },
           },
           {
-            label: "Edit task",
-            onSelect: () => onOpenTask(task.id),
+            label: "Activity",
+            onSelect: () => navigate(`/task/${task.id}/activity`),
           },
           {
             label: task.deadlineAt ? "Change deadline" : "Add deadline",
@@ -10117,6 +9328,10 @@ function TaskRowActions({
             onSelect: () => {
               void handleDuplicate();
             },
+          },
+          {
+            label: task.status === "ARCHIVED" ? "Unarchive" : "Archive",
+            onSelect: () => onArchiveTask(task.id),
           },
           {
             label: "Delete",
@@ -10284,7 +9499,7 @@ function TaskDeadlineDialog({
 }: {
   task: Task;
   payload: SyncPayload;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onClose: () => void;
 }) {
   const [deadlineEnabled, setDeadlineEnabled] = useState(
@@ -10390,7 +9605,7 @@ function TaskRemindersDialog({
   task: Task;
   initialReminders: TaskReminderDraft[];
   payload: SyncPayload;
-  onSaveTask: (taskId: string, draft: TaskDraft) => void;
+  onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
   onClose: () => void;
 }) {
   const [reminderEditors, setReminderEditors] = useState<ReminderEditorDraft[]>(
@@ -11554,6 +10769,20 @@ function getTaskLocationLabel(payload: SyncPayload, task: Task): string {
   return section ? `${project.name} / ${section.name}` : project.name;
 }
 
+function getTaskWorkspacePath(
+  task: Task,
+  todayStartMs: number,
+): string {
+  if (task.projectId) {
+    return `/project/${task.projectId}`;
+  }
+  if (task.dueAt === null) {
+    return "/inbox";
+  }
+  const tomorrowStart = addDays(startOfDay(todayStartMs), 1).getTime();
+  return task.dueAt < tomorrowStart ? "/today" : "/upcoming";
+}
+
 function getQuickAddContext(
   pathname: string,
   payload: SyncPayload,
@@ -11565,6 +10794,7 @@ function getQuickAddContext(
       defaultDueToday: true,
       relativeAnchorTaskId: null,
       relativePosition: null,
+      editTaskId: null,
     };
   }
 
@@ -11577,6 +10807,7 @@ function getQuickAddContext(
       defaultDueToday: false,
       relativeAnchorTaskId: null,
       relativePosition: null,
+      editTaskId: null,
     };
   }
 
@@ -11587,6 +10818,7 @@ function getQuickAddContext(
       defaultDueToday: false,
       relativeAnchorTaskId: null,
       relativePosition: null,
+      editTaskId: null,
     };
   }
 
@@ -11596,6 +10828,7 @@ function getQuickAddContext(
     defaultDueToday: false,
     relativeAnchorTaskId: null,
     relativePosition: null,
+    editTaskId: null,
   };
 }
 
@@ -11739,6 +10972,79 @@ function buildTaskDraftFromTask(payload: SyncPayload, task: Task): TaskDraft {
   };
 }
 
+function serializeTaskToQuickAddInput(
+  payload: SyncPayload,
+  task: Task,
+  reminders: TaskReminderDraft[],
+): string {
+  const parts: string[] = [task.title];
+  if (task.priority !== "P4") {
+    parts.push(task.priority.toLowerCase());
+  }
+  if (task.dueAt != null) {
+    parts.push(formatQuickAddDateToken(task.dueAt, task.allDay));
+  }
+  const recurrencePhrase = recurrenceRuleToQuickAddPhrase(task.recurringRule);
+  if (recurrencePhrase) {
+    parts.push(recurrencePhrase);
+  }
+  if (task.deadlineAt != null) {
+    parts.push(`by ${formatQuickAddDateToken(task.deadlineAt, task.deadlineAllDay ?? false)}`);
+  }
+  const deadlineRecurrencePhrase = recurrenceRuleToQuickAddPhrase(
+    task.deadlineRecurringRule,
+  );
+  if (deadlineRecurrencePhrase) {
+    parts.push(`deadline ${deadlineRecurrencePhrase}`);
+  }
+  if (reminders.length <= 1) {
+    const reminderPhrase = reminderToQuickAddPhrase(reminders[0] ?? null);
+    if (reminderPhrase) {
+      parts.push(reminderPhrase);
+    }
+  }
+  const project = task.projectId ? getProjectById(payload, task.projectId) : null;
+  const section =
+    task.sectionId && task.projectId
+      ? getProjectSections(payload, task.projectId).find(
+          (candidate) => candidate.id === task.sectionId,
+        ) ?? null
+      : null;
+  if (project) {
+    parts.push(
+      `#${project.name}${section ? `/${section.name}` : ""}`,
+    );
+  }
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function formatQuickAddDateToken(timestamp: number, allDay: boolean): string {
+  const dateLabel = format(timestamp, "MMM d");
+  return allDay ? dateLabel : `${dateLabel} ${formatClock(timestamp)}`;
+}
+
+function reminderToQuickAddPhrase(
+  reminder: TaskReminderDraft | null,
+): string | null {
+  if (!reminder) return null;
+  if (reminder.kind === "ABSOLUTE") {
+    return `remind me at ${format(reminder.timeAt, "M/d")} ${formatClock(reminder.timeAt)}`;
+  }
+  return `remind me ${reminder.offsetMinutes}m before`;
+}
+
+function recurrenceRuleToQuickAddPhrase(
+  rule: string | null | undefined,
+): string | null {
+  if (!rule) return null;
+  if (rule === "FREQ=DAILY") return "every day";
+  if (rule === "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR") return "every weekday";
+  if (rule === "FREQ=WEEKLY") return "every week";
+  if (rule === "FREQ=MONTHLY") return "every month";
+  if (rule === "FREQ=YEARLY") return "every year";
+  return null;
+}
+
 function renderRecurrenceLabel(rule: string): string {
   const frequency = /FREQ=([A-Z]+)/.exec(rule)?.[1] ?? "CUSTOM";
   const interval = Number.parseInt(/INTERVAL=(\d+)/.exec(rule)?.[1] ?? "1", 10);
@@ -11873,6 +11179,11 @@ function getRouteTitle(pathname: string, payload: SyncPayload): string {
   if (pathname.startsWith("/project/")) {
     const projectId = pathname.split("/")[2];
     return getProjectById(payload, projectId)?.name ?? "Project";
+  }
+  if (pathname.startsWith("/task/") && pathname.endsWith("/activity")) {
+    const taskId = pathname.split("/")[2];
+    const task = getTaskById(payload, taskId);
+    return task ? `${task.title} activity` : "Task activity";
   }
   if (pathname.startsWith("/task/")) {
     const taskId = pathname.split("/")[2];
