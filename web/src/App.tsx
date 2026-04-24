@@ -7424,7 +7424,7 @@ function TaskRow({
           onPromoteSubtask(task.id);
         }
       }}
-      className={`group/task-row flex items-start gap-3 border-b border-[#f1eeeb] px-3 py-2 text-left transition last:border-b-0 md:px-4 ${
+      className={`group/task-row flex items-start gap-2 border-b border-[#f1eeeb] px-2 py-2 text-left transition last:border-b-0 md:gap-3 md:px-4 ${
         isDropActive
           ? "bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]"
           : selected
@@ -7444,12 +7444,12 @@ function TaskRow({
           }}
           onTouchEnd={handleTouchHandleActivate}
           aria-label={`Drag ${task.title}`}
-          className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[var(--app-surface-soft)] active:cursor-grabbing"
+          className="mt-0.5 flex h-4 w-4 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[var(--app-surface-soft)] active:cursor-grabbing md:h-5 md:w-5"
         >
           <GripVertical size={14} />
         </button>
       ) : (
-        <div className="h-5 w-5 shrink-0" aria-hidden="true" />
+        <div className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" />
       )}
       {depth > 0 ? <TaskHierarchyGutter depth={depth} /> : null}
       {selectionMode ? (
@@ -7523,19 +7523,14 @@ function TaskRow({
             <span className={overdue ? "text-[#d1453b]" : ""}>↻</span>
           ) : null}
           {task.parentTaskId && depth === 0 ? <span>Subtask</span> : null}
-          {!showMobileRowActions ? (
-            <span className="md:hidden">{locationLabel}</span>
-          ) : null}
+          <span className="md:hidden">{locationLabel}</span>
         </div>
-        {showMobileRowActions ? (
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 md:hidden">
-            <div className="flex flex-wrap gap-1.5">
-              {rowActions ? rowActions(task) : null}
-            </div>
-            <div className="text-xs text-[#8a8076]">{locationLabel}</div>
-          </div>
-        ) : null}
       </div>
+      {showMobileRowActions ? (
+        <div className="mt-0.5 flex shrink-0 items-center gap-1.5 md:hidden">
+          {rowActions ? rowActions(task) : null}
+        </div>
+      ) : null}
       <div className="pointer-events-none mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
         {rowActions ? (
           <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5 opacity-0 transition group-hover/task-row:opacity-100 group-focus-within/task-row:opacity-100">
