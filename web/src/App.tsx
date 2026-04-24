@@ -9169,20 +9169,31 @@ function OverflowMenu({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [openDirection, setOpenDirection] = useState<"down" | "up">("down");
+  const [horizontalAlign, setHorizontalAlign] = useState<"left" | "right">(
+    "right",
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  function updateOpenDirection() {
+  function updateMenuPosition() {
     const trigger = triggerRef.current;
     if (!trigger) return;
     const rect = trigger.getBoundingClientRect();
     const estimatedMenuHeight = items.length * 42 + 18;
+    const estimatedMenuWidth = 220;
     const spaceBelow = window.innerHeight - rect.bottom;
     const spaceAbove = rect.top;
+    const spaceRight = window.innerWidth - rect.left;
+    const spaceLeft = rect.right;
     setOpenDirection(
       spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow
         ? "up"
         : "down",
+    );
+    setHorizontalAlign(
+      spaceRight < estimatedMenuWidth && spaceLeft > spaceRight
+        ? "right"
+        : "left",
     );
   }
 
@@ -9227,7 +9238,7 @@ function OverflowMenu({
           setIsOpen((current) => {
             const next = !current;
             if (!current && next) {
-              updateOpenDirection();
+              updateMenuPosition();
             }
             return next;
           });
@@ -9238,7 +9249,9 @@ function OverflowMenu({
       </button>
       {isOpen ? (
         <div
-          className={`absolute right-0 z-20 max-h-[min(320px,calc(100vh-32px))] min-w-[220px] overflow-y-auto rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-1.5 shadow-xl ${openDirection === "up" ? "bottom-full mb-2" : "top-full mt-2"}`}
+          className={`absolute z-20 max-h-[min(320px,calc(100vh-32px))] min-w-[220px] max-w-[min(280px,calc(100vw-24px))] overflow-y-auto rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-1.5 shadow-xl ${
+            horizontalAlign === "right" ? "right-0" : "left-0"
+          } ${openDirection === "up" ? "bottom-full mb-2" : "top-full mt-2"}`}
         >
           {items.map((item) => (
             <button
