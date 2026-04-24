@@ -10318,7 +10318,7 @@ function CloudConnectDialog({
   return (
     <ChoiceDialog
       title="Connect Google Drive"
-      description="Emberlist will open Google sign-in and ask for access to its own app-specific Drive data. On mobile browsers, this opens in the current tab."
+      description="Emberlist will switch to Google sign-in in this tab and then return you here after access is granted."
       onClose={onClose}
       dialogClassName="max-w-2xl"
     >

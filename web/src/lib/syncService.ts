@@ -42,17 +42,6 @@ export function resolveGoogleLoginHint(preferredEmail: string | null): string | 
     return normalized.length ? normalized : undefined;
 }
 
-export function shouldPreferRedirectAuthFlow(): boolean {
-    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
-        return false;
-    }
-
-    const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
-    const touchCapable = (navigator.maxTouchPoints ?? 0) > 0;
-    const userAgent = navigator.userAgent ?? '';
-    return coarsePointer || touchCapable || /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
-}
-
 export function buildGoogleRedirectAuthUrl({
     clientId,
     redirectUri,
@@ -144,7 +133,7 @@ export class DriveSyncService {
         const prompt = resolveGoogleAuthPrompt(interactive, Boolean(this.accessToken));
         const loginHint = resolveGoogleLoginHint(this.preferredLoginHint);
 
-        if (interactive && shouldPreferRedirectAuthFlow()) {
+        if (interactive && prompt === 'consent') {
             await this.beginRedirectLogin(prompt, loginHint);
         }
 
