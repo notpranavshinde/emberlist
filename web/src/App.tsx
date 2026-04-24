@@ -235,6 +235,10 @@ function normalizeCloudSyncErrorMessage(message: string): string {
     return "Google sign-in finished, but Drive access was not granted. Try again and check the final box that allows Emberlist to access its own configuration data in Google Drive.";
   }
 
+  if (message.includes("popup_failed_to_open")) {
+    return "Google sign-in was blocked by the browser. Allow popups for Emberlist or try again from a browser that permits the Google sign-in window.";
+  }
+
   if (message.includes("popup_closed")) {
     return "Google sign-in was closed before it finished. Try again and keep the Google window open until you return to Emberlist.";
   }
@@ -338,6 +342,13 @@ function App() {
     () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
     [],
   );
+
+  useEffect(() => {
+    if (!syncService) return;
+    void syncService.init().catch((error) => {
+      console.warn("Failed to pre-initialize Google Identity Services", error);
+    });
+  }, [syncService]);
 
   function showBanner(
     tone: Banner["tone"],
@@ -909,8 +920,13 @@ function App() {
   }
 
   async function handleConnectCloudSync() {
-    setIsCloudConnectDialogOpen(false);
     await runCloudSync({ interactiveAuth: true, automatic: false });
+    if (!cloudSessionRef.current && syncService?.getSession()) {
+      setCloudSession(syncService.getSession());
+    }
+    if (syncService?.getSession()) {
+      setIsCloudConnectDialogOpen(false);
+    }
     setBootState("ready");
   }
 
