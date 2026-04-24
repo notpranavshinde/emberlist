@@ -7,12 +7,15 @@
 - `Permissions-Policy: geolocation=(), camera=(), microphone=()`
 
 ## CSP target policy (example)
-Use deployment headers (preferred) or HTML meta fallback:
+Set CSP via HTTP response headers in production.
+
+`frame-ancestors` is not enforced from a `<meta http-equiv="Content-Security-Policy">` tag, so clickjacking protection must be delivered from the hosting layer (for example Vercel headers config).
 
 ```text
 default-src 'self';
 script-src 'self' https://accounts.google.com;
 connect-src 'self' https://www.googleapis.com https://accounts.google.com;
+frame-src https://accounts.google.com/gsi/;
 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
 font-src 'self' https://fonts.gstatic.com;
 img-src 'self' data:;
@@ -23,6 +26,6 @@ object-src 'none';
 ```
 
 ## Rollout
-1. Run as `Content-Security-Policy-Report-Only`.
+1. Run as `Content-Security-Policy-Report-Only` from HTTP headers.
 2. Triage/allowlist legitimate violations.
 3. Enforce CSP before GA rollout.

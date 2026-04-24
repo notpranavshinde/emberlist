@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../src', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../src/', import.meta.url));
 
 function collect(dir) {
   const entries = readdirSync(dir);
@@ -23,7 +24,7 @@ function collect(dir) {
 const files = collect(root);
 const violations = [];
 for (const file of files) {
-  if (file.endsWith('/src/lib/webStorage.ts')) continue;
+  if (basename(file) === 'webStorage.ts') continue;
   const content = readFileSync(file, 'utf8');
   const hasDirectUsage = /window\.localStorage|localStorage\.(getItem|setItem|removeItem)/.test(content);
   if (hasDirectUsage) violations.push(file);
