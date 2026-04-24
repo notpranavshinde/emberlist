@@ -126,6 +126,7 @@ import {
   type WeekStartsOn,
 } from "./lib/webPreferences";
 import { resolveGoShortcut, shortcutSections } from "./lib/webShortcuts";
+import { getStoredItem, removeStoredItem, setStoredItem } from "./lib/webStorage";
 import {
   archiveTask,
   canReparentTaskAsSubtask,
@@ -392,40 +393,40 @@ function App() {
   }, [lastCloudSyncAt]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.showCompletedToday",
       JSON.stringify(showCompletedToday),
     );
   }, [showCompletedToday]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.showSelectionButtons",
       JSON.stringify(showSelectionButtons),
     );
   }, [showSelectionButtons]);
 
   useEffect(() => {
-    window.localStorage.setItem("emberlist.weekStartsOn", String(weekStartsOn));
+    setStoredItem("emberlist.weekStartsOn", String(weekStartsOn));
     setGlobalWebDisplayPreferences({ weekStartsOn, use24HourTime });
   }, [use24HourTime, weekStartsOn]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.use24HourTime",
       JSON.stringify(use24HourTime),
     );
   }, [use24HourTime]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.autoSyncEnabled",
       JSON.stringify(autoSyncEnabled),
     );
   }, [autoSyncEnabled]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.autoBackupEnabled",
       JSON.stringify(autoBackupEnabled),
     );
@@ -433,10 +434,10 @@ function App() {
 
   useEffect(() => {
     if (lastCloudSyncAt === null) {
-      window.localStorage.removeItem("emberlist.lastCloudSyncAt");
+      removeStoredItem("emberlist.lastCloudSyncAt");
       return;
     }
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.lastCloudSyncAt",
       String(lastCloudSyncAt),
     );
@@ -448,10 +449,10 @@ function App() {
 
   useEffect(() => {
     if (lastLocalBackupAt === null) {
-      window.localStorage.removeItem("emberlist.lastLocalBackupAt");
+      removeStoredItem("emberlist.lastLocalBackupAt");
       return;
     }
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.lastLocalBackupAt",
       String(lastLocalBackupAt),
     );
@@ -462,7 +463,7 @@ function App() {
   }, [activityEntries]);
 
   useEffect(() => {
-    window.localStorage.setItem(
+    setStoredItem(
       FIRST_RUN_WELCOME_DISMISSED_KEY,
       JSON.stringify(hasDismissedFirstRunWelcome),
     );
@@ -553,7 +554,7 @@ function App() {
   ) {
     if (typeof window === "undefined") return;
     if (automatic && !autoBackupEnabledRef.current) return;
-    window.localStorage.setItem(
+    setStoredItem(
       "emberlist.browserBackup",
       JSON.stringify(nextPayload),
     );
@@ -1444,7 +1445,7 @@ function App() {
   }
 
   async function handleRestoreBrowserBackup() {
-    const raw = window.localStorage.getItem("emberlist.browserBackup");
+    const raw = getStoredItem("emberlist.browserBackup");
     if (!raw) {
       showBanner(
         "error",
@@ -11326,7 +11327,7 @@ function getOnboardingCoachmarkContent(
 function readStoredOnboardingState(): FirstRunOnboardingState | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(FIRST_RUN_ONBOARDING_STATE_KEY);
+    const raw = getStoredItem(FIRST_RUN_ONBOARDING_STATE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<FirstRunOnboardingState> | null;
     if (!parsed || typeof parsed !== "object") return null;
@@ -11367,10 +11368,10 @@ function writeStoredOnboardingState(
 ): void {
   if (typeof window === "undefined") return;
   if (!state) {
-    window.localStorage.removeItem(FIRST_RUN_ONBOARDING_STATE_KEY);
+    removeStoredItem(FIRST_RUN_ONBOARDING_STATE_KEY);
     return;
   }
-  window.localStorage.setItem(
+  setStoredItem(
     FIRST_RUN_ONBOARDING_STATE_KEY,
     JSON.stringify(state),
   );
@@ -11378,7 +11379,7 @@ function writeStoredOnboardingState(
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {
   if (typeof window === "undefined") return fallback;
-  const raw = window.localStorage.getItem(key);
+  const raw = getStoredItem(key);
   if (raw === null) return fallback;
   return raw === "true" || raw === "1" || raw === JSON.stringify(true);
 }
@@ -11388,7 +11389,7 @@ function readStoredWeekStartsOn(
   fallback: WeekStartsOn,
 ): WeekStartsOn {
   if (typeof window === "undefined") return fallback;
-  const raw = window.localStorage.getItem(key);
+  const raw = getStoredItem(key);
   if (raw === "1") return 1;
   if (raw === "0") return 0;
   return fallback;
@@ -11396,7 +11397,7 @@ function readStoredWeekStartsOn(
 
 function readStoredNumber(key: string): number | null {
   if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(key);
+  const raw = getStoredItem(key);
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
@@ -11405,7 +11406,7 @@ function readStoredNumber(key: string): number | null {
 function readStoredActivityEntries(): ActivityEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem("emberlist.activityEntries");
+    const raw = getStoredItem("emberlist.activityEntries");
     if (!raw) return [];
     const parsed = JSON.parse(raw) as ActivityEntry[];
     return Array.isArray(parsed)
@@ -11418,7 +11419,7 @@ function readStoredActivityEntries(): ActivityEntry[] {
 
 function writeStoredActivityEntries(entries: ActivityEntry[]) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(
+  setStoredItem(
     "emberlist.activityEntries",
     JSON.stringify(entries),
   );
@@ -11428,7 +11429,7 @@ function readStoredCloudSession(): CloudSession | null {
   if (typeof window === "undefined") return null;
 
   try {
-    const raw = window.localStorage.getItem("emberlist.cloudSession");
+    const raw = getStoredItem("emberlist.cloudSession");
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
       email?: string | null;
@@ -11446,10 +11447,10 @@ function readStoredCloudSession(): CloudSession | null {
 function writeStoredCloudSession(session: CloudSession | null) {
   if (typeof window === "undefined") return;
   if (!session) {
-    window.localStorage.removeItem("emberlist.cloudSession");
+    removeStoredItem("emberlist.cloudSession");
     return;
   }
-  window.localStorage.setItem(
+  setStoredItem(
     "emberlist.cloudSession",
     JSON.stringify(session),
   );

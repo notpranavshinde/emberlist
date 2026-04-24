@@ -71,3 +71,8 @@ export default defineConfig([
   },
 ])
 ```
+
+## Security checks
+
+- `npm run security:check` validates required security documentation, required HTTP security headers in `vercel.json`, and centralized local storage usage.
+- Security planning and launch documents are in `docs/security/`.

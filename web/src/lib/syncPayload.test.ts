@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertSupportedSyncPayload, createEmptySyncPayload, normalizeImportedPayload } from './syncPayload';
+import { assertSupportedSyncPayload, createEmptySyncPayload, ensureSyncPayload, normalizeImportedPayload } from './syncPayload';
 
 describe('syncPayload', () => {
   it('serializes default sync payload fields', () => {
@@ -51,6 +51,58 @@ describe('syncPayload', () => {
       payloadId: '',
       source: 'android-legacy-backup',
     });
+  });
+
+
+  it('rejects payload roots with non-plain object prototypes', () => {
+    const payload = createEmptySyncPayload('device-1');
+    payload.exportedAt = 123;
+    payload.payloadId = 'payload-1';
+
+    const nonPlain = Object.create(new Date());
+    Object.assign(nonPlain, payload);
+
+    expect(() => ensureSyncPayload(nonPlain, 'Cloud sync file'))
+      .toThrow('Cloud sync file is invalid: expected a JSON object.');
+  });
+
+  it('rejects task entities with non-plain object prototypes', () => {
+    const payload = createEmptySyncPayload('device-1');
+    payload.exportedAt = 123;
+    payload.payloadId = 'payload-1';
+
+    const task = Object.create(new Map());
+    Object.assign(task, {
+      id: 'task-1',
+      title: 'Task',
+      description: '',
+      projectId: null,
+      sectionId: null,
+      priority: 'P4',
+      dueAt: null,
+      allDay: false,
+      deadlineAt: null,
+      deadlineAllDay: false,
+      recurringRule: null,
+      deadlineRecurringRule: null,
+      status: 'OPEN',
+      completedAt: null,
+      parentTaskId: null,
+      locationId: null,
+      locationTriggerType: null,
+      order: 0,
+      createdAt: 1,
+      updatedAt: 1,
+      deletedAt: null,
+    });
+
+    const malformed = {
+      ...payload,
+      tasks: [task],
+    };
+
+    expect(() => ensureSyncPayload(malformed, 'Cloud sync file'))
+      .toThrow('Cloud sync file.tasks[0] is invalid: expected an object.');
   });
 
   it('rejects payloads from newer schema versions', () => {
