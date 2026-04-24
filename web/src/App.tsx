@@ -8393,9 +8393,9 @@ function QuickAddDialog({
   return (
     <div
       data-overlay-dialog="true"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-[#221E1C]/40 px-4 py-8 backdrop-blur-sm"
+      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[#221E1C]/40 px-3 py-3 backdrop-blur-sm sm:items-center sm:px-4 sm:py-8"
     >
-      <div className="w-full max-w-xl rounded-2xl border border-[var(--app-shell-border)] bg-[var(--app-shell-bg-soft)] p-4 shadow-2xl">
+      <div className="flex max-h-[calc(100dvh-24px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[var(--app-shell-border)] bg-[var(--app-shell-bg-soft)] p-4 shadow-2xl sm:max-h-[min(88vh,900px)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#9F7B63]">
@@ -8413,7 +8413,8 @@ function QuickAddDialog({
           </button>
         </div>
 
-        <form onSubmit={submit} className="mt-4 space-y-3">
+        <form onSubmit={submit} className="mt-4 flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
           <section className="rounded-xl border border-[#E1D5CA] bg-[var(--app-surface)] p-4 shadow-sm">
             <label className="block">
               <span className="sr-only">Task parser</span>
@@ -8804,8 +8805,8 @@ function QuickAddDialog({
                   </div>
                 )}
               </section>
-            ) : null}
-          </section>
+              ) : null}
+            </section>
 
           {showBulkChoices ? (
             <section className="rounded-[22px] border border-[#F1C7B5] bg-[#FFF1EB] px-4 py-4">
@@ -8843,8 +8844,9 @@ function QuickAddDialog({
               </div>
             </section>
           ) : null}
+          </div>
 
-          <div className="flex flex-col gap-3 border-t border-[#E7DDD4] pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-3 flex flex-col gap-3 border-t border-[#E7DDD4] pt-4 sm:flex-row sm:items-center sm:justify-between">
             <div ref={projectMenuRef} className="relative self-start">
               <button
                 type="button"
