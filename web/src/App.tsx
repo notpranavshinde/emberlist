@@ -203,6 +203,8 @@ type Banner = {
   message: string;
   actionLabel?: string;
   onAction?: (() => void | Promise<void>) | null;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: (() => void | Promise<void>) | null;
   persistOnNavigation?: boolean;
   autoDismissMs?: number;
 };
@@ -341,7 +343,12 @@ function App() {
     message: string,
     options?: Pick<
       Banner,
-      "actionLabel" | "onAction" | "persistOnNavigation" | "autoDismissMs"
+      | "actionLabel"
+      | "onAction"
+      | "secondaryActionLabel"
+      | "onSecondaryAction"
+      | "persistOnNavigation"
+      | "autoDismissMs"
     >,
   ) {
     bannerIdRef.current += 1;
@@ -351,6 +358,8 @@ function App() {
       message,
       actionLabel: options?.actionLabel,
       onAction: options?.onAction ?? null,
+      secondaryActionLabel: options?.secondaryActionLabel,
+      onSecondaryAction: options?.onSecondaryAction ?? null,
       persistOnNavigation: options?.persistOnNavigation ?? false,
       autoDismissMs: options?.autoDismissMs,
     });
@@ -592,6 +601,28 @@ function App() {
     );
   }
 
+  function buildCreatedTaskSecondaryBannerAction(
+    createdTask: Task,
+  ): Pick<Banner, "secondaryActionLabel" | "onSecondaryAction"> | undefined {
+    const currentHash =
+      typeof window === "undefined" ? "" : window.location.hash || "#/today";
+    const tomorrowStart = addDays(startOfDay(Date.now()), 1).getTime();
+    if (
+      !currentHash.startsWith("#/today") ||
+      createdTask.dueAt === null ||
+      createdTask.dueAt < tomorrowStart
+    ) {
+      return undefined;
+    }
+
+    return {
+      secondaryActionLabel: "View in Upcoming",
+      onSecondaryAction: () => {
+        window.location.hash = "#/upcoming";
+      },
+    };
+  }
+
   async function handleUndoActivity(activityId: string) {
     const undoRecord = undoActivityMapRef.current.get(activityId);
     if (!undoRecord) return;
@@ -749,6 +780,7 @@ function App() {
     previousPayload: SyncPayload,
     undoMessage: string = "Change undone.",
     activityId?: string,
+    extraOptions?: Pick<Banner, "secondaryActionLabel" | "onSecondaryAction">,
   ) {
     showBanner("success", message, {
       actionLabel: "Undo",
@@ -762,6 +794,8 @@ function App() {
         await persistPayload(previousPayload, true);
         showBanner("info", undoMessage);
       },
+      secondaryActionLabel: extraOptions?.secondaryActionLabel,
+      onSecondaryAction: extraOptions?.onSecondaryAction,
     });
   }
 
@@ -1152,7 +1186,7 @@ function App() {
       ? (payloadRef.current?.sections.find(
           (section) => section.id === sectionId && !section.deletedAt,
         )?.name ?? "section")
-      : "Loose tasks";
+      : "No section";
     await applyUndoablePayloadUpdate(
       (current) => moveTasksToSection(current, taskIds, sectionId),
       {
@@ -1295,11 +1329,15 @@ function App() {
       });
     }
     if (!options?.silent) {
+      const secondaryBannerAction = createdTask
+        ? buildCreatedTaskSecondaryBannerAction(createdTask)
+        : undefined;
       showUndoBanner(
         options?.successMessage ?? `Task "${draft.title.trim()}" created.`,
         current,
         `Removed "${draft.title.trim()}".`,
         activityId,
+        secondaryBannerAction,
       );
     }
     const onboardingState = firstRunOnboardingRef.current;
@@ -1351,11 +1389,14 @@ function App() {
       });
     }
     if (!options?.silent && createdTask) {
+      const secondaryBannerAction =
+        buildCreatedTaskSecondaryBannerAction(createdTask);
       showUndoBanner(
         options?.successMessage ?? `Task "${createdTask.title}" created.`,
         current,
         `Removed "${createdTask.title}".`,
         activityId,
+        secondaryBannerAction,
       );
     }
     const onboardingState = firstRunOnboardingRef.current;
@@ -2142,6 +2183,21 @@ function WorkspaceShell({
     }
   }
 
+  async function handleSecondaryBannerAction() {
+    if (!banner?.onSecondaryAction || isBannerActionRunning) return;
+    setIsBannerActionRunning(true);
+    try {
+      await banner.onSecondaryAction();
+    } catch (error) {
+      onShowBanner(
+        "error",
+        error instanceof Error ? error.message : "Action failed.",
+      );
+    } finally {
+      setIsBannerActionRunning(false);
+    }
+  }
+
   bannerActionRef.current = handleBannerAction;
 
   const focusedTaskActionTasks = useMemo(
@@ -2591,9 +2647,17 @@ function WorkspaceShell({
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
+                  onClick={() => setIsProjectSwitcherOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-3 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] md:hidden"
+                >
+                  <Folder size={16} />
+                  <span>Projects</span>
+                </button>
+                <button
                   onClick={onCloudSync}
                   disabled={isSyncing}
-                  className={`flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[#f8f5f2] disabled:cursor-not-allowed disabled:opacity-70 ${isSidebarCollapsed ? "" : "md:hidden"}`}
+                  className={`items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] disabled:cursor-not-allowed disabled:opacity-70 ${isSidebarCollapsed ? "hidden md:flex" : "hidden"}`}
                 >
                   {isSyncing ? (
                     <RefreshCw size={16} className="animate-spin" />
@@ -2604,7 +2668,7 @@ function WorkspaceShell({
                 </button>
                 <button
                   onClick={() => onOpenQuickAdd()}
-                  className="flex items-center gap-2 rounded-lg bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
+                  className="flex items-center gap-2 rounded-lg bg-[#dc4c3e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335] md:px-4"
                 >
                   <Plus size={16} />
                   <span className="sm:hidden">Add</span>
@@ -2628,6 +2692,16 @@ function WorkspaceShell({
                       {isBannerActionRunning
                         ? `${banner.actionLabel}...`
                         : banner.actionLabel}
+                    </button>
+                  ) : null}
+                  {banner.secondaryActionLabel && banner.onSecondaryAction ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleSecondaryBannerAction()}
+                      disabled={isBannerActionRunning}
+                      className="rounded-md border border-black/10 bg-[var(--app-surface)]/50 px-3 py-1 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {banner.secondaryActionLabel}
                     </button>
                   ) : null}
                   <button
@@ -5533,7 +5607,7 @@ function ProjectPage({
   const boardColumns = [
     {
       id: "__loose__",
-      title: "Loose tasks",
+      title: "No section",
       subtitle: "Open tasks without a section.",
       tasks: unsectionedTasks,
       sectionId: null as string | null,
@@ -5876,7 +5950,7 @@ function ProjectPage({
                   emptyMessage={
                     column.sectionId
                       ? "No tasks in this section yet."
-                      : "No unsectioned tasks here."
+                      : "No tasks without a section."
                   }
                   onToggleTask={onToggleTask}
                   onReparentTaskAsSubtask={onReparentTaskAsSubtask}
@@ -5895,12 +5969,12 @@ function ProjectPage({
           <>
             <div data-onboarding-target="project-task-area">
               <TaskGroup
-                title="Loose tasks"
+                title="No section"
                 subtitle="Open tasks in this project without a section."
                 payload={payload}
                 todayStartMs={todayStartMs}
                 tasks={unsectionedTasks}
-                emptyMessage="No unsectioned tasks here."
+                emptyMessage="No tasks without a section."
                 onToggleTask={onToggleTask}
                 onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                 onPromoteSubtask={onPromoteSubtask}
@@ -5912,7 +5986,7 @@ function ProjectPage({
                 rowActions={renderProjectRowActions}
                 dropTargetState={{
                   active: activeListDropSectionId === "__loose__",
-                  hint: "Drop task here to move it out of a section.",
+                  hint: "Drop task here to clear its section.",
                   ...getListDropHandlers(null),
                 }}
                 headerActions={
@@ -6144,7 +6218,7 @@ function ProjectPage({
               }}
               className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
             >
-              Loose tasks
+              No section
             </button>
             {sections.map((section) => (
               <button
@@ -6816,7 +6890,7 @@ function TaskGroup({
         onDragLeave={dropTargetState?.onDragLeave}
         onDrop={dropTargetState?.onDrop}
       >
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-[18px] font-semibold text-[#202020]">
               {title}
@@ -6830,7 +6904,7 @@ function TaskGroup({
               </p>
             ) : null}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {headerActions}
             <span className="text-xs font-medium text-[#8a8076]">
               {tasks.length} task{tasks.length === 1 ? "" : "s"}
@@ -6841,9 +6915,13 @@ function TaskGroup({
                 onClick={() => setCollapsed((value) => !value)}
                 className="rounded-full border border-[#e7ddd4] bg-[var(--app-surface)] px-3 py-1 text-xs font-semibold text-[#6d5c50] transition hover:bg-[#fbf7f3]"
               >
-                {isCollapsed
-                  ? `Show ${title.toLowerCase()}`
-                  : `Hide ${title.toLowerCase()}`}
+                {title.toLowerCase() === "completed today"
+                  ? isCollapsed
+                    ? "Show completed"
+                    : "Hide completed"
+                  : isCollapsed
+                    ? `Show ${title.toLowerCase()}`
+                    : `Hide ${title.toLowerCase()}`}
               </button>
             ) : null}
           </div>
@@ -7651,6 +7729,17 @@ function QuickAddDialog({
         .filter(Boolean),
     [subtaskInput],
   );
+  const shouldOfferUpcomingBannerAction = useMemo(() => {
+    if (typeof window === "undefined" || effectiveDraft.dueAt === null) {
+      return false;
+    }
+    const currentHash = window.location.hash || "#/today";
+    const tomorrowStart = addDays(startOfDay(todayStartMs), 1).getTime();
+    return (
+      currentHash.startsWith("#/today") &&
+      effectiveDraft.dueAt >= tomorrowStart
+    );
+  }, [effectiveDraft.dueAt, todayStartMs]);
   const dueSummaryLabel =
     effectiveDraft.dueAt !== null
       ? formatTaskDate(effectiveDraft.dueAt, effectiveDraft.allDay)
@@ -7817,7 +7906,8 @@ function QuickAddDialog({
       setDeadlineInputOverride(undefined);
       window.setTimeout(() => {
         inputRef.current?.focus();
-        inputRef.current?.setSelectionRange(0, inputRef.current.value.length);
+        const cursorPosition = inputRef.current?.value.length ?? 0;
+        inputRef.current?.setSelectionRange(cursorPosition, cursorPosition);
       }, 0);
       return;
     }
@@ -7935,7 +8025,26 @@ function QuickAddDialog({
           onShowBanner(
             "success",
             `Task "${effectiveDraft.title.trim()}" created${createdSubtasks > 0 ? ` with ${createdSubtasks} subtask${createdSubtasks === 1 ? "" : "s"}` : ""}.`,
+            shouldOfferUpcomingBannerAction
+              ? {
+                  actionLabel: "View in Upcoming",
+                  onAction: () => {
+                    window.location.hash = "#/upcoming";
+                  },
+                  persistOnNavigation: true,
+                  autoDismissMs: 8_000,
+                }
+              : undefined,
           );
+        } else if (shouldOfferUpcomingBannerAction) {
+          onShowBanner("success", `Task "${effectiveDraft.title.trim()}" created.`, {
+            actionLabel: "View in Upcoming",
+            onAction: () => {
+              window.location.hash = "#/upcoming";
+            },
+            persistOnNavigation: true,
+            autoDismissMs: 8_000,
+          });
         }
         if (context.relativePosition === "after") {
           setRelativeAnchorTaskId(taskId);
@@ -8110,14 +8219,13 @@ function QuickAddDialog({
                   if (showBulkChoices) setShowBulkChoices(false);
                 }}
                 rows={1}
-                placeholder="Pay rent every month on the 1st at 9am p1 #bills"
+                placeholder="Pay rent monthly 9am p1 #bills !30m"
                 className="min-h-[44px] w-full resize-none border-0 bg-transparent px-0 py-0 text-base font-semibold text-[#1E2D2F] outline-none placeholder:text-[#9A9188]"
               />
             </label>
             <p className="mt-1 text-xs text-[#8A8076]">
-              Use plain language for dates, priorities, projects, reminders, and
-              repeat rules. Example: `Pay rent every month on the 1st at 9am p1
-              #bills`.
+              Type it naturally. Dates, projects, priorities, reminders, and
+              repeats all work.
             </p>
             {onboardingExample && !input.trim() ? (
               <button
@@ -8139,7 +8247,7 @@ function QuickAddDialog({
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={2}
-                placeholder="Description"
+                placeholder="Notes (optional)"
                 className="w-full resize-none border-0 bg-transparent px-0 py-0 text-sm text-[#6D5C50] outline-none placeholder:text-[#9A9188]"
               />
             </label>
@@ -9435,7 +9543,7 @@ function TaskRowActions({
                   }}
                   className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
                 >
-                  {taskProject?.name ?? "Project"} / Loose tasks
+                  {taskProject?.name ?? "Project"} / No section
                 </button>
               </div>
             </div>
