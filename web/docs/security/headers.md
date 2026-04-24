@@ -7,7 +7,7 @@
 - `Permissions-Policy: geolocation=(), camera=(), microphone=()`
 
 ## CSP target policy (example)
-Set CSP via HTTP response headers in production.
+Set CSP via HTTP response headers in production (configured in `web/vercel.json`).
 
 `frame-ancestors` is not enforced from a `<meta http-equiv="Content-Security-Policy">` tag, so clickjacking protection must be delivered from the hosting layer (for example Vercel headers config).
 
