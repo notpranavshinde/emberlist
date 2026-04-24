@@ -8629,8 +8629,8 @@ function QuickAddDialog({
             ) : null}
 
             {showAdvancedFields ? (
-              <section className="mt-4 rounded-[22px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] p-4">
-                <div className="flex items-center justify-between gap-3">
+              <section className="mt-4 rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] p-3 sm:rounded-[22px] sm:p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-[#1E2D2F]">
                       More options
@@ -8658,9 +8658,9 @@ function QuickAddDialog({
                   ) : null}
                 </div>
 
-                <div className="mt-4 space-y-4">
-                  <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
-                    <div className="flex items-center justify-between gap-3">
+                <div className="mt-4 space-y-3 sm:space-y-4">
+                  <div className="rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-[#1E2D2F]">
                           Deadline
@@ -8681,7 +8681,7 @@ function QuickAddDialog({
                             setDeadlineAllDayOverride(true);
                           }
                         }}
-                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                        className={`w-full rounded-full px-3 py-2 text-xs font-semibold transition sm:w-auto sm:py-1.5 ${
                           effectiveDeadlineEnabled
                             ? "bg-[#EE6A3C] text-white hover:bg-[#d75e33]"
                             : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
@@ -8691,7 +8691,7 @@ function QuickAddDialog({
                       </button>
                     </div>
                     {effectiveDeadlineEnabled ? (
-                      <div className="mt-4 grid gap-3 md:grid-cols-[auto_minmax(0,1fr)] md:items-center">
+                      <div className="mt-4 grid gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
                         <label className="inline-flex items-center gap-2 text-sm text-[#6D5C50]">
                           <input
                             type="checkbox"
@@ -8717,7 +8717,7 @@ function QuickAddDialog({
                     ) : null}
                   </div>
 
-                  <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
+                  <div className="rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:p-4">
                     <RecurrenceField
                       label="Repeat schedule"
                       value={effectiveRecurrenceRule}
@@ -8731,7 +8731,7 @@ function QuickAddDialog({
                     />
                   </div>
 
-                  <div className="rounded-[18px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4">
+                  <div className="rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:p-4">
                     <div>
                       <p className="text-sm font-semibold text-[#1E2D2F]">
                         Subtasks
@@ -8746,7 +8746,7 @@ function QuickAddDialog({
                       onChange={(event) => setSubtaskInput(event.target.value)}
                       rows={3}
                       placeholder={"Draft outline\nCollect links\nSend final version"}
-                      className="mt-3 w-full rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C]"
+                      className="mt-3 w-full rounded-[14px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-3 py-3 text-sm leading-6 outline-none transition focus:border-[#EE6A3C] sm:rounded-[16px] sm:px-4"
                     />
                     {quickAddSubtaskLines.length > 0 ? (
                       <p className="mt-2 text-xs font-semibold text-[#8A8076]">
