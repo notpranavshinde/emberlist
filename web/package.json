@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "security:config": "node scripts/validate-security-config.mjs",
+    "security:storage": "node scripts/check-storage-usage.mjs",
+    "security:check": "npm run security:config && npm run security:storage"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
