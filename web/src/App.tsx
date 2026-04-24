@@ -6909,7 +6909,7 @@ function TaskGroup({
             <span className="text-xs font-medium text-[#8a8076]">
               {tasks.length} task{tasks.length === 1 ? "" : "s"}
             </span>
-            {collapsible ? (
+            {collapsible && tasks.length > 0 ? (
               <button
                 type="button"
                 onClick={() => setCollapsed((value) => !value)}
