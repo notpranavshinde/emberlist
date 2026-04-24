@@ -4515,6 +4515,8 @@ function SearchPage({
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(
     () => new Set(),
   );
+  const [isMobileFilterDialogOpen, setIsMobileFilterDialogOpen] =
+    useState(false);
   const [activeDialog, setActiveDialog] = useState<
     null | "reschedule" | "move" | "priority" | "delete"
   >(null);
@@ -4547,6 +4549,7 @@ function SearchPage({
     });
     return next.size ? next : new Set<SearchFilter>(["ALL"]);
   }, [forcedFilter, userFilters]);
+  const activeFilterCount = filters.has("ALL") ? 0 : filters.size;
   const results = useMemo(
     () => searchTasks(payload, deferredQuery, filters),
     [deferredQuery, filters, payload],
@@ -4792,7 +4795,17 @@ function SearchPage({
             className="w-full bg-transparent text-sm outline-none placeholder:text-[#9F7B63]"
           />
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 md:hidden">
+          <button
+            type="button"
+            onClick={() => setIsMobileFilterDialogOpen(true)}
+            className="inline-flex items-center rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-2 text-sm font-semibold text-[#6D5C50] transition hover:bg-[var(--app-surface)]"
+          >
+            Filters
+            {activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+          </button>
+        </div>
+        <div className="mt-4 hidden flex-wrap gap-2 md:flex">
           {SEARCH_FILTERS.map((filter) => {
             const active =
               filter.value === "ALL"
@@ -4871,6 +4884,7 @@ function SearchPage({
         onToggleSelection={toggleSelection}
         onStartSelection={openSelection}
         rowActions={renderTaskRowActions}
+        showTaskCount={false}
       />
 
       {completedResults.length ? (
@@ -4906,6 +4920,43 @@ function SearchPage({
             clearSelection();
           }}
         />
+      ) : null}
+
+      {isMobileFilterDialogOpen ? (
+        <ChoiceDialog
+          title="Search filters"
+          description="Pick the filters you want to apply."
+          onClose={() => setIsMobileFilterDialogOpen(false)}
+        >
+          <div className="space-y-2">
+            {SEARCH_FILTERS.map((filter) => {
+              const active =
+                filter.value === "ALL"
+                  ? !forcedFilter && userFilters.size === 0
+                  : filters.has(filter.value);
+              const disabled = forcedFilter === filter.value;
+              return (
+                <label
+                  key={filter.value}
+                  className={`flex items-center justify-between rounded-[18px] border px-4 py-3 text-sm transition ${
+                    active
+                      ? "border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28]"
+                      : "border-[#E1D5CA] bg-[var(--app-surface-soft)] text-[#1E2D2F]"
+                  } ${disabled ? "opacity-80" : ""}`}
+                >
+                  <span className="font-medium">{filter.label}</span>
+                  <input
+                    type="checkbox"
+                    checked={active}
+                    disabled={disabled}
+                    onChange={() => toggleFilter(filter.value)}
+                    className="h-4 w-4 accent-[#EE6A3C]"
+                  />
+                </label>
+              );
+            })}
+          </div>
+        </ChoiceDialog>
       ) : null}
 
       {activeDialog === "move" ? (
@@ -6850,6 +6901,7 @@ function TaskGroup({
   headerActions,
   rowActions,
   dropTargetState,
+  showTaskCount = true,
 }: {
   title: string;
   subtitle?: string;
@@ -6879,6 +6931,7 @@ function TaskGroup({
     onDragLeave: (event: DragEvent<HTMLElement>) => void;
     onDrop: (event: DragEvent<HTMLElement>) => void;
   };
+  showTaskCount?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const isCollapsed = collapsible && collapsed;
@@ -6907,9 +6960,11 @@ function TaskGroup({
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {headerActions}
-            <span className="text-xs font-medium text-[#8a8076]">
-              {tasks.length} task{tasks.length === 1 ? "" : "s"}
-            </span>
+            {showTaskCount ? (
+              <span className="text-xs font-medium text-[#8a8076]">
+                {tasks.length} task{tasks.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
             {collapsible && tasks.length > 0 ? (
               <button
                 type="button"
