@@ -2658,7 +2658,9 @@ function WorkspaceShell({
                 <button
                   onClick={onCloudSync}
                   disabled={isSyncing}
-                  className={`items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-4 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] disabled:cursor-not-allowed disabled:opacity-70 ${isSidebarCollapsed ? "hidden md:flex" : "hidden"}`}
+                  className={`inline-flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-3 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] disabled:cursor-not-allowed disabled:opacity-70 md:px-4 ${
+                    isSidebarCollapsed ? "md:flex" : "md:hidden"
+                  }`}
                 >
                   {isSyncing ? (
                     <RefreshCw size={16} className="animate-spin" />
@@ -2669,7 +2671,7 @@ function WorkspaceShell({
                 </button>
                 <button
                   onClick={() => onOpenQuickAdd()}
-                  className="flex items-center gap-2 rounded-lg bg-[#dc4c3e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335] md:px-4"
+                  className="hidden items-center gap-2 rounded-lg bg-[#dc4c3e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335] md:flex md:px-4"
                 >
                   <Plus size={16} />
                   <span className="sm:hidden">Add</span>
@@ -2929,6 +2931,15 @@ function WorkspaceShell({
           </main>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => onOpenQuickAdd()}
+        aria-label="Quick add"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#dc4c3e] text-white shadow-[0_12px_30px_rgba(220,76,62,0.28)] transition hover:bg-[#c84335] md:hidden"
+      >
+        <Plus size={22} />
+      </button>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
