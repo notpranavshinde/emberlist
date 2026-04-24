@@ -8659,7 +8659,7 @@ function QuickAddDialog({
                 </div>
 
                 <div className="mt-4 space-y-3 sm:space-y-4">
-                  <div className="rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:p-4">
+                  <div className="rounded-[14px] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:border sm:border-[#E1D5CA] sm:p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -8717,7 +8717,7 @@ function QuickAddDialog({
                     ) : null}
                   </div>
 
-                  <div className="rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:p-4">
+                  <div className="rounded-[14px] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:border sm:border-[#E1D5CA] sm:p-4">
                     <RecurrenceField
                       label="Repeat schedule"
                       value={effectiveRecurrenceRule}
@@ -8731,7 +8731,7 @@ function QuickAddDialog({
                     />
                   </div>
 
-                  <div className="rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:p-4">
+                  <div className="rounded-[14px] bg-[var(--app-surface)] p-3 sm:rounded-[18px] sm:border sm:border-[#E1D5CA] sm:p-4">
                     <div>
                       <p className="text-sm font-semibold text-[#1E2D2F]">
                         Subtasks
