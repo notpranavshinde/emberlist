@@ -7,6 +7,18 @@ const SCOPES = 'openid email https://www.googleapis.com/auth/drive.appdata';
 const GIS_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 const SYNC_FILE_NAME = 'emberlist_sync.json';
 export const GOOGLE_AUTH_TIMEOUT_MS = 180_000;
+const REDIRECT_AUTH_STORAGE_KEY = 'emberlist.googleRedirectAuth';
+
+type RedirectAuthState = {
+    state: string;
+    returnHash: string;
+};
+
+export type RedirectAuthCompletion = {
+    handled: boolean;
+    session?: CloudSession | null;
+    error?: Error;
+};
 
 type DriveFileListResponse = {
     files?: Array<{ id?: string | null; modifiedTime?: string | null }>;
@@ -28,6 +40,75 @@ export function resolveGoogleAuthPrompt(interactive: boolean, hasAccessToken: bo
 export function resolveGoogleLoginHint(preferredEmail: string | null): string | undefined {
     const normalized = preferredEmail?.trim() ?? '';
     return normalized.length ? normalized : undefined;
+}
+
+export function shouldPreferRedirectAuthFlow(): boolean {
+    if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+        return false;
+    }
+
+    const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+    const touchCapable = (navigator.maxTouchPoints ?? 0) > 0;
+    const userAgent = navigator.userAgent ?? '';
+    return coarsePointer || touchCapable || /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent);
+}
+
+export function buildGoogleRedirectAuthUrl({
+    clientId,
+    redirectUri,
+    state,
+    prompt,
+    loginHint,
+}: {
+    clientId: string;
+    redirectUri: string;
+    state: string;
+    prompt: '' | 'consent';
+    loginHint?: string;
+}): string {
+    const params = new URLSearchParams({
+        client_id: clientId,
+        include_granted_scopes: 'true',
+        redirect_uri: redirectUri,
+        response_type: 'token',
+        scope: SCOPES,
+        state,
+    });
+
+    if (prompt) {
+        params.set('prompt', prompt);
+    }
+    if (loginHint) {
+        params.set('login_hint', loginHint);
+    }
+
+    return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+}
+
+export function parseGoogleRedirectHash(hash: string): {
+    accessToken?: string;
+    error?: string;
+    errorDescription?: string;
+    state?: string;
+} | null {
+    const normalized = hash.startsWith('#') ? hash.slice(1) : hash;
+    if (!normalized) return null;
+
+    const params = new URLSearchParams(normalized);
+    const accessToken = params.get('access_token');
+    const error = params.get('error');
+    const state = params.get('state');
+
+    if (!accessToken && !error) {
+        return null;
+    }
+
+    return {
+        accessToken: accessToken ?? undefined,
+        error: error ?? undefined,
+        errorDescription: params.get('error_description') ?? undefined,
+        state: state ?? undefined,
+    };
 }
 
 export class DriveSyncService {
@@ -63,9 +144,20 @@ export class DriveSyncService {
         const prompt = resolveGoogleAuthPrompt(interactive, Boolean(this.accessToken));
         const loginHint = resolveGoogleLoginHint(this.preferredLoginHint);
 
+        if (interactive && shouldPreferRedirectAuthFlow()) {
+            await this.beginRedirectLogin(prompt, loginHint);
+        }
+
         try {
             this.accessToken = await this.requestAccessToken(prompt, loginHint);
         } catch (error) {
+            if (
+                interactive &&
+                error instanceof Error &&
+                error.message.includes('popup_failed_to_open')
+            ) {
+                await this.beginRedirectLogin(prompt, loginHint);
+            }
             if (!interactive) {
                 throw new Error('Google Drive sign-in is required in this browser.');
             }
@@ -153,6 +245,54 @@ export class DriveSyncService {
 
     getSession(): CloudSession | null {
         return this.session;
+    }
+
+    async completeRedirectLoginIfPresent(): Promise<RedirectAuthCompletion> {
+        const result = parseGoogleRedirectHash(window.location.hash);
+        if (!result) {
+            return { handled: false };
+        }
+
+        const pendingState = this.readRedirectState();
+        this.clearRedirectState();
+
+        const restoreHash = pendingState?.returnHash || '#/today';
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${window.location.search}${restoreHash}`,
+        );
+
+        if (!pendingState || result.state !== pendingState.state) {
+            return {
+                handled: true,
+                error: new Error('Google sign-in failed: state_mismatch'),
+            };
+        }
+
+        if (result.error) {
+            const detail = result.errorDescription
+                ? `${result.error}: ${result.errorDescription}`
+                : result.error;
+            return {
+                handled: true,
+                error: new Error(`Google sign-in failed: ${detail}`),
+            };
+        }
+
+        if (!result.accessToken) {
+            return {
+                handled: true,
+                error: new Error('Google sign-in did not return an access token.'),
+            };
+        }
+
+        this.accessToken = result.accessToken;
+        this.session = await this.fetchSessionProfile(false);
+        return {
+            handled: true,
+            session: this.session,
+        };
     }
 
     setPreferredLoginHint(email: string | null) {
@@ -387,6 +527,57 @@ export class DriveSyncService {
                 reject(error instanceof Error ? error : new Error('Google sign-in failed.'));
             }
         });
+    }
+
+    private async beginRedirectLogin(prompt: '' | 'consent', loginHint?: string): Promise<never> {
+        const state = crypto.randomUUID();
+        this.writeRedirectState({
+            state,
+            returnHash: window.location.hash || '#/today',
+        });
+
+        const redirectUri = `${window.location.origin}${window.location.pathname}${window.location.search}`;
+        const url = buildGoogleRedirectAuthUrl({
+            clientId: this.clientId,
+            redirectUri,
+            state,
+            prompt,
+            loginHint,
+        });
+        window.location.assign(url);
+
+        return new Promise<never>(() => {});
+    }
+
+    private readRedirectState(): RedirectAuthState | null {
+        try {
+            const raw = window.sessionStorage.getItem(REDIRECT_AUTH_STORAGE_KEY);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw) as Partial<RedirectAuthState>;
+            if (
+                typeof parsed.state !== 'string' ||
+                typeof parsed.returnHash !== 'string'
+            ) {
+                return null;
+            }
+            return {
+                state: parsed.state,
+                returnHash: parsed.returnHash,
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    private writeRedirectState(state: RedirectAuthState) {
+        window.sessionStorage.setItem(
+            REDIRECT_AUTH_STORAGE_KEY,
+            JSON.stringify(state),
+        );
+    }
+
+    private clearRedirectState() {
+        window.sessionStorage.removeItem(REDIRECT_AUTH_STORAGE_KEY);
     }
 
     private loadGoogleIdentityScript(): Promise<void> {

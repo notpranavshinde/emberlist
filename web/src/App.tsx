@@ -116,7 +116,11 @@ import {
   type RecurrencePreset,
 } from "./lib/taskEditing";
 import { normalizeImportedPayload } from "./lib/syncPayload";
-import { DriveSyncService, type CloudSession } from "./lib/syncService";
+import {
+  DriveSyncService,
+  type CloudSession,
+  type RedirectAuthCompletion,
+} from "./lib/syncService";
 import { SyncEngine } from "./lib/syncEngine";
 import {
   formatClock,
@@ -304,6 +308,8 @@ function App() {
     useState<FirstRunOnboardingState | null>(() => readStoredOnboardingState());
   const [isCloudConnectDialogOpen, setIsCloudConnectDialogOpen] =
     useState(false);
+  const [redirectAuthCompletion, setRedirectAuthCompletion] =
+    useState<RedirectAuthCompletion | null>(null);
 
   const payloadRef = useRef<SyncPayload | null>(null);
   const cloudSessionRef = useRef<CloudSession | null>(cloudSession);
@@ -348,6 +354,18 @@ function App() {
     void syncService.init().catch((error) => {
       console.warn("Failed to pre-initialize Google Identity Services", error);
     });
+  }, [syncService]);
+
+  useEffect(() => {
+    if (!syncService) return;
+    let cancelled = false;
+    void syncService.completeRedirectLoginIfPresent().then((result) => {
+      if (cancelled || !result.handled) return;
+      setRedirectAuthCompletion(result);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [syncService]);
 
   function showBanner(
@@ -1665,6 +1683,41 @@ function App() {
       clearBackoffTimer();
     };
   }, []);
+
+  useEffect(() => {
+    if (!redirectAuthCompletion || bootState !== "ready" || !syncService) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (redirectAuthCompletion.error) {
+          const message = normalizeCloudSyncErrorMessage(
+            redirectAuthCompletion.error.message,
+          );
+          if (!cancelled) {
+            setLastSyncError(message);
+            showBanner("error", message);
+          }
+          return;
+        }
+
+        if (redirectAuthCompletion.session && !cancelled) {
+          setCloudSession(syncService.getSession());
+          setIsCloudConnectDialogOpen(false);
+        }
+
+        await runCloudSync({ interactiveAuth: false, automatic: false });
+      } finally {
+        if (!cancelled) {
+          setRedirectAuthCompletion(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bootState, redirectAuthCompletion, syncService]);
 
   if (bootState === "loading") {
     return <LoadingScreen label="Loading your workspace..." />;
@@ -7154,7 +7207,8 @@ function TaskRow({
   const longPressTimerRef = useRef<number | null>(null);
   const suppressNextClickRef = useRef(false);
 
-  const showMobileRowActions = Boolean(rowActions) && isTouchActionsVisible;
+  const showMobileRowActions =
+    Boolean(rowActions) && isTouchActionsVisible && selectionMode && selected;
 
   function clearLongPressTimer() {
     if (longPressTimerRef.current !== null) {
@@ -7202,12 +7256,6 @@ function TaskRow({
     clearLongPressTimer();
     revealTouchActions();
   }
-
-  useEffect(() => {
-    if (!selectionMode || !selected) {
-      setIsTouchActionsVisible(false);
-    }
-  }, [selected, selectionMode]);
 
   useEffect(() => () => clearLongPressTimer(), []);
 
@@ -10270,7 +10318,7 @@ function CloudConnectDialog({
   return (
     <ChoiceDialog
       title="Connect Google Drive"
-      description="Emberlist will open Google sign-in in a new window and ask for access to its own app-specific Drive data."
+      description="Emberlist will open Google sign-in and ask for access to its own app-specific Drive data. On mobile browsers, this opens in the current tab."
       onClose={onClose}
       dialogClassName="max-w-2xl"
     >

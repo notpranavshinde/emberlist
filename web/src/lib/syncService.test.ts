@@ -2,7 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SyncPayload } from '../types/sync';
 import { createEmptySyncPayload } from './syncPayload';
 import { db } from './db';
-import { DriveSyncService, GOOGLE_AUTH_TIMEOUT_MS, resolveGoogleAuthPrompt, resolveGoogleLoginHint } from './syncService';
+import {
+  buildGoogleRedirectAuthUrl,
+  DriveSyncService,
+  GOOGLE_AUTH_TIMEOUT_MS,
+  parseGoogleRedirectHash,
+  resolveGoogleAuthPrompt,
+  resolveGoogleLoginHint,
+} from './syncService';
 
 type TestableDriveSyncService = {
   performSync: (options?: { interactiveAuth?: boolean }) => Promise<SyncPayload>;
@@ -67,6 +74,39 @@ describe('resolveGoogleLoginHint', () => {
     expect(resolveGoogleLoginHint(null)).toBeUndefined();
     expect(resolveGoogleLoginHint('   ')).toBeUndefined();
     expect(resolveGoogleLoginHint('  pranav@example.com  ')).toBe('pranav@example.com');
+  });
+});
+
+describe('redirect auth helpers', () => {
+  it('builds a Google redirect auth URL with the expected OAuth parameters', () => {
+    const url = new URL(buildGoogleRedirectAuthUrl({
+      clientId: 'client-id',
+      redirectUri: 'https://emberlist.dev/',
+      state: 'state-123',
+      prompt: 'consent',
+      loginHint: 'pranav@example.com',
+    }));
+
+    expect(url.origin + url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+    expect(url.searchParams.get('client_id')).toBe('client-id');
+    expect(url.searchParams.get('redirect_uri')).toBe('https://emberlist.dev/');
+    expect(url.searchParams.get('response_type')).toBe('token');
+    expect(url.searchParams.get('state')).toBe('state-123');
+    expect(url.searchParams.get('prompt')).toBe('consent');
+    expect(url.searchParams.get('login_hint')).toBe('pranav@example.com');
+  });
+
+  it('parses a Google redirect hash carrying the access token', () => {
+    expect(
+      parseGoogleRedirectHash(
+        '#access_token=token-123&state=state-123&token_type=Bearer&expires_in=3599',
+      ),
+    ).toEqual({
+      accessToken: 'token-123',
+      state: 'state-123',
+      error: undefined,
+      errorDescription: undefined,
+    });
   });
 });
 
@@ -304,5 +344,56 @@ describe('DriveSyncService', () => {
 
     vi.unstubAllGlobals();
     vi.useRealTimers();
+  });
+
+  it('restores a redirect-based Google sign-in from the returned access token', async () => {
+    vi.stubGlobal('window', {
+      location: {
+        hash: '#access_token=token-123&state=state-123&token_type=Bearer',
+        pathname: '/',
+        search: '',
+      },
+      history: {
+        replaceState: vi.fn(),
+      },
+      sessionStorage: {
+        getItem: vi.fn(() => JSON.stringify({
+          state: 'state-123',
+          returnHash: '#/today',
+        })),
+        removeItem: vi.fn(),
+      },
+    });
+
+    const service = new DriveSyncService('client-id');
+    const fetchSessionProfile = vi.fn(async () => ({
+      email: 'pranav@example.com',
+      name: 'Pranav',
+    }));
+    (service as unknown as {
+      fetchSessionProfile: (interactiveAuth: boolean) => Promise<{ email: string; name: string }>;
+    }).fetchSessionProfile = fetchSessionProfile;
+
+    const result = await service.completeRedirectLoginIfPresent();
+
+    expect(result).toEqual({
+      handled: true,
+      session: {
+        email: 'pranav@example.com',
+        name: 'Pranav',
+      },
+    });
+    expect(fetchSessionProfile).toHaveBeenCalledWith(false);
+    expect((window.history.replaceState as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(
+      null,
+      '',
+      '/#/today',
+    );
+    expect(service.getSession()).toEqual({
+      email: 'pranav@example.com',
+      name: 'Pranav',
+    });
+
+    vi.unstubAllGlobals();
   });
 });
