@@ -7,6 +7,7 @@ import type {
   FormEvent,
   MouseEvent as ReactMouseEvent,
   ReactNode,
+  TouchEvent as ReactTouchEvent,
 } from "react";
 import {
   Calendar,
@@ -7067,8 +7068,72 @@ function TaskRow({
   const locationLabel = getTaskLocationLabel(payload, task);
   const dueLabel = task.dueAt ? formatTaskDate(task.dueAt, task.allDay) : null;
   const [isDropActive, setIsDropActive] = useState(false);
+  const [isTouchActionsVisible, setIsTouchActionsVisible] = useState(false);
+  const longPressTimerRef = useRef<number | null>(null);
+  const suppressNextClickRef = useRef(false);
+
+  const showMobileRowActions = Boolean(rowActions) && isTouchActionsVisible;
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function revealTouchActions() {
+    if (!rowActions) return;
+    if (!selectionMode) {
+      onStartSelection?.();
+    }
+    if (!selected) {
+      onToggleSelection?.(task.id);
+    }
+    setIsTouchActionsVisible(true);
+    suppressNextClickRef.current = true;
+  }
+
+  function handleTouchStart(event: ReactTouchEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(
+        'button, input, textarea, select, a, [data-overlay-dialog="true"]',
+      )
+    ) {
+      return;
+    }
+    clearLongPressTimer();
+    longPressTimerRef.current = window.setTimeout(() => {
+      revealTouchActions();
+      longPressTimerRef.current = null;
+    }, 425);
+  }
+
+  function handleTouchEnd() {
+    clearLongPressTimer();
+  }
+
+  function handleTouchHandleActivate(event: ReactTouchEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    clearLongPressTimer();
+    revealTouchActions();
+  }
+
+  useEffect(() => {
+    if (!selectionMode || !selected) {
+      setIsTouchActionsVisible(false);
+    }
+  }, [selected, selectionMode]);
+
+  useEffect(() => () => clearLongPressTimer(), []);
 
   function handleRowAction() {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
     if (selectionMode) {
       onToggleSelection?.(task.id);
       return;
@@ -7148,6 +7213,10 @@ function TaskRow({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={handleRowAction}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
+      onTouchMove={handleTouchEnd}
       onKeyDown={(event) => {
         const lowerKey = event.key.toLowerCase();
         if (event.key === "Enter" || event.key === " ") {
@@ -7239,7 +7308,11 @@ function TaskRow({
           draggable
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-          onClick={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            revealTouchActions();
+          }}
+          onTouchEnd={handleTouchHandleActivate}
           aria-label={`Drag ${task.title}`}
           className="mt-0.5 flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[var(--app-surface-soft)] active:cursor-grabbing"
         >
@@ -7320,8 +7393,18 @@ function TaskRow({
             <span className={overdue ? "text-[#d1453b]" : ""}>↻</span>
           ) : null}
           {task.parentTaskId && depth === 0 ? <span>Subtask</span> : null}
-          <span className="md:hidden">{locationLabel}</span>
+          {!showMobileRowActions ? (
+            <span className="md:hidden">{locationLabel}</span>
+          ) : null}
         </div>
+        {showMobileRowActions ? (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 md:hidden">
+            <div className="flex flex-wrap gap-1.5">
+              {rowActions ? rowActions(task) : null}
+            </div>
+            <div className="text-xs text-[#8a8076]">{locationLabel}</div>
+          </div>
+        ) : null}
       </div>
       <div className="pointer-events-none mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
         {rowActions ? (
