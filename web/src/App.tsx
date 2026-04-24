@@ -202,6 +202,7 @@ const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
 ];
 
 type BootState = "loading" | "ready" | "error";
+type SyncMode = "google_drive" | "local";
 type Banner = {
   id: number;
   tone: "success" | "error" | "info";
@@ -289,6 +290,9 @@ function App() {
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(() =>
     readStoredBoolean("emberlist.autoBackupEnabled", true),
   );
+  const [syncMode, setSyncMode] = useState<SyncMode>(() =>
+    readStoredSyncMode("emberlist.syncMode", "google_drive"),
+  );
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() =>
     readStoredNumber("emberlist.lastCloudSyncAt"),
   );
@@ -318,6 +322,7 @@ function App() {
   const hasPendingLocalChangesRef = useRef(hasPendingLocalChanges);
   const autoSyncEnabledRef = useRef(autoSyncEnabled);
   const autoBackupEnabledRef = useRef(autoBackupEnabled);
+  const syncModeRef = useRef<SyncMode>(syncMode);
   const lastCloudSyncAtRef = useRef(lastCloudSyncAt);
   const followUpSyncRequestedRef = useRef(false);
   const debounceTimerRef = useRef<number | null>(null);
@@ -327,7 +332,7 @@ function App() {
   const hasAutoSyncedOnLoadRef = useRef(false);
   const previousAutoSyncStateRef = useRef({
     autoSyncEnabled,
-    hasCloudSession: Boolean(cloudSession),
+    hasCloudSession: syncMode === "google_drive" && Boolean(cloudSession),
   });
   const bannerIdRef = useRef(0);
   const firstRunOnboardingRef = useRef<FirstRunOnboardingState | null>(
@@ -348,6 +353,9 @@ function App() {
     () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
     [],
   );
+  const cloudSyncEnabled = syncMode === "google_drive";
+  const cloudConfigured = cloudSyncEnabled && Boolean(syncService);
+  const activeCloudSession = cloudSyncEnabled ? cloudSession : null;
 
   useEffect(() => {
     if (!syncService) return;
@@ -472,6 +480,10 @@ function App() {
   }, [autoBackupEnabled]);
 
   useEffect(() => {
+    setStoredItem("emberlist.syncMode", syncMode);
+  }, [syncMode]);
+
+  useEffect(() => {
     if (lastCloudSyncAt === null) {
       removeStoredItem("emberlist.lastCloudSyncAt");
       return;
@@ -485,6 +497,10 @@ function App() {
   useEffect(() => {
     writeStoredCloudSession(cloudSession);
   }, [cloudSession]);
+
+  useEffect(() => {
+    syncModeRef.current = syncMode;
+  }, [syncMode]);
 
   useEffect(() => {
     if (lastLocalBackupAt === null) {
@@ -692,6 +708,16 @@ function App() {
           "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
         setLastSyncError(message);
         showBanner("error", message);
+      }
+      return;
+    }
+
+    if (!cloudSyncEnabled) {
+      if (!automatic) {
+        showBanner(
+          "info",
+          "Sync mode is set to Local. Switch to Google Drive in Settings to use cloud sync.",
+        );
       }
       return;
     }
@@ -1560,6 +1586,7 @@ function App() {
   useEffect(() => {
     if (
       bootState !== "ready" ||
+      !cloudSyncEnabled ||
       !syncService ||
       !cloudSession ||
       hasAutoSyncedOnLoadRef.current
@@ -1567,7 +1594,7 @@ function App() {
       return;
     hasAutoSyncedOnLoadRef.current = true;
     void runCloudSync({ interactiveAuth: false, automatic: true });
-  }, [bootState, cloudSession, syncService]);
+  }, [bootState, cloudSession, cloudSyncEnabled, syncService]);
 
   useEffect(() => {
     if (bootState !== "ready") return;
@@ -1600,7 +1627,7 @@ function App() {
     const previous = previousAutoSyncStateRef.current;
     const current = {
       autoSyncEnabled,
-      hasCloudSession: Boolean(cloudSession),
+      hasCloudSession: cloudSyncEnabled && Boolean(cloudSession),
     };
     previousAutoSyncStateRef.current = current;
 
@@ -1616,12 +1643,12 @@ function App() {
       return;
     }
 
-    if (!current.autoSyncEnabled || !current.hasCloudSession) {
+    if (!cloudSyncEnabled || !current.autoSyncEnabled || !current.hasCloudSession) {
       clearDebounceTimer();
       clearBackoffTimer();
       followUpSyncRequestedRef.current = false;
     }
-  }, [autoSyncEnabled, bootState, cloudSession, syncService]);
+  }, [autoSyncEnabled, bootState, cloudSession, cloudSyncEnabled, syncService]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -1630,7 +1657,9 @@ function App() {
         true,
         {
           autoSyncEnabled: autoSyncEnabledRef.current,
-          hasCloudSession: Boolean(cloudSessionRef.current),
+          hasCloudSession:
+            syncModeRef.current === "google_drive" &&
+            Boolean(cloudSessionRef.current),
         },
       );
       setIsOnline(true);
@@ -1667,7 +1696,7 @@ function App() {
   }, [cloudSession, syncService]);
 
   useEffect(() => {
-    if (!syncService || !cloudSession) return;
+    if (!cloudSyncEnabled || !syncService || !cloudSession) return;
 
     const intervalId = window.setInterval(() => {
       if (document.visibilityState !== "visible" || !navigator.onLine) return;
@@ -1675,7 +1704,7 @@ function App() {
     }, 5 * 60_000);
 
     return () => window.clearInterval(intervalId);
-  }, [cloudSession, syncService]);
+  }, [cloudSession, cloudSyncEnabled, syncService]);
 
   useEffect(() => {
     return () => {
@@ -1812,8 +1841,10 @@ function App() {
         onToggleAutoBackupEnabled={() =>
           setAutoBackupEnabled((value) => !value)
         }
-        cloudConfigured={Boolean(syncService)}
-        cloudSession={cloudSession}
+        syncMode={syncMode}
+        onSyncModeChange={(value) => setSyncMode(value)}
+        cloudConfigured={cloudConfigured}
+        cloudSession={activeCloudSession}
         lastSyncError={lastSyncError}
         hasPendingLocalChanges={hasPendingLocalChanges}
         isOnline={isOnline}
@@ -1854,7 +1885,9 @@ function App() {
           setQuickAddOverride(null);
         }}
         onConnectGoogleWelcome={() => {
-          setIsCloudConnectDialogOpen(true);
+          if (cloudConfigured) {
+            setIsCloudConnectDialogOpen(true);
+          }
         }}
         onCompleteWelcomeSetup={(presetId) =>
           handleCreateOnboardingWorkspace(presetId)
@@ -2075,6 +2108,8 @@ type WorkspaceShellProps = {
   onToggleShowCompletedToday: () => void;
   showSelectionButtons: boolean;
   onToggleShowSelectionButtons: () => void;
+  syncMode: SyncMode;
+  onSyncModeChange: (value: SyncMode) => void;
   weekStartsOn: WeekStartsOn;
   onWeekStartsOnChange: (value: WeekStartsOn) => void;
   use24HourTime: boolean;
@@ -2140,6 +2175,8 @@ function WorkspaceShell({
   onToggleShowCompletedToday,
   showSelectionButtons,
   onToggleShowSelectionButtons,
+  syncMode,
+  onSyncModeChange,
   weekStartsOn,
   onWeekStartsOnChange,
   use24HourTime,
@@ -2651,6 +2688,7 @@ function WorkspaceShell({
             ))}
           </div>
 
+          {cloudConfigured ? (
           <div
             data-onboarding-target="sidebar-cloud-sync"
             className={`mt-4 rounded-[18px] border border-[#ece7e3] bg-[var(--app-surface)] px-3 py-3 ${isSidebarCollapsed ? "hidden" : ""}`}
@@ -2690,6 +2728,7 @@ function WorkspaceShell({
               </button>
             ) : null}
           </div>
+          ) : null}
 
           <div
             className={`mt-3 flex items-center justify-center gap-3 px-2 pb-1 text-[11px] text-[#b3aaa2] ${isSidebarCollapsed ? "hidden" : ""}`}
@@ -2724,6 +2763,7 @@ function WorkspaceShell({
                   <Folder size={16} />
                   <span>Projects</span>
                 </button>
+                {cloudConfigured ? (
                 <button
                   onClick={onCloudSync}
                   disabled={isSyncing}
@@ -2738,6 +2778,7 @@ function WorkspaceShell({
                   )}
                   <span>{isSyncing ? "Syncing..." : "Sync"}</span>
                 </button>
+                ) : null}
                 <button
                   onClick={() => onOpenQuickAdd()}
                   className="hidden items-center gap-2 rounded-lg bg-[#dc4c3e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335] md:flex md:px-4"
@@ -2961,6 +3002,8 @@ function WorkspaceShell({
                   path="/settings"
                   element={
                     <SettingsPage
+                      syncMode={syncMode}
+                      onSyncModeChange={onSyncModeChange}
                       cloudConfigured={cloudConfigured}
                       cloudSession={cloudSession}
                       lastSyncError={lastSyncError}
@@ -6598,6 +6641,8 @@ function SettingsDisclosure({
 }
 
 function SettingsPage({
+  syncMode,
+  onSyncModeChange,
   cloudConfigured,
   cloudSession,
   lastSyncError,
@@ -6628,6 +6673,8 @@ function SettingsPage({
   lastCloudSyncAt,
   lastLocalBackupAt,
 }: {
+  syncMode: SyncMode;
+  onSyncModeChange: (value: SyncMode) => void;
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
@@ -6689,9 +6736,47 @@ function SettingsPage({
 
       <div className="space-y-4">
         <SettingsDisclosure
+          title="Sync mode"
+          description="Choose whether this browser uses Google Drive sync or stays local-only."
+          defaultOpen
+        >
+          <div className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => onSyncModeChange("google_drive")}
+                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
+                  syncMode === "google_drive"
+                    ? "bg-[#EE6A3C] text-white"
+                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[#FFFDFC]"
+                }`}
+              >
+                Google Drive
+              </button>
+              <button
+                type="button"
+                onClick={() => onSyncModeChange("local")}
+                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
+                  syncMode === "local"
+                    ? "bg-[#EE6A3C] text-white"
+                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[#FFFDFC]"
+                }`}
+              >
+                Local
+              </button>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-[#6D5C50]">
+              {syncMode === "google_drive"
+                ? "Google Drive keeps this workspace available across browsers and devices."
+                : "Local keeps everything on this browser only and hides Google Drive sync controls."}
+            </p>
+          </div>
+        </SettingsDisclosure>
+
+        {syncMode === "google_drive" ? (
+        <SettingsDisclosure
           title="Cloud sync"
           description="Connection status, sync account, and whether this browser should sync automatically."
-          defaultOpen
         >
           <div className="space-y-3">
             <InfoRow label="Status" value={cloudStatus.label} />
@@ -6759,10 +6844,13 @@ function SettingsPage({
             </label>
           </div>
         </SettingsDisclosure>
+        ) : null}
 
+        {syncMode === "local" ? (
         <SettingsDisclosure
           title="Backups and recovery"
           description="Save a browser snapshot, export JSON, or recover this browser's local workspace."
+          defaultOpen
         >
           <div className="space-y-3">
             <InfoRow
@@ -6836,6 +6924,7 @@ function SettingsPage({
             </label>
           </div>
         </SettingsDisclosure>
+        ) : null}
 
         <SettingsDisclosure
           title="Display and behavior"
@@ -11713,6 +11802,15 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
   const raw = getStoredItem(key);
   if (raw === null) return fallback;
   return raw === "true" || raw === "1" || raw === JSON.stringify(true);
+}
+
+function readStoredSyncMode(key: string, fallback: SyncMode): SyncMode {
+  if (typeof window === "undefined") return fallback;
+  const raw = getStoredItem(key);
+  if (raw === "google_drive" || raw === "local") {
+    return raw;
+  }
+  return fallback;
 }
 
 function readStoredWeekStartsOn(
