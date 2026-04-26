@@ -47,5 +47,3 @@ web/.gemini/
 web/.playwright-mcp/
 .artifacts/
 mobile-sync-snapshot.md
-.agent-telegram/
-__pycache__/
