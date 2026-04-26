@@ -29,7 +29,6 @@ Thumbs.db
 
 # Kotlin
 *.class
-__pycache__/
 
 # NDK
 obj/
@@ -47,6 +46,3 @@ web/.gemini/
 .playwright-mcp/
 web/.playwright-mcp/
 .artifacts/
-mobile-sync-snapshot.md
-.agent-mail/
-agent-mail*.log
