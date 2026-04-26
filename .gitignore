@@ -46,3 +46,4 @@ web/.gemini/
 .playwright-mcp/
 web/.playwright-mcp/
 .artifacts/
+mobile-sync-snapshot.md
