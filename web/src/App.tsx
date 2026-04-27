@@ -3247,9 +3247,12 @@ function PublicSiteLayout({
       <header className="border-b border-[#ece7e3] bg-[#fffdfb]">
         <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-4 px-5 py-4 md:px-8">
           <NavLink to="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#dc4c3e] text-base font-semibold text-white">
-              E
-            </div>
+            <img
+              src="/logo-mark.svg"
+              alt=""
+              className="h-11 w-11 rounded-2xl shadow-sm"
+              aria-hidden="true"
+            />
             <div>
               <p className="text-base font-semibold text-[#1e2d2f]">
                 Emberlist
