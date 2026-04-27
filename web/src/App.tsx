@@ -3244,9 +3244,9 @@ function PublicSiteLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#faf8f6] text-[#1e2d2f]">
-      <header className="border-b border-[#ece7e3] bg-[#fffdfb]">
-        <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-4 px-5 py-4 md:px-8">
+    <div className="min-h-screen bg-[var(--app-shell-bg)] text-[#221E1C]">
+      <header className="border-b border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_86%,white)]">
+        <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-4 px-5 py-4 md:px-8">
           <NavLink to="/" className="flex items-center gap-3">
             <img
               src="/logo-mark.svg"
@@ -3255,7 +3255,7 @@ function PublicSiteLayout({
               aria-hidden="true"
             />
             <div>
-              <p className="text-base font-semibold text-[#1e2d2f]">
+              <p className="text-base font-semibold text-[#221E1C]">
                 Emberlist
               </p>
               <p className="text-xs text-[#7a746d]">
@@ -3268,19 +3268,19 @@ function PublicSiteLayout({
               href={GITHUB_REPOSITORY_URL}
               target="_blank"
               rel="noreferrer"
-              className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9] md:inline-flex"
+              className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)] md:inline-flex"
             >
               GitHub
             </a>
             <NavLink
               to="/privacy"
-              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9]"
+              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)]"
             >
               Privacy
             </NavLink>
             <NavLink
               to="/terms"
-              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9]"
+              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)]"
             >
               Terms
             </NavLink>
@@ -3295,12 +3295,12 @@ function PublicSiteLayout({
       </header>
 
       <main className="px-5 py-10 md:px-8 md:py-14">
-        <div className="mx-auto w-full max-w-[1120px]">
-          <div className="max-w-[760px]">
+        <div className="mx-auto w-full max-w-[1240px]">
+          <div className="max-w-[820px]">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#b1775c]">
               {eyebrow}
             </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#1e2d2f] md:text-5xl">
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#221E1C] md:text-5xl">
               {title}
             </h1>
             <p className="mt-4 text-lg leading-8 text-[#6d5c50]">
@@ -3322,8 +3322,8 @@ function PublicSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-[#e1d5ca] bg-[var(--app-surface)] p-6 shadow-sm">
-      <h2 className="text-xl font-semibold text-[#1e2d2f]">{title}</h2>
+    <section className="rounded-[28px] border border-[var(--app-shell-border)] bg-[var(--app-surface)] p-6 shadow-sm">
+      <h2 className="text-xl font-semibold text-[#221E1C]">{title}</h2>
       <div className="mt-4 space-y-4 text-sm leading-7 text-[#4d4a45]">
         {children}
       </div>
@@ -3338,8 +3338,8 @@ function MarketingHomePage() {
       title="A fast task app that speaks in natural language and syncs through your own Google Drive."
       description="Capture work the way you think: dates, projects, priorities, repeats, reminders, and subtasks in one quick line. Emberlist stays usable offline first, then syncs privately when you connect Drive."
     >
-      <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="rounded-[32px] border border-[#e1d5ca] bg-[var(--app-surface)] p-6 shadow-sm md:p-8">
+      <div className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
+        <section className="rounded-[32px] border border-[var(--app-shell-border)] bg-[var(--app-surface)] p-6 shadow-sm md:p-8">
           <div className="flex flex-wrap gap-3">
             <NavLink
               to="/today"
@@ -3349,7 +3349,7 @@ function MarketingHomePage() {
             </NavLink>
             <NavLink
               to="/privacy"
-              className="rounded-full border border-[#e1d5ca] bg-[#fbf7f3] px-5 py-2.5 text-sm font-semibold text-[#1e2d2f] transition hover:bg-[#f4ede7]"
+              className="rounded-full border border-[var(--app-shell-border)] bg-[var(--app-surface-soft)] px-5 py-2.5 text-sm font-semibold text-[#221E1C] transition hover:bg-[var(--app-surface)]"
             >
               How sync works
             </NavLink>
@@ -3357,30 +3357,30 @@ function MarketingHomePage() {
               href={GITHUB_REPOSITORY_URL}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-[#e1d5ca] bg-[#fbf7f3] px-5 py-2.5 text-sm font-semibold text-[#1e2d2f] transition hover:bg-[#f4ede7]"
+              className="rounded-full border border-[var(--app-shell-border)] bg-[var(--app-surface-soft)] px-5 py-2.5 text-sm font-semibold text-[#221E1C] transition hover:bg-[var(--app-surface)]"
             >
               View source
             </a>
           </div>
 
-          <div className="mt-8 rounded-[26px] border border-[#eadbd0] bg-[#fffaf3] p-5">
+          <div className="mt-8 rounded-[26px] border border-[var(--app-shell-border)] bg-[var(--app-surface-muted)] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b1775c]">
               Quick add
             </p>
-            <p className="mt-3 rounded-2xl border border-[#eadbd0] bg-white px-4 py-3 text-lg font-semibold text-[#1e2d2f]">
+            <p className="mt-3 rounded-2xl border border-[var(--app-shell-border)] bg-[var(--app-surface)] px-4 py-3 text-lg font-semibold text-[#221E1C]">
               pay rent every month on the 1st at 9am p1 #bills
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold text-[#6d5c50]">
-              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+              <span className="rounded-full bg-[var(--app-surface)] px-3 py-1">
                 Monthly repeat
               </span>
-              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+              <span className="rounded-full bg-[var(--app-surface)] px-3 py-1">
                 Priority 1
               </span>
-              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+              <span className="rounded-full bg-[var(--app-surface)] px-3 py-1">
                 Bills project
               </span>
-              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+              <span className="rounded-full bg-[var(--app-surface)] px-3 py-1">
                 9 AM reminder
               </span>
             </div>
@@ -3405,7 +3405,7 @@ function MarketingHomePage() {
           </PublicSection>
         </div>
 
-        <div className="grid gap-5 lg:col-span-2 lg:grid-cols-3">
+        <div className="grid gap-5 lg:col-span-2 lg:grid-cols-4">
           <PublicSection title="Natural language capture">
             <p>
               Type tasks with dates, repeats, reminders, projects, priorities,
@@ -3420,7 +3420,7 @@ function MarketingHomePage() {
             </p>
           </PublicSection>
 
-          <PublicSection title="No custom task backend">
+          <PublicSection title="Private sync">
             <p>
               Emberlist does not sell task data or store your workspace on a
               proprietary server. Sync stays in storage you control.
