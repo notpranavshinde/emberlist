@@ -3230,6 +3230,7 @@ function WorkspaceShell({
 
 const LEGAL_LAST_UPDATED = "April 11, 2026";
 const SUPPORT_EMAIL = "support@emberlist.dev";
+const GITHUB_REPOSITORY_URL = "https://github.com/notpranavshinde/emberlist";
 
 function PublicSiteLayout({
   eyebrow,
@@ -3263,6 +3264,14 @@ function PublicSiteLayout({
             </div>
           </NavLink>
           <div className="flex items-center gap-2">
+            <a
+              href={GITHUB_REPOSITORY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9] md:inline-flex"
+            >
+              GitHub
+            </a>
             <NavLink
               to="/privacy"
               className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[#f5efe9]"
@@ -3344,6 +3353,14 @@ function MarketingHomePage() {
             >
               How sync works
             </NavLink>
+            <a
+              href={GITHUB_REPOSITORY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-[#e1d5ca] bg-[#fbf7f3] px-5 py-2.5 text-sm font-semibold text-[#1e2d2f] transition hover:bg-[#f4ede7]"
+            >
+              View source
+            </a>
           </div>
 
           <div className="mt-8 rounded-[26px] border border-[#eadbd0] bg-[#fffaf3] p-5">
@@ -3407,6 +3424,24 @@ function MarketingHomePage() {
             <p>
               Emberlist does not sell task data or store your workspace on a
               proprietary server. Sync stays in storage you control.
+            </p>
+          </PublicSection>
+
+          <PublicSection title="Open source">
+            <p>
+              Emberlist is open source, so you can inspect how local storage,
+              recurrence, and Google Drive sync work before trusting it with
+              your task system.
+            </p>
+            <p>
+              <a
+                href={GITHUB_REPOSITORY_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+              >
+                View the repository
+              </a>
             </p>
           </PublicSection>
         </div>
