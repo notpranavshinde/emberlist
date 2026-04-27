@@ -220,7 +220,7 @@ type FocusedTaskActionMode = "reschedule" | "move" | "priority" | "delete";
 let activeDraggedTaskId: string | null = null;
 
 function isPublicMarketingPath(pathname: string) {
-  return pathname === "/privacy" || pathname === "/terms";
+  return pathname === "/" || pathname === "/privacy" || pathname === "/terms";
 }
 
 function isWorkspaceEmpty(payload: SyncPayload | null): boolean {
@@ -3322,23 +3322,13 @@ function PublicSection({
 function MarketingHomePage() {
   return (
     <PublicSiteLayout
-      eyebrow="Task management"
-      title="Emberlist keeps your tasks local-first and syncs through your own Google Drive."
-      description="Emberlist is a personal task manager for people who want fast local task editing, recurring work, and cross-device sync without handing their whole workspace to a custom backend."
+      eyebrow="Local-first task management"
+      title="A fast task app that speaks in natural language and syncs through your own Google Drive."
+      description="Capture work the way you think: dates, projects, priorities, repeats, reminders, and subtasks in one quick line. Emberlist stays usable offline first, then syncs privately when you connect Drive."
     >
-      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-        <PublicSection title="What Emberlist does">
-          <p>
-            Emberlist stores your tasks locally on each device so the app stays
-            usable offline. When you connect Google Drive, Emberlist syncs the
-            workspace through your personal Google Drive app-data area.
-          </p>
-          <p>
-            The app is built for personal task planning: projects, sections,
-            reminders, recurrence, subtasks, quick capture, and keyboard-heavy
-            desktop workflows.
-          </p>
-          <div className="flex flex-wrap gap-3 pt-2">
+      <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="rounded-[32px] border border-[#e1d5ca] bg-[var(--app-surface)] p-6 shadow-sm md:p-8">
+          <div className="flex flex-wrap gap-3">
             <NavLink
               to="/today"
               className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335]"
@@ -3349,70 +3339,74 @@ function MarketingHomePage() {
               to="/privacy"
               className="rounded-full border border-[#e1d5ca] bg-[#fbf7f3] px-5 py-2.5 text-sm font-semibold text-[#1e2d2f] transition hover:bg-[#f4ede7]"
             >
-              Read privacy policy
+              How sync works
             </NavLink>
           </div>
-        </PublicSection>
 
-        <PublicSection title="How sync works">
-          <ul className="space-y-3">
-            <li>
-              1. Emberlist writes your workspace into local browser or device
-              storage first.
-            </li>
-            <li>
-              2. If you connect Google Drive, Emberlist syncs an app-specific
-              file in your Drive appData folder.
-            </li>
-            <li>
-              3. Emberlist does not browse or manage your normal Drive files.
-            </li>
-            <li>
-              4. You can disconnect Google Drive and continue using the app
-              locally.
-            </li>
-          </ul>
-        </PublicSection>
-
-        <PublicSection title="Data handling summary">
-          <ul className="space-y-3">
-            <li>
-              Google account data used: basic profile identity needed to show
-              which account is connected.
-            </li>
-            <li>
-              Google Drive data used: only Emberlist&apos;s own sync file in the
-              appData folder.
-            </li>
-            <li>
-              Data shared or sold: Emberlist does not sell user task data.
-            </li>
-            <li>Support contact: {SUPPORT_EMAIL}</li>
-          </ul>
-        </PublicSection>
-
-        <PublicSection title="Useful links">
-          <div className="flex flex-col gap-3">
-            <NavLink
-              to="/terms"
-              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
-            >
-              Terms of service
-            </NavLink>
-            <NavLink
-              to="/privacy"
-              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
-            >
-              Privacy policy
-            </NavLink>
-            <NavLink
-              to="/today"
-              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
-            >
-              Open the app
-            </NavLink>
+          <div className="mt-8 rounded-[26px] border border-[#eadbd0] bg-[#fffaf3] p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#b1775c]">
+              Quick add
+            </p>
+            <p className="mt-3 rounded-2xl border border-[#eadbd0] bg-white px-4 py-3 text-lg font-semibold text-[#1e2d2f]">
+              pay rent every month on the 1st at 9am p1 #bills
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2 text-sm font-semibold text-[#6d5c50]">
+              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+                Monthly repeat
+              </span>
+              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+                Priority 1
+              </span>
+              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+                Bills project
+              </span>
+              <span className="rounded-full bg-[#f5efe9] px-3 py-1">
+                9 AM reminder
+              </span>
+            </div>
           </div>
-        </PublicSection>
+        </section>
+
+        <div className="grid gap-5">
+          <PublicSection title="Built for real task maintenance">
+            <p>
+              Emberlist handles recurring work, overdue cleanup, subtasks,
+              projects, sections, reminders, deadlines, bulk actions, and
+              keyboard-first workflows without making capture feel heavy.
+            </p>
+          </PublicSection>
+
+          <PublicSection title="Private by default">
+            <p>
+              Your workspace is written locally first. If you enable Google
+              Drive, Emberlist syncs only its own app-specific file in your
+              Drive appData folder.
+            </p>
+          </PublicSection>
+        </div>
+
+        <div className="grid gap-5 lg:col-span-2 lg:grid-cols-3">
+          <PublicSection title="Natural language capture">
+            <p>
+              Type tasks with dates, repeats, reminders, projects, priorities,
+              and subtasks in the same place you edit them.
+            </p>
+          </PublicSection>
+
+          <PublicSection title="Offline-first workspace">
+            <p>
+              Keep planning even when the network is unreliable. Sync is a
+              layer on top of local data, not the thing holding the app up.
+            </p>
+          </PublicSection>
+
+          <PublicSection title="No custom task backend">
+            <p>
+              Emberlist does not sell task data or store your workspace on a
+              proprietary server. Sync stays in storage you control.
+            </p>
+          </PublicSection>
+        </div>
       </div>
     </PublicSiteLayout>
   );
