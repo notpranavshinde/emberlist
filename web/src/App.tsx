@@ -3249,7 +3249,7 @@ function PublicSiteLayout({
         <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-4 px-5 py-4 md:px-8">
           <NavLink to="/" className="flex items-center gap-3">
             <img
-              src="/logo-mark.svg"
+              src="/logo.svg"
               alt=""
               className="h-11 w-11 rounded-2xl shadow-sm"
               aria-hidden="true"
