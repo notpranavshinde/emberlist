@@ -2263,8 +2263,8 @@ function WorkspaceShell({
   );
 
   useEffect(() => {
-    document.title = `${title} · Emberlist`;
-  }, [title]);
+    updateRouteMetadata(location.pathname, title);
+  }, [location.pathname, title]);
 
   useEffect(() => {
     if (previousPathRef.current !== location.key) {
@@ -11605,6 +11605,61 @@ function getRouteTitle(pathname: string, payload: SyncPayload): string {
     return getTaskById(payload, taskId)?.title ?? "Task";
   }
   return "Workspace";
+}
+
+function getRouteDescription(pathname: string): string {
+  if (pathname === "/") {
+    return "Emberlist is a local-first task manager with natural-language quick add, recurring tasks, reminders, subtasks, and optional Google Drive sync.";
+  }
+  if (pathname === "/privacy") {
+    return "Read how Emberlist stores local task data and uses Google Drive appData only when you enable sync.";
+  }
+  if (pathname === "/terms") {
+    return "Terms of service for using Emberlist, a local-first task management app with optional Google Drive sync.";
+  }
+  if (pathname.startsWith("/today")) {
+    return "Open Emberlist Today to review overdue work, due tasks, recurring tasks, and completed items.";
+  }
+  if (pathname.startsWith("/upcoming")) {
+    return "Review upcoming Emberlist tasks, future dates, recurring work, and deadlines.";
+  }
+  return "Open Emberlist to manage projects, tasks, subtasks, reminders, recurrence, and local-first Google Drive sync.";
+}
+
+function updateRouteMetadata(pathname: string, title: string) {
+  if (typeof document === "undefined") return;
+
+  const description = getRouteDescription(pathname);
+  const canonicalPath =
+    pathname === "/" || pathname === "/privacy" || pathname === "/terms"
+      ? pathname
+      : "/today";
+  const canonicalUrl = `https://emberlist.dev${canonicalPath}`;
+
+  document.title =
+    pathname === "/"
+      ? "Emberlist · Local-first task management"
+      : `${title} · Emberlist`;
+
+  let descriptionTag = document.querySelector<HTMLMetaElement>(
+    'meta[name="description"]',
+  );
+  if (!descriptionTag) {
+    descriptionTag = document.createElement("meta");
+    descriptionTag.name = "description";
+    document.head.appendChild(descriptionTag);
+  }
+  descriptionTag.content = description;
+
+  let canonicalTag = document.querySelector<HTMLLinkElement>(
+    'link[rel="canonical"]',
+  );
+  if (!canonicalTag) {
+    canonicalTag = document.createElement("link");
+    canonicalTag.rel = "canonical";
+    document.head.appendChild(canonicalTag);
+  }
+  canonicalTag.href = canonicalUrl;
 }
 
 function formatTaskDate(timestamp: number, allDay: boolean): string {
