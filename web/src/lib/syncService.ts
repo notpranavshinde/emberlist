@@ -53,7 +53,7 @@ export function createCloudSyncService({
     authMode: 'backend' | 'legacy_spa';
 }): CloudSyncService | null {
     if (authMode === 'backend') {
-        return new BackendDriveSyncService();
+        return new BackendDriveSyncService(clientId ? new DriveSyncService(clientId) : null);
     }
 
     return clientId ? new DriveSyncService(clientId) : null;
@@ -650,12 +650,26 @@ export class BackendDriveSyncService implements CloudSyncService {
     private session: CloudSession | null = null;
     private readonly syncEngine = new SyncEngine();
     private syncInFlight: Promise<SyncPayload> | null = null;
+    private backendUnavailable = false;
+    private readonly fallbackService: CloudSyncService | null;
+
+    constructor(fallbackService: CloudSyncService | null = null) {
+        this.fallbackService = fallbackService;
+    }
 
     async init() {
         await this.refreshSession();
+        if (this.backendUnavailable && this.fallbackService) {
+            await this.fallbackService.init();
+        }
     }
 
     async login(interactive: boolean = true) {
+        if (this.backendUnavailable && this.fallbackService) {
+            const session = await this.fallbackService.login(interactive);
+            this.session = session;
+            return session;
+        }
         if (this.session) {
             return this.session;
         }
@@ -689,11 +703,19 @@ export class BackendDriveSyncService implements CloudSyncService {
     }
 
     async disconnect() {
+        if (this.backendUnavailable && this.fallbackService) {
+            await this.fallbackService.disconnect();
+            this.session = null;
+            return;
+        }
         await this.backendFetch('/api/auth/google/logout', { method: 'POST' });
         this.session = null;
     }
 
     getSession(): CloudSession | null {
+        if (this.backendUnavailable && this.fallbackService) {
+            return this.fallbackService.getSession();
+        }
         return this.session;
     }
 
@@ -702,6 +724,11 @@ export class BackendDriveSyncService implements CloudSyncService {
             return { handled: false };
         }
         const session = await this.refreshSession();
+        if (this.backendUnavailable && this.fallbackService) {
+            const result = await this.fallbackService.completeRedirectLoginIfPresent();
+            this.session = this.fallbackService.getSession();
+            return result;
+        }
         if (!session) {
             return { handled: false };
         }
@@ -709,21 +736,37 @@ export class BackendDriveSyncService implements CloudSyncService {
     }
 
     setPreferredLoginHint(email: string | null) {
+        if (this.backendUnavailable && this.fallbackService) {
+            this.fallbackService.setPreferredLoginHint(email);
+            return;
+        }
         void email;
         // Login hints apply only to the legacy in-browser GIS flow. The backend
         // flow relies on Google's account chooser during the full-page redirect.
     }
 
     hasActiveSession(): boolean {
+        if (this.backendUnavailable && this.fallbackService) {
+            return this.fallbackService.hasActiveSession();
+        }
         return Boolean(this.session);
     }
 
     async resetRemoteSyncFile() {
+        if (this.backendUnavailable && this.fallbackService) {
+            await this.fallbackService.resetRemoteSyncFile();
+            return;
+        }
         await this.login(true);
         await this.backendFetch('/api/drive/sync-file', { method: 'DELETE' });
     }
 
     private async performSync(options: SyncOptions = {}) {
+        if (this.backendUnavailable && this.fallbackService) {
+            const payload = await this.fallbackService.sync(options);
+            this.session = this.fallbackService.getSession();
+            return payload;
+        }
         const interactiveAuth = options.interactiveAuth ?? true;
         await this.login(interactiveAuth);
 
@@ -767,12 +810,15 @@ export class BackendDriveSyncService implements CloudSyncService {
         try {
             const response = await this.backendFetch('/api/auth/session', {}, false);
             if (!response.ok) {
+                this.backendUnavailable = true;
                 return null;
             }
             const body = (await response.json()) as BackendSessionResponse;
+            this.backendUnavailable = false;
             this.session = body.authenticated ? body.session : null;
             return this.session;
         } catch {
+            this.backendUnavailable = true;
             this.session = null;
             return null;
         }
