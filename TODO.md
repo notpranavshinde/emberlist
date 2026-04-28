@@ -180,9 +180,9 @@
 ## Auth Hardening Backlog
 
 ### Do Not Block Friend Testing
-- [ ] Add a public privacy policy URL to Google Auth Platform branding.
-- [ ] Add a public terms of service URL to Google Auth Platform branding.
-- [ ] Add a production consent-screen logo for Emberlist.
+- [x] Add a public privacy policy URL to Google Auth Platform branding.
+- [x] Add a public terms of service URL to Google Auth Platform branding.
+- [x] Add a production consent-screen logo for Emberlist.
 
 ### Security / OAuth Follow-Up
 - [ ] Audit the web Google Drive auth flow against Google's current secure-flow guidance and decide whether to keep the current GIS token flow or move to an authorization-code + backend/BFF model later.
