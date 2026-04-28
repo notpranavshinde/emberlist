@@ -185,12 +185,8 @@
 - [x] Add a production consent-screen logo for Emberlist.
 
 ### Security / OAuth Follow-Up
-- [x] Audit the web Google Drive auth flow against Google's current secure-flow guidance and decide whether to keep the current GIS token flow or move to an authorization-code + backend/BFF model later.
-- [x] Build a backend-backed Google auth flow for web so Emberlist can exchange auth codes server-side, store refresh tokens securely, and restore sync sessions without browser popups on reload.
-- [x] Audit Android Google Drive auth against Google's modern OAuth guidance and plan a migration away from legacy `GoogleSignIn` APIs if needed.
-- [x] Review whether Cross-Account Protection is worth adding for the published OAuth app, and document the decision.
-- [x] Review incremental-authorization support for Google Drive sync and document whether Emberlist should stay single-consent or adopt staged scope requests later.
-
-### Deployment Activation
-- [ ] Add `https://emberlist.dev/api/auth/google/callback` to the Google web OAuth client's authorized redirect URIs.
-- [ ] Set Vercel env vars for the backend auth flow: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET`.
+- [ ] Audit the web Google Drive auth flow against Google's current secure-flow guidance and decide whether to keep the current GIS token flow or move to an authorization-code + backend/BFF model later.
+- [ ] Build a backend-backed Google auth flow for web so Emberlist can exchange auth codes server-side, store refresh tokens securely, and restore sync sessions without browser popups on reload.
+- [ ] Audit Android Google Drive auth against Google's modern OAuth guidance and plan a migration away from legacy `GoogleSignIn` APIs if needed.
+- [ ] Review whether Cross-Account Protection is worth adding for the published OAuth app, and document the decision.
+- [ ] Review incremental-authorization support for Google Drive sync and document whether Emberlist should stay single-consent or adopt staged scope requests later.

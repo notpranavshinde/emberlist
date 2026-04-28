@@ -25,8 +25,6 @@ form-action 'self';
 object-src 'none';
 ```
 
-The default production auth path now calls Google only from Vercel functions. The Google origins remain in CSP so the explicit `legacy_spa` fallback and Google redirect pages can still operate during troubleshooting.
-
 ## Rollout
 1. Run as `Content-Security-Policy-Report-Only` from HTTP headers.
 2. Triage/allowlist legitimate violations.

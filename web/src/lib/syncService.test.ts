@@ -3,8 +3,6 @@ import type { SyncPayload } from '../types/sync';
 import { createEmptySyncPayload } from './syncPayload';
 import { db } from './db';
 import {
-  BackendDriveSyncService,
-  buildBackendAuthStartUrl,
   buildGoogleRedirectAuthUrl,
   DriveSyncService,
   GOOGLE_AUTH_TIMEOUT_MS,
@@ -24,10 +22,6 @@ type TestableDriveSyncService = {
     interactiveAuth?: boolean
   ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
   uploadPayload: (fileId: string | null, payload: SyncPayload, interactiveAuth: boolean) => Promise<void>;
-};
-
-type TestableBackendDriveSyncService = {
-  session: { email: string | null; name: string | null } | null;
 };
 
 function createPayload(title: string = 'Local'): SyncPayload {
@@ -399,127 +393,6 @@ describe('DriveSyncService', () => {
       email: 'pranav@example.com',
       name: 'Pranav',
     });
-
-    vi.unstubAllGlobals();
-  });
-});
-
-describe('BackendDriveSyncService', () => {
-  it('builds the backend authorization-code start URL with the current app route', () => {
-    const url = new URL(
-      buildBackendAuthStartUrl('/app?from=test#/today'),
-      'https://emberlist.dev',
-    );
-
-    expect(url.pathname).toBe('/api/auth/google/start');
-    expect(url.searchParams.get('returnTo')).toBe('/app?from=test#/today');
-  });
-
-  it('uses the backend session endpoint without loading Google Identity Services', async () => {
-    const service = new BackendDriveSyncService();
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      authenticated: true,
-      session: { email: 'pranav@example.com', name: 'Pranav' },
-    }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await service.init();
-
-    expect(service.getSession()).toEqual({
-      email: 'pranav@example.com',
-      name: 'Pranav',
-    });
-    expect(fetchMock).toHaveBeenCalledWith('/api/auth/session', expect.objectContaining({
-      credentials: 'same-origin',
-    }));
-
-    vi.unstubAllGlobals();
-  });
-
-  it('merges backend remote payloads and uploads the reconciled payload', async () => {
-    const service = new BackendDriveSyncService();
-    (service as unknown as TestableBackendDriveSyncService).session = {
-      email: 'pranav@example.com',
-      name: 'Pranav',
-    };
-    const localPayload = createPayload('Local');
-    const remotePayload = createPayload('Remote');
-    remotePayload.tasks[0] = { ...remotePayload.tasks[0], updatedAt: 20 };
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (input === '/api/drive/sync-file' && init?.method === 'PUT') {
-        return new Response(JSON.stringify({ ok: true }), { status: 200 });
-      }
-      if (input === '/api/drive/sync-file') {
-        return new Response(JSON.stringify({ fileId: 'file-1', payload: remotePayload }), { status: 200 });
-      }
-      throw new Error(`Unexpected fetch ${String(input)}`);
-    });
-    vi.stubGlobal('fetch', fetchMock);
-    const getPayloadSpy = vi.spyOn(db, 'getPayload').mockResolvedValue(localPayload);
-    const savePayloadSpy = vi.spyOn(db, 'savePayload').mockResolvedValue(undefined);
-
-    const result = await service.sync({ interactiveAuth: false });
-
-    expect(result.tasks[0].title).toBe('Remote');
-    expect(fetchMock).toHaveBeenCalledWith('/api/drive/sync-file', expect.objectContaining({
-      method: 'PUT',
-      credentials: 'same-origin',
-      body: JSON.stringify(result),
-    }));
-    expect(savePayloadSpy).not.toHaveBeenCalled();
-
-    getPayloadSpy.mockRestore();
-    savePayloadSpy.mockRestore();
-    vi.unstubAllGlobals();
-  });
-
-  it('clears the backend session on disconnect', async () => {
-    const service = new BackendDriveSyncService();
-    (service as unknown as TestableBackendDriveSyncService).session = {
-      email: 'pranav@example.com',
-      name: 'Pranav',
-    };
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
-
-    await service.disconnect();
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/auth/google/logout', expect.objectContaining({
-      method: 'POST',
-      credentials: 'same-origin',
-    }));
-    expect(service.getSession()).toBeNull();
-
-    vi.unstubAllGlobals();
-  });
-
-  it('falls back to the legacy service when backend auth is not configured yet', async () => {
-    const fallbackSession = { email: 'fallback@example.com', name: 'Fallback' };
-    const fallbackPayload = createPayload('Fallback payload');
-    const fallback = {
-      init: vi.fn(async () => undefined),
-      login: vi.fn(async () => fallbackSession),
-      sync: vi.fn(async () => fallbackPayload),
-      disconnect: vi.fn(async () => undefined),
-      getSession: vi.fn(() => fallbackSession),
-      completeRedirectLoginIfPresent: vi.fn(async () => ({ handled: false })),
-      setPreferredLoginHint: vi.fn(),
-      hasActiveSession: vi.fn(() => true),
-      resetRemoteSyncFile: vi.fn(async () => undefined),
-    };
-    const service = new BackendDriveSyncService(fallback);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
-      error: 'server_error',
-      message: 'Missing server auth configuration: GOOGLE_CLIENT_SECRET',
-    }), { status: 500 })));
-
-    await service.init();
-    const result = await service.sync({ interactiveAuth: false });
-
-    expect(fallback.init).toHaveBeenCalled();
-    expect(fallback.sync).toHaveBeenCalledWith({ interactiveAuth: false });
-    expect(result).toBe(fallbackPayload);
-    expect(service.getSession()).toBe(fallbackSession);
 
     vi.unstubAllGlobals();
   });

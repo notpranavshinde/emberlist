@@ -117,9 +117,8 @@ import {
 } from "./lib/taskEditing";
 import { normalizeImportedPayload } from "./lib/syncPayload";
 import {
-  createCloudSyncService,
+  DriveSyncService,
   type CloudSession,
-  type CloudSyncService,
   type RedirectAuthCompletion,
 } from "./lib/syncService";
 import { SyncEngine } from "./lib/syncEngine";
@@ -187,10 +186,6 @@ import type {
 
 const syncEngine = new SyncEngine();
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
-const GOOGLE_AUTH_MODE =
-  import.meta.env.VITE_GOOGLE_AUTH_MODE?.trim() === "legacy_spa"
-    ? "legacy_spa"
-    : "backend";
 const FIRST_RUN_WELCOME_DISMISSED_KEY = "emberlist.firstRunWelcomeDismissed";
 const FIRST_RUN_ONBOARDING_STATE_KEY = "emberlist.firstRunOnboardingState";
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
@@ -354,12 +349,8 @@ function App() {
       }
     >(),
   );
-  const syncService = useMemo<CloudSyncService | null>(
-    () =>
-      createCloudSyncService({
-        clientId: GOOGLE_CLIENT_ID,
-        authMode: GOOGLE_AUTH_MODE,
-      }),
+  const syncService = useMemo(
+    () => (GOOGLE_CLIENT_ID ? new DriveSyncService(GOOGLE_CLIENT_ID) : null),
     [],
   );
   const cloudSyncEnabled = syncMode === "google_drive";
@@ -368,17 +359,9 @@ function App() {
 
   useEffect(() => {
     if (!syncService) return;
-    void syncService
-      .init()
-      .then(() => {
-        const session = syncService.getSession();
-        if (session) {
-          setCloudSession(session);
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to pre-initialize cloud sync", error);
-      });
+    void syncService.init().catch((error) => {
+      console.warn("Failed to pre-initialize Google Identity Services", error);
+    });
   }, [syncService]);
 
   useEffect(() => {
