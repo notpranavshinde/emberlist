@@ -33,6 +33,36 @@ export type SyncOptions = {
     interactiveAuth?: boolean;
 };
 
+export type CloudSyncService = {
+    init: () => Promise<void>;
+    login: (interactive?: boolean) => Promise<CloudSession>;
+    sync: (options?: SyncOptions) => Promise<SyncPayload>;
+    disconnect: () => Promise<void>;
+    getSession: () => CloudSession | null;
+    completeRedirectLoginIfPresent: () => Promise<RedirectAuthCompletion>;
+    setPreferredLoginHint: (email: string | null) => void;
+    hasActiveSession: () => boolean;
+    resetRemoteSyncFile: () => Promise<void>;
+};
+
+export function createCloudSyncService({
+    clientId,
+    authMode,
+}: {
+    clientId: string;
+    authMode: 'backend' | 'legacy_spa';
+}): CloudSyncService | null {
+    if (authMode === 'backend') {
+        return new BackendDriveSyncService(clientId ? new DriveSyncService(clientId) : null);
+    }
+
+    return clientId ? new DriveSyncService(clientId) : null;
+}
+
+export function buildBackendAuthStartUrl(returnTo: string): string {
+    return `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
 export function resolveGoogleAuthPrompt(interactive: boolean, hasAccessToken: boolean): '' | 'consent' {
     return interactive && !hasAccessToken ? 'consent' : '';
 }
@@ -603,6 +633,250 @@ export class DriveSyncService {
         });
 
         return DriveSyncService.gisScriptPromise;
+    }
+}
+
+type BackendRemotePayloadResponse = {
+    fileId: string | null;
+    payload: unknown;
+};
+
+type BackendSessionResponse = {
+    authenticated: boolean;
+    session: CloudSession | null;
+};
+
+export class BackendDriveSyncService implements CloudSyncService {
+    private session: CloudSession | null = null;
+    private readonly syncEngine = new SyncEngine();
+    private syncInFlight: Promise<SyncPayload> | null = null;
+    private backendUnavailable = false;
+    private readonly fallbackService: CloudSyncService | null;
+
+    constructor(fallbackService: CloudSyncService | null = null) {
+        this.fallbackService = fallbackService;
+    }
+
+    async init() {
+        await this.refreshSession();
+        if (this.backendUnavailable && this.fallbackService) {
+            await this.fallbackService.init();
+        }
+    }
+
+    async login(interactive: boolean = true) {
+        if (this.backendUnavailable && this.fallbackService) {
+            const session = await this.fallbackService.login(interactive);
+            this.session = session;
+            return session;
+        }
+        if (this.session) {
+            return this.session;
+        }
+        const session = await this.refreshSession();
+        if (session) {
+            return session;
+        }
+        if (!interactive) {
+            throw new Error('Google Drive sign-in is required in this browser.');
+        }
+
+        const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash || '#/today'}`;
+        window.location.assign(buildBackendAuthStartUrl(returnTo));
+        return new Promise<CloudSession>(() => {});
+    }
+
+    async sync(options: SyncOptions = {}) {
+        if (this.syncInFlight) {
+            return this.syncInFlight;
+        }
+
+        const syncPromise = this.performSync(options);
+        this.syncInFlight = syncPromise;
+        try {
+            return await syncPromise;
+        } finally {
+            if (this.syncInFlight === syncPromise) {
+                this.syncInFlight = null;
+            }
+        }
+    }
+
+    async disconnect() {
+        if (this.backendUnavailable && this.fallbackService) {
+            await this.fallbackService.disconnect();
+            this.session = null;
+            return;
+        }
+        await this.backendFetch('/api/auth/google/logout', { method: 'POST' });
+        this.session = null;
+    }
+
+    getSession(): CloudSession | null {
+        if (this.backendUnavailable && this.fallbackService) {
+            return this.fallbackService.getSession();
+        }
+        return this.session;
+    }
+
+    async completeRedirectLoginIfPresent(): Promise<RedirectAuthCompletion> {
+        if (!this.consumeBackendAuthCompletionMarker()) {
+            return { handled: false };
+        }
+        const session = await this.refreshSession();
+        if (this.backendUnavailable && this.fallbackService) {
+            const result = await this.fallbackService.completeRedirectLoginIfPresent();
+            this.session = this.fallbackService.getSession();
+            return result;
+        }
+        if (!session) {
+            return { handled: false };
+        }
+        return { handled: true, session };
+    }
+
+    setPreferredLoginHint(email: string | null) {
+        if (this.backendUnavailable && this.fallbackService) {
+            this.fallbackService.setPreferredLoginHint(email);
+            return;
+        }
+        void email;
+        // Login hints apply only to the legacy in-browser GIS flow. The backend
+        // flow relies on Google's account chooser during the full-page redirect.
+    }
+
+    hasActiveSession(): boolean {
+        if (this.backendUnavailable && this.fallbackService) {
+            return this.fallbackService.hasActiveSession();
+        }
+        return Boolean(this.session);
+    }
+
+    async resetRemoteSyncFile() {
+        if (this.backendUnavailable && this.fallbackService) {
+            await this.fallbackService.resetRemoteSyncFile();
+            return;
+        }
+        await this.login(true);
+        await this.backendFetch('/api/drive/sync-file', { method: 'DELETE' });
+    }
+
+    private async performSync(options: SyncOptions = {}) {
+        if (this.backendUnavailable && this.fallbackService) {
+            const payload = await this.fallbackService.sync(options);
+            this.session = this.fallbackService.getSession();
+            return payload;
+        }
+        const interactiveAuth = options.interactiveAuth ?? true;
+        await this.login(interactiveAuth);
+
+        const response = await this.backendFetch('/api/drive/sync-file');
+        const remote = (await response.json()) as BackendRemotePayloadResponse;
+        let remotePayload: SyncPayload | null = null;
+
+        if (remote.payload) {
+            try {
+                remotePayload = assertSupportedSyncPayload(
+                    ensureSyncPayload(remote.payload, 'Cloud sync file'),
+                    'Cloud sync file'
+                );
+            } catch (error) {
+                if (error instanceof Error && error.message.includes('newer app version')) {
+                    throw error;
+                }
+                if (error instanceof Error && error.message.startsWith('Cloud sync file')) {
+                    throw new Error(
+                        'Cloud sync file is invalid or corrupted. Local web data was not changed. Reset cloud sync and sync again to recreate it.'
+                    );
+                }
+                throw error;
+            }
+        }
+
+        const localPayload = await db.getPayload();
+        const finalPayload = remotePayload
+            ? this.syncEngine.mergePayloads(localPayload, remotePayload)
+            : localPayload;
+
+        await this.backendFetch('/api/drive/sync-file', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(finalPayload),
+        });
+        return finalPayload;
+    }
+
+    private async refreshSession(): Promise<CloudSession | null> {
+        try {
+            const response = await this.backendFetch('/api/auth/session', {}, false);
+            if (!response.ok) {
+                this.backendUnavailable = true;
+                return null;
+            }
+            const body = (await response.json()) as BackendSessionResponse;
+            this.backendUnavailable = false;
+            this.session = body.authenticated ? body.session : null;
+            return this.session;
+        } catch {
+            this.backendUnavailable = true;
+            this.session = null;
+            return null;
+        }
+    }
+
+    private async backendFetch(
+        input: string,
+        init: RequestInit = {},
+        requireOk: boolean = true
+    ): Promise<Response> {
+        const response = await fetch(input, {
+            ...init,
+            credentials: 'same-origin',
+            headers: {
+                ...init.headers,
+            },
+        });
+        if (requireOk && !response.ok) {
+            throw new Error(await this.buildBackendError(response));
+        }
+        return response;
+    }
+
+    private async buildBackendError(response: Response): Promise<string> {
+        const fallback = `Cloud sync request failed (${response.status})`;
+        try {
+            const body = await response.json() as { message?: string };
+            return body.message ? `${fallback} - ${body.message}` : fallback;
+        } catch {
+            return fallback;
+        }
+    }
+
+    private consumeBackendAuthCompletionMarker(): boolean {
+        const hash = window.location.hash || '';
+        const hashWithoutPrefix = hash.startsWith('#') ? hash.slice(1) : hash;
+        const [hashPath, hashQuery = ''] = hashWithoutPrefix.split('?');
+        const hashParams = new URLSearchParams(hashQuery);
+        const searchParams = new URLSearchParams(window.location.search);
+        const hasMarker =
+            hashParams.get('googleAuth') === 'connected' ||
+            searchParams.get('googleAuth') === 'connected';
+
+        if (!hasMarker) return false;
+
+        hashParams.delete('googleAuth');
+        searchParams.delete('googleAuth');
+        const nextHashQuery = hashParams.toString();
+        const nextHash = hashPath
+            ? `#${hashPath}${nextHashQuery ? `?${nextHashQuery}` : ''}`
+            : '';
+        const nextSearch = searchParams.toString();
+        window.history.replaceState(
+            null,
+            '',
+            `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${nextHash}`,
+        );
+        return true;
     }
 }
 
