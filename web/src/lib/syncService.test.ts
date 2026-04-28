@@ -493,33 +493,17 @@ describe('BackendDriveSyncService', () => {
     vi.unstubAllGlobals();
   });
 
-  it('falls back to the legacy service when backend auth is not configured yet', async () => {
-    const fallbackSession = { email: 'fallback@example.com', name: 'Fallback' };
-    const fallbackPayload = createPayload('Fallback payload');
-    const fallback = {
-      init: vi.fn(async () => undefined),
-      login: vi.fn(async () => fallbackSession),
-      sync: vi.fn(async () => fallbackPayload),
-      disconnect: vi.fn(async () => undefined),
-      getSession: vi.fn(() => fallbackSession),
-      completeRedirectLoginIfPresent: vi.fn(async () => ({ handled: false })),
-      setPreferredLoginHint: vi.fn(),
-      hasActiveSession: vi.fn(() => true),
-      resetRemoteSyncFile: vi.fn(async () => undefined),
-    };
-    const service = new BackendDriveSyncService(fallback);
+  it('fails clearly instead of falling back to a mismatched legacy redirect when backend auth is not configured', async () => {
+    const service = new BackendDriveSyncService();
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
       error: 'server_error',
       message: 'Missing server auth configuration: GOOGLE_CLIENT_SECRET',
     }), { status: 500 })));
 
     await service.init();
-    const result = await service.sync({ interactiveAuth: false });
-
-    expect(fallback.init).toHaveBeenCalled();
-    expect(fallback.sync).toHaveBeenCalledWith({ interactiveAuth: false });
-    expect(result).toBe(fallbackPayload);
-    expect(service.getSession()).toBe(fallbackSession);
+    await expect(service.sync({ interactiveAuth: false })).rejects.toThrow(
+      'Google Drive sign-in is required in this browser.',
+    );
 
     vi.unstubAllGlobals();
   });
