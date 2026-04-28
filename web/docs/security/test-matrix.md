@@ -6,9 +6,11 @@
    - prototype-pollution style objects
    - unexpected enum values and types
 2. **OAuth/sync resilience**
-   - token refresh failures
+   - backend refresh-token failures
+   - authorization callback state mismatch
    - insufficient permissions handling
    - network and timeout behavior
+   - legacy SPA auth fallback remains opt-in only
 3. **Storage safety**
    - local cache reset behavior
    - stale/local backup corruption handling

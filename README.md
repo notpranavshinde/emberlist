@@ -186,9 +186,11 @@ The web client lives in [`web/`](./web).
 1. Install dependencies:
    - `cd web`
    - `npm install`
-2. Configure the web OAuth client:
+2. Configure the web OAuth client for local development:
    - create `web/.env.local`
-   - add `VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com`
+   - add `GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com`
+   - add `GOOGLE_CLIENT_SECRET=your-web-oauth-client-secret`
+   - add `EMBERLIST_AUTH_SECRET=at-least-32-random-bytes`
 3. Start the dev server:
    - `npm run dev`
 4. Build for production:
@@ -197,7 +199,9 @@ The web client lives in [`web/`](./web).
 Example env file:
 
 ```bash
-VITE_GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-web-oauth-client-secret
+EMBERLIST_AUTH_SECRET=replace-with-32-random-bytes-or-more
 ```
 
 ### Build variants
@@ -241,24 +245,25 @@ Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/dat
   - Configure the corresponding web OAuth client in the same Google Cloud project.
   - Use the same Google Cloud project and Drive scope as the web client.
   - Keep Android and web pointed at the same `SyncPayload` contract and the same Drive appData file.
-  - For the web client, configure `VITE_GOOGLE_CLIENT_ID` with the web OAuth client ID.
-  - Add every browser origin you will use to the web OAuth client’s **Authorized JavaScript origins**.
-    - Development examples:
-      - `http://localhost:5173`
-      - `http://127.0.0.1:5173`
+  - For the web client, configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET` on the host.
+  - Add every backend callback you will use to the web OAuth client’s **Authorized redirect URIs**.
+    - Development example:
+      - `http://localhost:5173/api/auth/google/callback`
     - Production example:
-      - `https://emberlist.yourdomain.com`
+      - `https://emberlist.dev/api/auth/google/callback`
+  - `VITE_GOOGLE_AUTH_MODE=legacy_spa` is available only as a temporary troubleshooting fallback for the older browser-token flow.
 
 ## Deploying The Web App
 
-Emberlist’s web client is a static Vite app. That means you do not need a custom backend just to use it from another computer. The browser stores a local IndexedDB cache on each machine, and cross-device state is shared through Google Drive appData sync.
+Emberlist’s web client is a Vite app with small Vercel serverless API functions for Google Drive auth and sync. The browser stores a local IndexedDB cache on each machine, and cross-device state is shared through Google Drive appData sync.
 
 ### What you need
 
 1. A public HTTPS URL for the web app.
 2. A Google web OAuth client in the same Google Cloud project as Android sync.
-3. That deployment URL added to the OAuth client’s **Authorized JavaScript origins**.
-4. The same Google account signed in on both devices if you want both devices to use the same Drive-backed workspace.
+3. The deployment callback URL added to the OAuth client’s **Authorized redirect URIs**.
+4. Server environment variables for `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET`.
+5. The same Google account signed in on both devices if you want both devices to use the same Drive-backed workspace.
 
 ### Simplest hosting options
 
@@ -267,19 +272,19 @@ Emberlist’s web client is a static Vite app. That means you do not need a cust
   - set the web root to `web/` if deploying as a separate project
   - build command: `npm run build`
   - output directory: `dist`
-  - environment variable: `VITE_GOOGLE_CLIENT_ID=...`
+  - environment variables: `GOOGLE_CLIENT_ID=...`, `GOOGLE_CLIENT_SECRET=...`, `EMBERLIST_AUTH_SECRET=...`
 - Cloudflare Pages:
   - import the repo
   - build command: `npm run build`
   - output directory: `dist`
-  - environment variable: `VITE_GOOGLE_CLIENT_ID=...`
+  - the built-in Vercel API functions must be ported to Cloudflare Workers before Google sync will work there.
 
 ### Recommended first production path
 
 1. Push the repo to GitHub.
-2. Deploy `web/` to Vercel or Cloudflare Pages.
-3. Add the deployed HTTPS origin to the Google web OAuth client.
-4. Set `VITE_GOOGLE_CLIENT_ID` in the host’s environment settings.
+2. Deploy `web/` to Vercel.
+3. Add `https://emberlist.dev/api/auth/google/callback` to the Google web OAuth client’s authorized redirect URIs.
+4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET` in Vercel.
 5. Open the deployed site on your other computer.
 6. Sign in with the same Google account and run `Sync now`.
 
