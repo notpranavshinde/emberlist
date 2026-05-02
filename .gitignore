@@ -46,5 +46,6 @@ web/.gemini/
 .playwright-mcp/
 web/.playwright-mcp/
 .artifacts/
+.agent-telegram/
 mobile-sync-snapshot.md
 .vercel
