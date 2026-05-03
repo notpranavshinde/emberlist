@@ -49,3 +49,5 @@ web/.playwright-mcp/
 .agent-telegram/
 mobile-sync-snapshot.md
 .vercel
+.env.example
+.vscode/
