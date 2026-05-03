@@ -28,7 +28,8 @@ export type SearchFilter =
     | 'HAS_DEADLINE'
     | 'NO_DEADLINE'
     | 'RECURRING'
-    | 'HAS_REMINDER';
+    | 'HAS_REMINDER'
+    | 'ARCHIVED';
 
 export type TaskDraft = {
     title: string;
@@ -257,6 +258,28 @@ export function searchCompletedTasks(payload: SyncPayload, query: string, filter
     const reminderTaskIds = new Set(payload.reminders.filter(reminder => !reminder.deletedAt).map(reminder => reminder.taskId));
 
     return getCompletedTasks(payload)
+        .filter(task => {
+            if (!normalizedQuery) return true;
+            const projectName = task.projectId ? projects.get(task.projectId)?.name ?? '' : 'inbox';
+            const sectionName = task.sectionId ? sections.get(task.sectionId)?.name ?? '' : '';
+            return [
+                task.title,
+                task.description,
+                projectName,
+                sectionName,
+            ].join(' ').toLowerCase().includes(normalizedQuery);
+        })
+        .filter(task => matchesFilters(task, filters, reminderTaskIds))
+        .sort(compareTasks);
+}
+
+export function searchArchivedTasks(payload: SyncPayload, query: string, filters: Set<SearchFilter>): Task[] {
+    const normalizedQuery = query.trim().toLowerCase();
+    const projects = new Map(payload.projects.map(project => [project.id, project]));
+    const sections = new Map(payload.sections.map(section => [section.id, section]));
+    const reminderTaskIds = new Set(payload.reminders.filter(reminder => !reminder.deletedAt).map(reminder => reminder.taskId));
+
+    return getArchivedTasks(payload)
         .filter(task => {
             if (!normalizedQuery) return true;
             const projectName = task.projectId ? projects.get(task.projectId)?.name ?? '' : 'inbox';
@@ -922,6 +945,10 @@ function getCompletedTasks(payload: SyncPayload): Task[] {
     return payload.tasks.filter(task => !task.deletedAt && task.status === 'COMPLETED');
 }
 
+function getArchivedTasks(payload: SyncPayload): Task[] {
+    return payload.tasks.filter(task => !task.deletedAt && task.status === 'ARCHIVED');
+}
+
 function compareTasks(left: Task, right: Task): number {
     const leftDue = left.dueAt ?? Number.MAX_SAFE_INTEGER;
     const rightDue = right.dueAt ?? Number.MAX_SAFE_INTEGER;
@@ -1438,6 +1465,8 @@ function matchesFilters(task: Task, filters: Set<SearchFilter>, reminderTaskIds:
                 return task.recurringRule !== null || task.deadlineRecurringRule !== null;
             case 'HAS_REMINDER':
                 return reminderTaskIds.has(task.id);
+            case 'ARCHIVED':
+                return task.status === 'ARCHIVED';
             case 'ALL':
             default:
                 return true;

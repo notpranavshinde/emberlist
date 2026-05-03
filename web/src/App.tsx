@@ -166,6 +166,7 @@ import {
   repairRecurringTasks,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
+  searchArchivedTasks,
   searchTasks,
   searchCompletedTasks,
   setPriorityForTasks,
@@ -204,6 +205,7 @@ const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: "Has deadline", value: "HAS_DEADLINE" },
   { label: "Recurring", value: "RECURRING" },
   { label: "Has reminder", value: "HAS_REMINDER" },
+  { label: "Archived", value: "ARCHIVED" },
 ];
 
 type BootState = "loading" | "ready" | "error";
@@ -2941,6 +2943,29 @@ function WorkspaceShell({
                   }
                 />
                 <Route
+                  path="/search/archived"
+                  element={
+                    <SearchPage
+                      payload={payload}
+                      showSelectionButtons={showSelectionButtons}
+                      onOpenQuickAdd={onOpenQuickAdd}
+                      onToggleTask={onToggleTask}
+                      onArchiveTask={onArchiveTask}
+                      onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+                      onRescheduleTasks={onRescheduleTasks}
+                      onPostponeTasks={onPostponeTasks}
+                      onMoveTasksToProject={onMoveTasksToProject}
+                      onMoveTasksToSection={onMoveTasksToSection}
+                      onSetTasksPriority={onSetTasksPriority}
+                      onDeleteTasks={onDeleteTasks}
+                      onPromoteSubtask={onPromoteSubtask}
+                      onSaveTask={onSaveTask}
+                      onDuplicateTask={onDuplicateTask}
+                      forcedFilter="ARCHIVED"
+                    />
+                  }
+                />
+                <Route
                   path="/browse"
                   element={<Navigate to="/today" replace />}
                 />
@@ -4677,6 +4702,7 @@ function SearchPage({
   forcedFilter?: SearchFilter;
 }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const todayStartMs = useTodayStartMs();
   const openTaskEditor = (taskId: string) =>
     onOpenQuickAdd({ editTaskId: taskId });
@@ -4722,13 +4748,24 @@ function SearchPage({
     return next.size ? next : new Set<SearchFilter>(["ALL"]);
   }, [forcedFilter, userFilters]);
   const activeFilterCount = filters.has("ALL") ? 0 : filters.size;
+  const showingArchived = filters.has("ARCHIVED");
   const results = useMemo(
-    () => searchTasks(payload, deferredQuery, filters),
-    [deferredQuery, filters, payload],
+    () => (showingArchived ? [] : searchTasks(payload, deferredQuery, filters)),
+    [deferredQuery, filters, payload, showingArchived],
   );
   const completedResults = useMemo(
-    () => searchCompletedTasks(payload, deferredQuery, filters),
-    [deferredQuery, filters, payload],
+    () =>
+      showingArchived
+        ? []
+        : searchCompletedTasks(payload, deferredQuery, filters),
+    [deferredQuery, filters, payload, showingArchived],
+  );
+  const archivedResults = useMemo(
+    () =>
+      showingArchived
+        ? searchArchivedTasks(payload, deferredQuery, filters)
+        : [],
+    [deferredQuery, filters, payload, showingArchived],
   );
   const projects = useMemo(() => getActiveProjects(payload), [payload]);
   const visibleTaskIds = useMemo(
@@ -4894,7 +4931,33 @@ function SearchPage({
   }
 
   function renderTaskRowActions(task: Task) {
-    if (task.status !== "OPEN") return null;
+    if (task.status === "COMPLETED") return null;
+    if (task.status === "ARCHIVED") {
+      return (
+        <OverflowMenu
+          label={`More actions for ${task.title}`}
+          items={[
+            {
+              label: "Edit",
+              onSelect: () => openTaskEditor(task.id),
+            },
+            {
+              label: "Activity",
+              onSelect: () => navigate(`/task/${task.id}/activity`),
+            },
+            {
+              label: "Unarchive",
+              onSelect: () => onArchiveTask(task.id),
+            },
+            {
+              label: "Delete",
+              tone: "destructive",
+              onSelect: () => onDeleteTasks([task.id]),
+            },
+          ]}
+        />
+      );
+    }
     return (
       <TaskRowActions
         payload={payload}
@@ -4923,16 +4986,22 @@ function SearchPage({
       <HeroCard
         eyebrow="Search"
         title={
-          forcedFilter === "NO_DUE" ? "Tasks without due dates" : "Find tasks"
+          forcedFilter === "NO_DUE"
+            ? "Tasks without due dates"
+            : forcedFilter === "ARCHIVED"
+              ? "Archived tasks"
+              : "Find tasks"
         }
         description={
           forcedFilter === "NO_DUE"
             ? "This is a real filtered view of open tasks that do not have a due date yet."
+            : forcedFilter === "ARCHIVED"
+              ? "Review tasks you archived and bring them back when they become relevant again."
             : "Search titles, descriptions, project names, and sections. Bulk actions stay available when you need to reschedule, move, reprioritize, or delete several tasks at once."
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {showSelectionButtons || selectionMode ? (
+            {!showingArchived && (showSelectionButtons || selectionMode) ? (
               <button
                 type="button"
                 onClick={() =>
@@ -5040,24 +5109,43 @@ function SearchPage({
         </section>
       ) : null}
 
-      <TaskGroup
-        title="Results"
-        subtitle={`${results.length} open task${results.length === 1 ? "" : "s"} matched.`}
-        payload={payload}
-        todayStartMs={todayStartMs}
-        tasks={results}
-        emptyMessage="No open tasks match this search yet."
-        onToggleTask={onToggleTask}
-        onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-        onPromoteSubtask={onPromoteSubtask}
-        onOpenTask={openTaskEditor}
-        selectionMode={selectionMode}
-        selectedTaskIds={selectedTaskIds}
-        onToggleSelection={toggleSelection}
-        onStartSelection={openSelection}
-        rowActions={renderTaskRowActions}
-        showTaskCount={false}
-      />
+      {!showingArchived ? (
+        <TaskGroup
+          title="Results"
+          subtitle={`${results.length} open task${results.length === 1 ? "" : "s"} matched.`}
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={results}
+          emptyMessage="No open tasks match this search yet."
+          onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
+          onOpenTask={openTaskEditor}
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={toggleSelection}
+          onStartSelection={openSelection}
+          rowActions={renderTaskRowActions}
+          showTaskCount={false}
+        />
+      ) : null}
+
+      {archivedResults.length || forcedFilter === "ARCHIVED" ? (
+        <TaskGroup
+          title="Archived"
+          subtitle={`${archivedResults.length} archived task${archivedResults.length === 1 ? "" : "s"} matched.`}
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={archivedResults}
+          emptyMessage="No archived tasks match this search."
+          onToggleTask={onToggleTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onPromoteSubtask={onPromoteSubtask}
+          onOpenTask={openTaskEditor}
+          rowActions={renderTaskRowActions}
+          showTaskCount={false}
+        />
+      ) : null}
 
       {completedResults.length ? (
         <TaskGroup
@@ -7332,6 +7420,8 @@ function TaskRow({
   rowActions?: (task: Task) => ReactNode;
 }) {
   const completed = task.status === "COMPLETED";
+  const archived = task.status === "ARCHIVED";
+  const canToggleCompletion = !archived;
   const canDrag = !selectionMode && task.status === "OPEN";
   const canAcceptSubtaskDrop =
     task.status === "OPEN" && task.parentTaskId === null;
@@ -7506,7 +7596,8 @@ function TaskRow({
           !event.metaKey &&
           !event.ctrlKey &&
           !event.altKey &&
-          lowerKey === "e"
+          lowerKey === "e" &&
+          canToggleCompletion
         ) {
           event.preventDefault();
           onToggleTask(task.id);
@@ -7613,13 +7704,20 @@ function TaskRow({
         type="button"
         onClick={(event) => {
           event.stopPropagation();
+          if (!canToggleCompletion) return;
           onToggleTask(task.id);
         }}
+        disabled={!canToggleCompletion}
+        aria-label={
+          archived ? `${task.title} is archived` : `Complete ${task.title}`
+        }
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition ${
           completed
             ? "border-[#dc4c3e] bg-[#dc4c3e] text-white"
+            : archived
+              ? "border-[#D8C9BC] bg-[var(--app-surface-soft)] text-transparent"
             : `${priorityCircleClasses(task.priority)} bg-[var(--app-surface)] text-transparent`
-        }`}
+        } ${canToggleCompletion ? "" : "cursor-not-allowed opacity-70"}`}
       >
         <Check size={12} />
       </button>

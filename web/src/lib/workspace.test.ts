@@ -22,6 +22,7 @@ import {
   repairRecurringTasks,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
+  searchArchivedTasks,
   searchTasks,
   setPriorityForTasks,
   toggleTaskCompletion,
@@ -385,6 +386,59 @@ describe('workspace bulk task helpers', () => {
       'task-parent-search',
       'task-child-search',
     ]);
+  });
+
+  it('searches archived tasks without returning open, completed, or deleted tasks', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-archived', title: 'Archived receipt', status: 'ARCHIVED', order: 10 }),
+      createTask({ id: 'task-archived-deleted', title: 'Archived deleted receipt', status: 'ARCHIVED', deletedAt: 5, order: 11 }),
+      createTask({ id: 'task-completed-receipt', title: 'Completed receipt', status: 'COMPLETED', completedAt: 5, order: 12 }),
+      createTask({ id: 'task-open-receipt', title: 'Open receipt', order: 13 }),
+    );
+
+    const results = searchArchivedTasks(payload, 'receipt', new Set(['ARCHIVED']));
+
+    expect(results.map(task => task.id)).toEqual(['task-archived']);
+  });
+
+  it('matches archived tasks by project and section metadata', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({
+        id: 'task-archived-weekend',
+        title: 'Old chore',
+        projectId: 'project-home',
+        sectionId: 'section-weekend',
+        status: 'ARCHIVED',
+        order: 10,
+      }),
+    );
+
+    expect(searchArchivedTasks(payload, 'weekend', new Set(['ARCHIVED'])).map(task => task.id)).toEqual([
+      'task-archived-weekend',
+    ]);
+    expect(searchArchivedTasks(payload, 'home', new Set(['ARCHIVED'])).map(task => task.id)).toEqual([
+      'task-archived-weekend',
+    ]);
+  });
+
+  it('applies normal filters within archived search results', () => {
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-archived-no-due', title: 'Archived someday', status: 'ARCHIVED', order: 10 }),
+      createTask({
+        id: 'task-archived-due',
+        title: 'Archived scheduled',
+        status: 'ARCHIVED',
+        dueAt: new Date('2026-04-05T00:00:00').getTime(),
+        order: 11,
+      }),
+    );
+
+    const results = searchArchivedTasks(payload, '', new Set(['ARCHIVED', 'NO_DUE']));
+
+    expect(results.map(task => task.id)).toEqual(['task-archived-no-due']);
   });
 
   it('flattens visible task hierarchies and leaves orphan subtasks at the root', () => {
