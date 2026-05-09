@@ -5,6 +5,28 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val releaseKeystoreProperties = java.util.Properties().apply {
+    val file = rootProject.file(".android-signing/keystore.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+
+fun releaseSigningValue(name: String): String? =
+    (System.getenv(name) ?: releaseKeystoreProperties.getProperty(name))
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+val releaseStoreFile = releaseSigningValue("EMBERLIST_RELEASE_STORE_FILE")
+val releaseStorePassword = releaseSigningValue("EMBERLIST_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = releaseSigningValue("EMBERLIST_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = releaseSigningValue("EMBERLIST_RELEASE_KEY_PASSWORD")
+val hasReleaseSigning =
+    releaseStoreFile != null &&
+        releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null
+
 android {
     namespace = "com.notpr.emberlist"
     compileSdk = 34
@@ -21,8 +43,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

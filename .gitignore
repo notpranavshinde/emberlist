@@ -40,6 +40,7 @@ out/
 *.keystore
 *.jks
 .env
+.android-signing/
 agent-auth.json
 .gemini/
 web/.gemini/
