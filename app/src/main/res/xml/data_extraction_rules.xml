@@ -3,11 +3,11 @@
     <cloud-backup>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
-        <include domain="files" path="." />
+        <include domain="file" path="." />
     </cloud-backup>
     <device-transfer>
         <include domain="database" path="." />
         <include domain="sharedpref" path="." />
-        <include domain="files" path="." />
+        <include domain="file" path="." />
     </device-transfer>
 </data-extraction-rules>

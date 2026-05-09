@@ -2,5 +2,5 @@
 <full-backup-content>
     <include domain="database" path="." />
     <include domain="sharedpref" path="." />
-    <include domain="files" path="." />
+    <include domain="file" path="." />
 </full-backup-content>
