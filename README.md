@@ -179,6 +179,20 @@ These are the important end-to-end cases still to verify.
 2. Let Gradle sync.
 3. Run the `app` configuration on an emulator or device (Android 8+).
 
+## Android Direct Install
+
+Signed APK builds are published from the `Android Signed APK` GitHub Actions workflow. The stable direct-download release is:
+
+- Latest signed APK: https://github.com/notpranavshinde/emberlist/releases/download/android-latest/emberlist-release.apk
+- Release page: https://github.com/notpranavshinde/emberlist/releases/tag/android-latest
+
+Install notes:
+
+- If you previously installed a debug build from Android Studio, Android may reject the signed APK as a conflicting update because debug and release builds use different signing keys. Uninstall the debug build first.
+- Uninstalling the app removes local-only data. Sync or export before uninstalling if the workspace matters.
+- If Google sign-in fails with code 10, the installed APK signing SHA-1 is not registered on the Android OAuth client in Google Cloud.
+- After connecting Google Drive, Emberlist enables sync and immediately restores/syncs the Drive appData workspace.
+
 ## Web Setup
 
 The web client lives in [`web/`](./web).
@@ -361,9 +375,14 @@ Run:
    - Import JSON and verify tasks/projects restored
 10. **Google Drive sync**
    - Connect Google from Settings
-   - Enable sync and tap Sync now
+   - Verify sync is enabled automatically after connect
+   - Verify a fresh install with an empty local database can restore tasks from Drive
+   - Tap Sync now
    - Verify sync completes and Last synced updates
    - Make a change on web, sync again on Android, and verify the local DB updates
+   - Force-close/reopen Android and verify startup sync does not undo the first local edit
+   - Disconnect/reconnect Google Drive and verify sync recovers without duplicated tasks
+   - Install the latest signed APK over the previous signed APK and verify Android accepts the versionCode update
 11. **Project + section management**
    - Create, rename, and archive projects from Browse
    - Create, rename, and delete sections in a project

@@ -73,6 +73,8 @@ class TaskRepositoryImpl(
 
     override fun search(query: String): Flow<List<TaskEntity>> = taskDao.search(query)
 
+    override fun observeWorkspaceTaskCount(): Flow<Int> = taskDao.observeWorkspaceTaskCount()
+
     override suspend fun upsertProject(project: ProjectEntity) {
         projectDao.upsert(project)
     }

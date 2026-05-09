@@ -51,11 +51,7 @@ class DriveAuthManager(private val context: Context) {
         val account = try {
             GoogleSignIn.getSignedInAccountFromIntent(data).getResult(ApiException::class.java)
         } catch (error: ApiException) {
-            errorMessage = buildString {
-                append("Google sign-in failed")
-                error.statusCode.takeIf { it != 0 }?.let { append(" (code ").append(it).append(')') }
-                error.statusMessage?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
-            }
+            errorMessage = googleSignInErrorMessage(error.statusCode, error.statusMessage)
             null
         } catch (error: Exception) {
             errorMessage = error.message ?: "Google sign-in failed."
@@ -107,5 +103,16 @@ class DriveAuthManager(private val context: Context) {
     private fun hasDriveAccess(account: GoogleSignInAccount): Boolean {
         return GoogleSignIn.hasPermissions(account, driveScope) ||
             account.grantedScopes.any { it.scopeUri == driveScope.scopeUri }
+    }
+
+    companion object {
+        internal fun googleSignInErrorMessage(statusCode: Int, statusMessage: String?): String = buildString {
+            append("Google sign-in failed")
+            statusCode.takeIf { it != 0 }?.let { append(" (code ").append(it).append(')') }
+            statusMessage?.takeIf { it.isNotBlank() }?.let { append(": ").append(it) }
+            if (statusCode == 10) {
+                append(". This usually means this APK's package name and signing certificate SHA-1 are not registered in Google Cloud.")
+            }
+        }
     }
 }

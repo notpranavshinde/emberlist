@@ -100,6 +100,20 @@ class TaskDaoQueryTest {
         db.close()
     }
 
+    @Test
+    fun workspaceTaskCountCountsAllNonDeletedTasks() = kotlinx.coroutines.runBlocking {
+        val db = buildDb()
+        val dao = db.taskDao()
+        val now = System.currentTimeMillis()
+        dao.upsert(baseTask("open", null, null, now))
+        dao.upsert(baseTask("completed", null, null, now).copy(status = TaskStatus.COMPLETED))
+        dao.upsert(baseTask("subtask", null, "open", now))
+        dao.upsert(baseTask("deleted", null, null, now).copy(deletedAt = now, updatedAt = now))
+
+        assertEquals(3, dao.observeWorkspaceTaskCount().first())
+        db.close()
+    }
+
     private fun buildDb(): EmberlistDatabase {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         return Room.inMemoryDatabaseBuilder(context, EmberlistDatabase::class.java)

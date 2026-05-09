@@ -73,7 +73,8 @@ class SettingsViewModel(
             val result = driveAuthManager.handleSignInResult(data)
             val state = result.state
             if (state.hasDriveScope) {
-                _syncUiState.value = SyncUiState(status = "Google Drive connected.")
+                settingsRepository.updateSyncEnabled(true)
+                syncNowInternal(connectStatus = "Google Drive connected. Syncing your workspace…")
             } else if (state.isSignedIn) {
                 _syncUiState.value = SyncUiState(
                     error = result.errorMessage
@@ -87,6 +88,17 @@ class SettingsViewModel(
         }
     }
 
+    fun enableSyncAndSyncNow() {
+        viewModelScope.launch {
+            if (!driveAuthState.value.hasDriveScope) {
+                _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
+                return@launch
+            }
+            settingsRepository.updateSyncEnabled(true)
+            syncNowInternal(connectStatus = "Syncing your Google Drive workspace…")
+        }
+    }
+
     fun disconnectDrive() {
         viewModelScope.launch {
             driveAuthManager.disconnect()
@@ -97,24 +109,38 @@ class SettingsViewModel(
 
     fun syncNow() {
         viewModelScope.launch {
-            if (_syncUiState.value.isSyncing) return@launch
-            if (!settings.value.syncEnabled) {
-                _syncUiState.value = SyncUiState(error = "Enable sync first.")
-                return@launch
-            }
-            if (!driveAuthState.value.hasDriveScope) {
-                _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
-                return@launch
-            }
-            syncStatusTracker.setSyncing(true)
-            syncStatusTracker.clearError()
-            _syncUiState.value = SyncUiState(isSyncing = true, status = "Syncing…")
+            syncNowInternal()
+        }
+    }
+
+    private suspend fun syncNowInternal(connectStatus: String? = null) {
+        if (_syncUiState.value.isSyncing) return
+        if (!settings.value.syncEnabled && connectStatus == null) {
+            _syncUiState.value = SyncUiState(error = "Enable sync first.")
+            return
+        }
+        if (!driveAuthState.value.hasDriveScope) {
+            _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
+            return
+        }
+        syncStatusTracker.setSyncing(true)
+        syncStatusTracker.clearError()
+        _syncUiState.value = SyncUiState(isSyncing = true, status = connectStatus ?: "Syncing…")
+        try {
             when (val result = driveSyncService.sync()) {
                 is SyncResult.Success -> {
                     settingsRepository.updateLastSyncedAt(result.syncedAt)
                     syncStatusTracker.onSyncSuccess()
                     _syncUiState.value = SyncUiState(
-                        status = if (result.remoteCreated) "Synced to Google Drive." else "Sync complete."
+                        status = if (connectStatus != null && result.remoteCreated) {
+                            "Google Drive connected. Cloud sync file created."
+                        } else if (connectStatus != null) {
+                            "Google Drive connected. Workspace restored and synced."
+                        } else if (result.remoteCreated) {
+                            "Synced to Google Drive."
+                        } else {
+                            "Sync complete."
+                        }
                     )
                 }
                 is SyncResult.Failure -> {
@@ -122,6 +148,7 @@ class SettingsViewModel(
                     _syncUiState.value = SyncUiState(error = result.message)
                 }
             }
+        } finally {
             syncStatusTracker.setSyncing(false)
         }
     }

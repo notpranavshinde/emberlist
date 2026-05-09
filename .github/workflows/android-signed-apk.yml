@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Optional GitHub release tag. Leave blank for android-YYYYMMDD-HHMMSS."
+        description: "Optional GitHub release tag. Leave blank for the stable android-latest release."
         required: false
         type: string
       create_github_release:
@@ -52,7 +52,7 @@ jobs:
           EMBERLIST_RELEASE_KEY_PASSWORD: ${{ secrets.EMBERLIST_RELEASE_KEY_PASSWORD }}
         run: |
           chmod +x ./gradlew
-          ./gradlew :app:assembleRelease
+          ./gradlew :app:test :app:assembleRelease
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/emberlist-release.apk
 
@@ -71,9 +71,15 @@ jobs:
         run: |
           TAG="$INPUT_RELEASE_TAG"
           if [ -z "$TAG" ]; then
-            TAG="android-$(date -u +'%Y%m%d-%H%M%S')"
+            TAG="android-latest"
           fi
-          gh release create "$TAG" dist/emberlist-release.apk \
-            --target "$GITHUB_SHA" \
-            --title "Emberlist Android $TAG" \
-            --notes "Signed Emberlist Android APK for direct installation."
+          NOTES="Signed Emberlist Android APK for direct installation. Version: $(grep -m1 'versionName =' app/build.gradle.kts | sed -E 's/.*\"([^\"]+)\".*/\1/')."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --target "$GITHUB_SHA" --title "Emberlist Android $TAG" --notes "$NOTES"
+            gh release upload "$TAG" dist/emberlist-release.apk --clobber
+          else
+            gh release create "$TAG" dist/emberlist-release.apk \
+              --target "$GITHUB_SHA" \
+              --title "Emberlist Android $TAG" \
+              --notes "$NOTES"
+          fi

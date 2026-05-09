@@ -30,9 +30,12 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,7 +78,10 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
     val parentItems by viewModel.tasks.collectAsState()
     val subtaskItems by viewModel.subtasks.collectAsState()
     val completedItems by viewModel.completedToday.collectAsState()
+    val workspaceTaskCount by viewModel.workspaceTaskCount.collectAsState()
     val settings by settingsViewModel.settings.collectAsState()
+    val driveAuthState by settingsViewModel.driveAuthState.collectAsState()
+    val syncUiState by settingsViewModel.syncUiState.collectAsState()
     val zone = ZoneId.systemDefault()
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val reorderState = remember { TodayManualReorderState() }
@@ -215,6 +221,18 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 IconButton(onClick = { showOrganizeDialog = true }) {
                     Icon(Icons.Default.Tune, contentDescription = "Sort and group")
                 }
+            }
+        }
+        if (workspaceTaskCount == 0) {
+            item(key = "empty_workspace_restore") {
+                EmptyWorkspaceRestoreCard(
+                    driveConnected = driveAuthState.hasDriveScope,
+                    syncEnabled = settings.syncEnabled,
+                    isSyncing = syncUiState.isSyncing,
+                    syncMessage = syncUiState.status ?: syncUiState.error,
+                    onOpenSettings = { navController.navigate("settings") },
+                    onSync = { settingsViewModel.enableSyncAndSyncNow() }
+                )
             }
         }
         if (selectionMode) {
@@ -527,6 +545,68 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun EmptyWorkspaceRestoreCard(
+    driveConnected: Boolean,
+    syncEnabled: Boolean,
+    isSyncing: Boolean,
+    syncMessage: String?,
+    onOpenSettings: () -> Unit,
+    onSync: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(text = "No local tasks yet", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "If you already use Emberlist on another device, connect Google Drive to restore your workspace. You can also start local-only and sync later.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            syncMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (it.contains("failed", ignoreCase = true)) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    }
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (driveConnected) {
+                    Button(
+                        onClick = onSync,
+                        enabled = !isSyncing,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (syncEnabled) "Restore from Drive" else "Enable sync")
+                    }
+                } else {
+                    Button(
+                        onClick = onOpenSettings,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Connect Google Drive")
+                    }
+                }
+                OutlinedButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Settings")
+                }
+            }
+        }
     }
 }
 

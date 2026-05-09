@@ -194,3 +194,15 @@
 ### Deployment Activation
 - [ ] Add `https://emberlist.dev/api/auth/google/callback` to the Google web OAuth client's authorized redirect URIs.
 - [ ] Set Vercel env vars for the backend auth flow: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET`.
+
+## Android Release / Sync Hardening
+
+- [x] Add a signed APK release workflow with a stable `android-latest` download target.
+- [x] Register and verify the release APK Android OAuth client in Google Cloud.
+- [x] Bump Android release version metadata after the first signed APK so direct installs can update cleanly.
+- [x] Enable Google Drive sync automatically after successful Android Google connection.
+- [x] Run the first Android Drive sync immediately after successful Google connection so fresh installs can restore without hunting for another toggle.
+- [x] Show a fresh-install restore affordance when the Android local workspace is empty.
+- [x] Improve Android Google sign-in code 10 messaging with package/SHA-1 guidance.
+- [x] Document signed APK install/update behavior and a real-device sync smoke checklist.
+- [ ] Migrate Android Drive auth from legacy `GoogleSignIn` APIs to Google's newer authorization stack before Play Store submission.

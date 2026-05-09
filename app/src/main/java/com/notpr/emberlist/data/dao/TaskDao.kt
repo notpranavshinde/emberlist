@@ -88,6 +88,9 @@ interface TaskDao {
     """)
     fun search(query: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
 
+    @Query("SELECT COUNT(*) FROM tasks WHERE deletedAt IS NULL")
+    fun observeWorkspaceTaskCount(): Flow<Int>
+
     @Query("""
         SELECT projectId as projectId, COUNT(*) as count
         FROM tasks

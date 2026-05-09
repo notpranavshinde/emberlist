@@ -62,6 +62,9 @@ class TodayViewModel(
     val projects = repository.observeProjects()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val workspaceTaskCount = repository.observeWorkspaceTaskCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private val subtaskEntities = tasks
         .map { list -> list.map { it.task.id } }

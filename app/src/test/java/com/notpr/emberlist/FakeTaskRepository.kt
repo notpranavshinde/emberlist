@@ -50,6 +50,7 @@ class FakeTaskRepository : TaskRepository {
     override fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun observeAllActivity(): Flow<List<ActivityEventEntity>> = flowOf(activities)
     override fun search(query: String): Flow<List<TaskEntity>> = flowOf(emptyList())
+    override fun observeWorkspaceTaskCount(): Flow<Int> = flowOf(tasks.values.count { it.deletedAt == null })
 
     override suspend fun upsertProject(project: ProjectEntity) {
         projects[project.id] = project

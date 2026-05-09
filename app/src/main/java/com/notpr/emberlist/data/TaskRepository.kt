@@ -32,6 +32,7 @@ interface TaskRepository {
     fun observeActivity(objectId: String): Flow<List<ActivityEventEntity>>
     fun observeAllActivity(): Flow<List<ActivityEventEntity>>
     fun search(query: String): Flow<List<TaskEntity>>
+    fun observeWorkspaceTaskCount(): Flow<Int>
     suspend fun upsertProject(project: ProjectEntity)
     suspend fun upsertSection(section: SectionEntity)
     suspend fun deleteSection(sectionId: String)
