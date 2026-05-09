@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -5,10 +7,10 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-val releaseKeystoreProperties = java.util.Properties().apply {
+val releaseKeystoreProperties = Properties().apply {
     val file = rootProject.file(".android-signing/keystore.properties")
     if (file.exists()) {
-        file.inputStream().use(::load)
+        file.inputStream().use { load(it) }
     }
 }
 
