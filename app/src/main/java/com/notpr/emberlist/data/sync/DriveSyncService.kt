@@ -39,23 +39,31 @@ class DriveSyncService(
             }
 
             if (remotePayload == null) {
-                driveClient.uploadPayload(SYNC_FILE_NAME, localPayload, existingFileId = null)
+                val latestLocalPayload = payloadStore.exportSyncPayload(context)
+                driveClient.uploadPayload(SYNC_FILE_NAME, latestLocalPayload, existingFileId = null)
                 SyncResult.Success(
-                    payload = localPayload,
+                    payload = latestLocalPayload,
                     syncedAt = nowProvider(),
                     remoteCreated = true
                 )
             } else {
                 val merged = syncManager.merge(localPayload, remotePayload)
-                driveClient.uploadPayload(SYNC_FILE_NAME, merged, existingFile.id)
                 statusTracker.setApplyingRemoteChanges(true)
-                try {
-                    payloadStore.importSyncPayload(merged, replace = false)
+                val latestMerged = try {
+                    // Local edits can land while startup sync is downloading remote data.
+                    // Re-read and merge inside the store import path so those edits are not overwritten.
+                    payloadStore.mergeAndImportSyncPayload(
+                        context = context,
+                        incomingPayload = merged,
+                        syncManager = syncManager,
+                        replace = false
+                    )
                 } finally {
                     statusTracker.setApplyingRemoteChanges(false)
                 }
+                driveClient.uploadPayload(SYNC_FILE_NAME, latestMerged, existingFile.id)
                 SyncResult.Success(
-                    payload = merged,
+                    payload = latestMerged,
                     syncedAt = nowProvider(),
                     remoteCreated = false
                 )

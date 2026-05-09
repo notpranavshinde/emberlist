@@ -28,6 +28,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.util.ArrayDeque
 
 @RunWith(RobolectricTestRunner::class)
 class DriveSyncServiceTest {
@@ -54,6 +55,27 @@ class DriveSyncServiceTest {
     }
 
     @Test
+    fun reReadsLocalPayloadBeforeCreatingRemoteFile() = runBlocking {
+        val initialLocal = payload(taskTitle = "Initial local", updatedAt = 10L)
+        val freshLocal = payload(taskTitle = "First local action", updatedAt = 30L)
+        val store = FakeSyncPayloadStore(initialLocal, freshLocal)
+        val drive = FakeDriveAppDataClient()
+        val service = DriveSyncService(
+            context = context,
+            payloadStore = store,
+            syncManager = SyncManager(nowProvider = { 100L }, payloadIdFactory = { "merged" }),
+            driveClientProvider = { drive },
+            nowProvider = { 100L }
+        )
+
+        val result = service.sync()
+
+        assertTrue(result is SyncResult.Success && result.remoteCreated)
+        assertEquals("First local action", drive.lastUploadedPayload?.tasks?.single()?.title)
+        assertEquals(0, store.importedPayloads.size)
+    }
+
+    @Test
     fun mergesExistingRemotePayloadAndImportsMergedResult() = runBlocking {
         val local = payload(taskTitle = "Local", updatedAt = 10L)
         val remote = payload(taskTitle = "Remote", updatedAt = 20L)
@@ -76,6 +98,32 @@ class DriveSyncServiceTest {
         assertEquals("Remote", drive.lastUploadedPayload?.tasks?.single()?.title)
         assertEquals(1, store.importedPayloads.size)
         assertEquals("Remote", store.importedPayloads.single().tasks.single().title)
+    }
+
+    @Test
+    fun reReadsLocalPayloadBeforeImportingRemoteMerge() = runBlocking {
+        val initialLocal = payload(taskTitle = "Initial local", updatedAt = 10L)
+        val remote = payload(taskTitle = "Remote", updatedAt = 20L)
+        val freshLocal = payload(taskTitle = "First local action", updatedAt = 30L)
+        val store = FakeSyncPayloadStore(initialLocal, freshLocal)
+        val drive = FakeDriveAppDataClient(
+            files = mutableListOf(DriveFileRef("file-1", modifiedTimeMs = 50L)),
+            payloads = mutableMapOf("file-1" to remote)
+        )
+        val service = DriveSyncService(
+            context = context,
+            payloadStore = store,
+            syncManager = SyncManager(nowProvider = { 100L }, payloadIdFactory = { "merged" }),
+            driveClientProvider = { drive },
+            nowProvider = { 100L }
+        )
+
+        val result = service.sync()
+
+        assertTrue(result is SyncResult.Success && !result.remoteCreated)
+        assertEquals("First local action", drive.lastUploadedPayload?.tasks?.single()?.title)
+        assertEquals(1, store.importedPayloads.size)
+        assertEquals("First local action", store.importedPayloads.single().tasks.single().title)
     }
 
     @Test
@@ -263,11 +311,22 @@ class DriveSyncServiceTest {
 }
 
 private class FakeSyncPayloadStore(
-    private val exportPayload: SyncPayload
+    firstExportPayload: SyncPayload,
+    vararg remainingExportPayloads: SyncPayload
 ) : SyncPayloadStore {
+    private val exportPayloads = ArrayDeque<SyncPayload>().apply {
+        add(firstExportPayload)
+        remainingExportPayloads.forEach { add(it) }
+    }
+    private var lastExportPayload: SyncPayload = firstExportPayload
     val importedPayloads = mutableListOf<SyncPayload>()
 
-    override suspend fun exportSyncPayload(context: Context): SyncPayload = exportPayload
+    override suspend fun exportSyncPayload(context: Context): SyncPayload {
+        if (exportPayloads.isNotEmpty()) {
+            lastExportPayload = exportPayloads.removeFirst()
+        }
+        return lastExportPayload
+    }
 
     override suspend fun importSyncPayload(payload: SyncPayload, replace: Boolean) {
         importedPayloads += payload

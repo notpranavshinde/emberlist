@@ -11,6 +11,7 @@ import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.sync.CURRENT_SYNC_SCHEMA_VERSION
+import com.notpr.emberlist.data.sync.SyncManager
 import com.notpr.emberlist.data.sync.SyncPayload
 import com.notpr.emberlist.data.sync.SyncPayloadStore
 import androidx.room.withTransaction
@@ -45,6 +46,25 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
     override suspend fun importSyncPayload(payload: SyncPayload, replace: Boolean) {
         withContext(Dispatchers.IO) {
             applySyncPayload(payload, replace)
+        }
+    }
+
+    override suspend fun mergeAndImportSyncPayload(
+        context: Context,
+        incomingPayload: SyncPayload,
+        syncManager: SyncManager,
+        replace: Boolean
+    ): SyncPayload = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            if (replace) {
+                applySyncPayloadInCurrentTransaction(incomingPayload, replace = true)
+                incomingPayload
+            } else {
+                val latestLocalPayload = buildSyncPayload(context)
+                val mergedPayload = syncManager.merge(latestLocalPayload, incomingPayload)
+                applySyncPayloadInCurrentTransaction(mergedPayload, replace = false)
+                mergedPayload
+            }
         }
     }
 
@@ -109,15 +129,19 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
 
     private suspend fun applySyncPayload(payload: SyncPayload, replace: Boolean) {
         database.withTransaction {
-            if (replace) {
-                database.clearAllTables()
-            }
-            payload.projects.forEach { database.projectDao().upsert(it) }
-            payload.sections.forEach { database.sectionDao().upsert(it) }
-            payload.tasks.forEach { database.taskDao().upsert(it) }
-            payload.reminders.forEach { database.reminderDao().upsert(it) }
-            payload.locations.forEach { database.locationDao().upsert(it) }
+            applySyncPayloadInCurrentTransaction(payload, replace)
         }
+    }
+
+    private suspend fun applySyncPayloadInCurrentTransaction(payload: SyncPayload, replace: Boolean) {
+        if (replace) {
+            database.clearAllTables()
+        }
+        payload.projects.forEach { database.projectDao().upsert(it) }
+        payload.sections.forEach { database.sectionDao().upsert(it) }
+        payload.tasks.forEach { database.taskDao().upsert(it) }
+        payload.reminders.forEach { database.reminderDao().upsert(it) }
+        payload.locations.forEach { database.locationDao().upsert(it) }
     }
 
     private fun getOrCreateDeviceId(context: Context): String {
