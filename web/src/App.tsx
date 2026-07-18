@@ -3964,7 +3964,6 @@ function TodayPage({
         {data.overdue.length ? (
           <TaskGroup
             title="Overdue"
-            subtitle="Open tasks that should already be done."
             payload={payload}
             todayStartMs={todayStartMs}
             tasks={data.overdue}
@@ -3993,7 +3992,6 @@ function TodayPage({
         <div data-onboarding-target="today-due">
           <TaskGroup
             title="Due today"
-            subtitle="Tasks scheduled for today."
             payload={payload}
             todayStartMs={todayStartMs}
             tasks={data.today}
@@ -4014,7 +4012,6 @@ function TodayPage({
         {showCompletedToday ? (
           <TaskGroup
             title="Completed today"
-            subtitle="Recently finished work."
             payload={payload}
             todayStartMs={todayStartMs}
             tasks={data.completedToday}
@@ -4381,35 +4378,26 @@ function UpcomingPage({
       className="space-y-6"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
-      <HeroCard
-        eyebrow="Timeline"
-        title="Upcoming"
-        description="Look ahead at upcoming deadlines and future work across the workspace. Drag tasks into a date lane when you want to reschedule them quickly."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {showSelectionButtons || selectionMode ? (
-              <button
-                type="button"
-                onClick={() =>
-                  selectionMode ? clearSelection() : openSelection()
-                }
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  selectionMode
-                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                }`}
-              >
-                {selectionMode ? "Cancel selection" : "Select tasks"}
-              </button>
-            ) : null}
-            {selectionMode ? (
-              <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
-                {selectedCount} selected
-              </span>
-            ) : null}
-          </div>
-        }
-      />
+      {showSelectionButtons || selectionMode ? (
+        <div className="flex flex-wrap items-center gap-2 px-3">
+          <button
+            type="button"
+            onClick={() => selectionMode ? clearSelection() : openSelection()}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              selectionMode
+                ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
+            }`}
+          >
+            {selectionMode ? "Cancel selection" : "Select tasks"}
+          </button>
+          {selectionMode ? (
+            <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              {selectedCount} selected
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {selectionMode ? (
         <section className="rounded-[24px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4 shadow-sm">
@@ -4450,10 +4438,10 @@ function UpcomingPage({
         </section>
       ) : null}
 
+      <TaskGroupGrid>
       {todayData.overdue.length ? (
         <TaskGroup
           title="Still overdue"
-          subtitle="These are past due and still open."
           payload={payload}
           todayStartMs={todayStartMs}
           tasks={todayData.overdue}
@@ -4525,11 +4513,6 @@ function UpcomingPage({
               onToggleSelection={toggleSelection}
               onStartSelection={openSelection}
               rowActions={renderTaskRowActions}
-              headerActions={
-                <span className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-[11px] font-semibold text-[#6D5C50]">
-                  Drag tasks here to reschedule
-                </span>
-              }
             />
           </div>
         ))
@@ -4543,7 +4526,6 @@ function UpcomingPage({
       {completedTasks.length ? (
         <TaskGroup
           title="Completed"
-          subtitle="Finished tasks with future due dates."
           payload={payload}
           todayStartMs={todayStartMs}
           tasks={completedTasks}
@@ -4557,6 +4539,7 @@ function UpcomingPage({
           defaultCollapsed
         />
       ) : null}
+      </TaskGroupGrid>
 
       {activeDialog === "reschedule-selected" ? (
         <RescheduleDialog
@@ -4973,48 +4956,28 @@ function SearchPage({
       className="space-y-6"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
-      <HeroCard
-        eyebrow="Search"
-        title={
-          forcedFilter === "NO_DUE"
-            ? "Tasks without due dates"
-            : forcedFilter === "ARCHIVED"
-              ? "Archived tasks"
-              : "Find tasks"
-        }
-        description={
-          forcedFilter === "NO_DUE"
-            ? "This is a real filtered view of open tasks that do not have a due date yet."
-            : forcedFilter === "ARCHIVED"
-              ? "Review tasks you archived and bring them back when they become relevant again."
-            : "Search titles, descriptions, project names, and sections. Bulk actions stay available when you need to reschedule, move, reprioritize, or delete several tasks at once."
-        }
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {!showingArchived && (showSelectionButtons || selectionMode) ? (
-              <button
-                type="button"
-                onClick={() =>
-                  selectionMode ? clearSelection() : openSelection()
-                }
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  selectionMode
-                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                }`}
-              >
-                {selectionMode ? "Cancel selection" : "Select tasks"}
-              </button>
-            ) : null}
-            {selectionMode ? (
-              <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
-                {selectedCount} selected
-              </span>
-            ) : null}
-          </div>
-        }
-      />
+      {!showingArchived && (showSelectionButtons || selectionMode) ? (
+        <div className="flex flex-wrap items-center gap-2 px-3">
+          <button
+            type="button"
+            onClick={() => selectionMode ? clearSelection() : openSelection()}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              selectionMode
+                ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
+            }`}
+          >
+            {selectionMode ? "Cancel selection" : "Select tasks"}
+          </button>
+          {selectionMode ? (
+            <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              {selectedCount} selected
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
+      <TaskGroupGrid>
       <section className="rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
         <div className="flex items-center gap-3 rounded-[22px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-3">
           <Search size={18} className="text-[#9F7B63]" />
@@ -5059,6 +5022,7 @@ function SearchPage({
           })}
         </div>
       </section>
+      </TaskGroupGrid>
 
       {selectionMode ? (
         <section className="rounded-[24px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4 shadow-sm">
@@ -5099,10 +5063,10 @@ function SearchPage({
         </section>
       ) : null}
 
+      <TaskGroupGrid>
       {!showingArchived ? (
         <TaskGroup
           title="Results"
-          subtitle={`${results.length} open task${results.length === 1 ? "" : "s"} matched.`}
           payload={payload}
           todayStartMs={todayStartMs}
           tasks={results}
@@ -5116,14 +5080,12 @@ function SearchPage({
           onToggleSelection={toggleSelection}
           onStartSelection={openSelection}
           rowActions={renderTaskRowActions}
-          showTaskCount={false}
         />
       ) : null}
 
       {archivedResults.length || forcedFilter === "ARCHIVED" ? (
         <TaskGroup
           title="Archived"
-          subtitle={`${archivedResults.length} archived task${archivedResults.length === 1 ? "" : "s"} matched.`}
           payload={payload}
           todayStartMs={todayStartMs}
           tasks={archivedResults}
@@ -5133,14 +5095,12 @@ function SearchPage({
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={openTaskEditor}
           rowActions={renderTaskRowActions}
-          showTaskCount={false}
         />
       ) : null}
 
       {completedResults.length ? (
         <TaskGroup
           title="Completed"
-          subtitle="Finished tasks matching this search."
           payload={payload}
           todayStartMs={todayStartMs}
           tasks={completedResults}
@@ -5154,6 +5114,7 @@ function SearchPage({
           defaultCollapsed
         />
       ) : null}
+      </TaskGroupGrid>
 
       {activeDialog === "reschedule" ? (
         <RescheduleDialog
@@ -5479,35 +5440,26 @@ function InboxPage({
       className="space-y-6"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
-      <HeroCard
-        eyebrow="Inbox"
-        title="Unsorted tasks"
-        description="These tasks are not attached to a project yet. Open one to move it into a project or section."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {showSelectionButtons || selectionMode ? (
-              <button
-                type="button"
-                onClick={() =>
-                  selectionMode ? clearSelection() : openSelection()
-                }
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  selectionMode
-                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                }`}
-              >
-                {selectionMode ? "Cancel selection" : "Select tasks"}
-              </button>
-            ) : null}
-            {selectionMode ? (
-              <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
-                {selectedCount} selected
-              </span>
-            ) : null}
-          </div>
-        }
-      />
+      {showSelectionButtons || selectionMode ? (
+        <div className="flex flex-wrap items-center gap-2 px-3">
+          <button
+            type="button"
+            onClick={() => selectionMode ? clearSelection() : openSelection()}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              selectionMode
+                ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
+            }`}
+          >
+            {selectionMode ? "Cancel selection" : "Select tasks"}
+          </button>
+          {selectionMode ? (
+            <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              {selectedCount} selected
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {selectionMode ? (
         <section className="rounded-[24px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4 shadow-sm">
@@ -5548,6 +5500,7 @@ function InboxPage({
         </section>
       ) : null}
 
+      <TaskGroupGrid>
       <TaskGroup
         title="Inbox"
         payload={payload}
@@ -5568,7 +5521,6 @@ function InboxPage({
       {completedTasks.length ? (
         <TaskGroup
           title="Completed"
-          subtitle="Finished Inbox tasks."
           payload={payload}
           todayStartMs={todayStartMs}
           tasks={completedTasks}
@@ -5582,6 +5534,7 @@ function InboxPage({
           defaultCollapsed
         />
       ) : null}
+      </TaskGroupGrid>
 
       {activeDialog === "reschedule" ? (
         <RescheduleDialog
@@ -5907,13 +5860,17 @@ function ProjectPage({
   const unsectionedTasks = tasks.filter((task) => !task.sectionId);
   const projectView = currentProject.viewPreference ?? "BOARD";
   const boardColumns = [
-    {
-      id: "__loose__",
-      title: "No section",
-      subtitle: "Open tasks without a section.",
-      tasks: unsectionedTasks,
-      sectionId: null as string | null,
-    },
+    ...(unsectionedTasks.length > 0 || sections.length === 0
+      ? [
+          {
+            id: "__loose__",
+            title: "No section",
+            subtitle: `${unsectionedTasks.length} task${unsectionedTasks.length === 1 ? "" : "s"}`,
+            tasks: unsectionedTasks,
+            sectionId: null as string | null,
+          },
+        ]
+      : []),
     ...sections.map((section) => ({
       id: section.id,
       title: section.name,
@@ -6078,18 +6035,7 @@ function ProjectPage({
       className="space-y-6"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
-      <section className="px-1 pb-2 pt-1">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">
-              Project
-            </p>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">
-              Manage tasks, sections, and project metadata for{" "}
-              {currentProject.name}.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+      <section className="flex flex-wrap justify-end gap-2 px-1">
             {showSelectionButtons || selectionMode ? (
               <button
                 type="button"
@@ -6145,8 +6091,6 @@ function ProjectPage({
                 },
               ]}
             />
-          </div>
-        </div>
       </section>
 
       {selectionMode ? (
@@ -6190,7 +6134,7 @@ function ProjectPage({
 
       <section className="space-y-4">
         {projectView === "BOARD" ? (
-          <div className="grid gap-4 xl:grid-cols-2">
+          <TaskGroupGrid>
             {boardColumns.map((column) => (
               <section
                 key={column.id}
@@ -6245,6 +6189,7 @@ function ProjectPage({
                     <Plus size={16} />
                   </button>
                 </div>
+                {column.tasks.length > 0 ? (
                 <TaskListBlock
                   payload={payload}
                   todayStartMs={todayStartMs}
@@ -6264,15 +6209,16 @@ function ProjectPage({
                   onStartSelection={openSelection}
                   rowActions={renderProjectRowActions}
                 />
+                ) : null}
               </section>
             ))}
-          </div>
+          </TaskGroupGrid>
         ) : (
           <>
+            {unsectionedTasks.length > 0 || sections.length === 0 ? (
             <div data-onboarding-target="project-task-area">
               <TaskGroup
                 title="No section"
-                subtitle="Open tasks in this project without a section."
                 payload={payload}
                 todayStartMs={todayStartMs}
                 tasks={unsectionedTasks}
@@ -6305,6 +6251,7 @@ function ProjectPage({
                 }
               />
             </div>
+            ) : null}
 
             {sections.map((section) => {
               const sectionTasks = tasks.filter(
@@ -6376,6 +6323,7 @@ function ProjectPage({
                       />
                     </div>
                   </div>
+                  {sectionTasks.length > 0 ? (
                   <TaskListBlock
                     payload={payload}
                     todayStartMs={todayStartMs}
@@ -6391,6 +6339,7 @@ function ProjectPage({
                     onStartSelection={openSelection}
                     rowActions={renderProjectRowActions}
                   />
+                  ) : null}
                 </div>
               );
             })}
@@ -6398,20 +6347,21 @@ function ProjectPage({
         )}
 
         {completedTasks.length ? (
-          <TaskGroup
-            title="Completed"
-            subtitle="Finished tasks in this project."
-            payload={payload}
-            todayStartMs={todayStartMs}
-            tasks={completedTasks}
-            emptyMessage="No completed tasks in this project."
-            onToggleTask={onToggleTask}
-            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-            onPromoteSubtask={onPromoteSubtask}
-            onOpenTask={openTaskEditor}
-            collapsible
-            defaultCollapsed
-          />
+          <TaskGroupGrid>
+            <TaskGroup
+              title="Completed"
+              payload={payload}
+              todayStartMs={todayStartMs}
+              tasks={completedTasks}
+              emptyMessage="No completed tasks in this project."
+              onToggleTask={onToggleTask}
+              onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+              onPromoteSubtask={onPromoteSubtask}
+              onOpenTask={openTaskEditor}
+              collapsible
+              defaultCollapsed
+            />
+          </TaskGroupGrid>
         ) : null}
       </section>
 
@@ -6652,11 +6602,8 @@ function TaskActivityPage({
 
   return (
     <div className="space-y-6">
-      <HeroCard
-        eyebrow="Activity"
-        title={task.title}
-        description="Review the recorded history for this task."
-        actions={
+      <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <h3 className="text-xl font-semibold text-[#1E2D2F]">{task.title}</h3>
           <button
             type="button"
             onClick={() => navigate(backPath)}
@@ -6664,22 +6611,10 @@ function TaskActivityPage({
           >
             Back
           </button>
-        }
-      />
+      </div>
+      <TaskGroupGrid>
       <section className="rounded-[28px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9F7B63]">
-              Timeline
-            </p>
-            <h3 className="mt-2 text-xl font-semibold text-[#1E2D2F]">
-              Recent changes for this task
-            </h3>
-            <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-              Local web activity appears here alongside the task&apos;s saved
-              schedule state.
-            </p>
-          </div>
+        <div className="flex justify-end">
           <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-1.5 text-xs font-semibold text-[#6D5C50]">
             {taskTimeline.length} event{taskTimeline.length === 1 ? "" : "s"}
           </span>
@@ -6726,6 +6661,7 @@ function TaskActivityPage({
           )}
         </div>
       </section>
+      </TaskGroupGrid>
     </div>
   );
 }
@@ -6855,13 +6791,7 @@ function SettingsPage({
 
   return (
     <div className="space-y-6">
-      <HeroCard
-        eyebrow="Settings"
-        title="Web sync and workspace"
-        description="Manage Google Drive sync, this browser's local workspace, and the display options that stay local to the web app."
-      />
-
-      <div className="space-y-4">
+      <TaskGroupGrid>
         <SettingsDisclosure
           title="Sync mode"
           description="Choose whether this browser uses Google Drive sync or stays local-only."
@@ -7172,7 +7102,7 @@ function SettingsPage({
             </p>
           </div>
         </SettingsDisclosure>
-      </div>
+      </TaskGroupGrid>
     </div>
   );
 }
@@ -7180,10 +7110,10 @@ function SettingsPage({
 function TaskGroupGrid({ children }: { children: ReactNode }) {
   return (
     <div
-        className="grid items-start gap-4"
+      className="grid items-start gap-4"
       style={{
         gridTemplateColumns:
-          "repeat(auto-fit, minmax(min(100%, 520px), 1fr))",
+          "repeat(auto-fill, minmax(min(100%, 520px), 1fr))",
       }}
     >
       {children}
@@ -7814,7 +7744,7 @@ function TaskRow({
           {rowActions ? rowActions(task) : null}
         </div>
       ) : null}
-      <div className="pointer-events-none absolute right-2 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-end gap-1.5 rounded-full bg-[var(--app-surface)]/95 pl-2 text-right text-xs text-[#8a8076] opacity-0 shadow-sm transition group-hover/task-row:pointer-events-auto group-hover/task-row:opacity-100 group-focus-within/task-row:pointer-events-auto group-focus-within/task-row:opacity-100 md:flex">
+      <div className="pointer-events-none absolute right-2 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-end gap-1.5 text-right text-xs text-[#8a8076] opacity-0 transition group-hover/task-row:pointer-events-auto group-hover/task-row:opacity-100 group-focus-within/task-row:pointer-events-auto group-focus-within/task-row:opacity-100 md:flex">
         {task.parentTaskId ? (
           <button
             type="button"
@@ -9666,8 +9596,10 @@ function TextInputDialog({
 function OverflowMenu({
   label,
   items,
+  compact = false,
 }: {
   label: string;
+  compact?: boolean;
   items: Array<{
     label: string;
     onSelect: () => void;
@@ -9750,7 +9682,7 @@ function OverflowMenu({
             return next;
           });
         }}
-        className="flex h-10 w-10 items-center justify-center rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)]"
+        className={`flex items-center justify-center rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] text-[#6D5C50] transition hover:bg-[var(--app-surface-soft)] ${compact ? "h-8 w-8" : "h-10 w-10"}`}
       >
         <MoreHorizontal size={16} />
       </button>
@@ -9919,6 +9851,7 @@ function TaskRowActions({
       </button>
       <OverflowMenu
         label={`More actions for ${task.title}`}
+        compact
         items={[
           {
             label: "Add task above",
@@ -10822,39 +10755,6 @@ function ProjectSwitcherDialog({
         </div>
       </div>
     </ChoiceDialog>
-  );
-}
-
-function HeroCard({
-  eyebrow,
-  title,
-  description,
-  actions,
-}: {
-  eyebrow: string;
-  title?: string;
-  description: string;
-  actions?: ReactNode;
-}) {
-  return (
-    <section className="px-1 pb-2 pt-1">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54]">
-            {eyebrow}
-          </p>
-          {title ? (
-            <h2 className="mt-2 text-[32px] font-semibold text-[#202020]">
-              {title}
-            </h2>
-          ) : null}
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-[#7a7168]">
-            {description}
-          </p>
-        </div>
-        {actions ? <div className="shrink-0">{actions}</div> : null}
-      </div>
-    </section>
   );
 }
 
