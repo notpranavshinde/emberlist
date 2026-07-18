@@ -4438,7 +4438,7 @@ function UpcomingPage({
         </section>
       ) : null}
 
-      <TaskGroupGrid>
+      <TaskTimelineColumn>
       {todayData.overdue.length ? (
         <TaskGroup
           title="Still overdue"
@@ -4539,7 +4539,7 @@ function UpcomingPage({
           defaultCollapsed
         />
       ) : null}
-      </TaskGroupGrid>
+      </TaskTimelineColumn>
 
       {activeDialog === "reschedule-selected" ? (
         <RescheduleDialog
@@ -7119,6 +7119,10 @@ function TaskGroupGrid({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+function TaskTimelineColumn({ children }: { children: ReactNode }) {
+  return <div className="w-full max-w-[612px] space-y-4">{children}</div>;
 }
 
 function TaskGroup({
