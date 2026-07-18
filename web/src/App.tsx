@@ -2802,14 +2802,6 @@ function WorkspaceShell({
                   <span>{isSyncing ? "Syncing..." : "Sync"}</span>
                 </button>
                 ) : null}
-                <button
-                  onClick={() => onOpenQuickAdd()}
-                  className="hidden items-center gap-2 rounded-lg bg-[#dc4c3e] px-3 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335] md:flex md:px-4"
-                >
-                  <Plus size={16} />
-                  <span className="sm:hidden">Add</span>
-                  <span className="hidden sm:inline">Quick add</span>
-                </button>
               </div>
             </div>
             {banner ? (
@@ -3905,38 +3897,29 @@ function TodayPage({
 
   return (
     <div
-      className="space-y-6"
+      className="mx-auto max-w-[1080px] space-y-4"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
-      <HeroCard
-        eyebrow="Focus"
-        title=""
-        description="Review what is due now, what slipped past due, and what you already finished today."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {showSelectionButtons || selectionMode ? (
-              <button
-                type="button"
-                onClick={() =>
-                  selectionMode ? clearSelection() : openSelection()
-                }
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  selectionMode
-                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                }`}
-              >
-                {selectionMode ? "Cancel selection" : "Select tasks"}
-              </button>
-            ) : null}
-            {selectionMode ? (
-              <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
-                {selectedCount} selected
-              </span>
-            ) : null}
-          </div>
-        }
-      />
+      {showSelectionButtons || selectionMode ? (
+        <div className="flex flex-wrap items-center gap-2 px-3">
+          <button
+            type="button"
+            onClick={() => selectionMode ? clearSelection() : openSelection()}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              selectionMode
+                ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
+            }`}
+          >
+            {selectionMode ? "Cancel selection" : "Select tasks"}
+          </button>
+          {selectionMode ? (
+            <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              {selectedCount} selected
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {selectionMode ? (
         <section className="rounded-[24px] border border-[#E1D5CA] bg-[var(--app-surface)] p-4 shadow-sm">
@@ -4023,6 +4006,7 @@ function TodayPage({
           onStartSelection={openSelection}
           onPromoteSubtask={onPromoteSubtask}
           rowActions={renderTaskRowActions}
+          hideDueDate
         />
       </div>
 
@@ -7212,6 +7196,7 @@ function TaskGroup({
   rowActions,
   dropTargetState,
   showTaskCount = true,
+  hideDueDate = false,
 }: {
   title: string;
   subtitle?: string;
@@ -7242,6 +7227,7 @@ function TaskGroup({
     onDrop: (event: DragEvent<HTMLElement>) => void;
   };
   showTaskCount?: boolean;
+  hideDueDate?: boolean;
 }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const isCollapsed = collapsible && collapsed;
@@ -7256,9 +7242,16 @@ function TaskGroup({
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-[18px] font-semibold text-[#202020]">
-              {title}
-            </h3>
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h3 className="text-[18px] font-semibold text-[#202020]">
+                {title}
+              </h3>
+              {showTaskCount ? (
+                <span className="text-xs font-medium text-[#8a8076]">
+                  {tasks.length} task{tasks.length === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
             {subtitle ? (
               <p className="mt-0.5 text-xs text-[#8a8076]">{subtitle}</p>
             ) : null}
@@ -7270,11 +7263,6 @@ function TaskGroup({
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {headerActions}
-            {showTaskCount ? (
-              <span className="text-xs font-medium text-[#8a8076]">
-                {tasks.length} task{tasks.length === 1 ? "" : "s"}
-              </span>
-            ) : null}
             {collapsible && tasks.length > 0 ? (
               <button
                 type="button"
@@ -7308,6 +7296,7 @@ function TaskGroup({
           onToggleSelection={onToggleSelection}
           onStartSelection={onStartSelection}
           rowActions={rowActions}
+          hideDueDate={hideDueDate}
         />
       ) : null}
     </section>
@@ -7329,6 +7318,7 @@ function TaskListBlock({
   onToggleSelection,
   onStartSelection,
   rowActions,
+  hideDueDate = false,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -7347,6 +7337,7 @@ function TaskListBlock({
   onToggleSelection?: (taskId: string) => void;
   onStartSelection?: () => void;
   rowActions?: (task: Task) => ReactNode;
+  hideDueDate?: boolean;
 }) {
   const flattenedTasks = useMemo(
     () => flattenTasksWithSubtasks(tasks),
@@ -7381,6 +7372,7 @@ function TaskListBlock({
           onToggleSelection={onToggleSelection}
           onStartSelection={onStartSelection}
           rowActions={rowActions}
+          hideDueDate={hideDueDate}
         />
       ))}
     </div>
@@ -7403,6 +7395,7 @@ function TaskRow({
   onToggleSelection,
   onStartSelection,
   rowActions,
+  hideDueDate = false,
 }: {
   payload: SyncPayload;
   todayStartMs: number;
@@ -7422,6 +7415,7 @@ function TaskRow({
   onToggleSelection?: (taskId: string) => void;
   onStartSelection?: () => void;
   rowActions?: (task: Task) => ReactNode;
+  hideDueDate?: boolean;
 }) {
   const completed = task.status === "COMPLETED";
   const archived = task.status === "ARCHIVED";
@@ -7434,6 +7428,13 @@ function TaskRow({
   );
   const locationLabel = getTaskLocationLabel(payload, task);
   const dueLabel = task.dueAt ? formatTaskDate(task.dueAt, task.allDay) : null;
+  const showDueDate = Boolean(dueLabel && !hideDueDate);
+  const showMetadata = Boolean(
+    depth > 0 ||
+      hasVisibleSubtasks ||
+      showDueDate ||
+      (task.parentTaskId && depth === 0),
+  );
   const [isDropActive, setIsDropActive] = useState(false);
   const [isTouchActionsVisible, setIsTouchActionsVisible] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
@@ -7657,7 +7658,7 @@ function TaskRow({
           onPromoteSubtask(task.id);
         }
       }}
-      className={`group/task-row flex items-start gap-2 border-b border-[#f1eeeb] px-2 py-2 text-left transition last:border-b-0 md:gap-3 md:px-4 ${
+      className={`group/task-row relative flex items-start gap-2 border-b border-[#f1eeeb] px-2 py-1.5 text-left transition last:border-b-0 md:gap-3 md:px-4 ${
         isDropActive
           ? "bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]"
           : selected
@@ -7677,7 +7678,7 @@ function TaskRow({
           }}
           onTouchEnd={handleTouchHandleActivate}
           aria-label={`Drag ${task.title}`}
-          className="mt-0.5 flex h-4 w-4 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] transition hover:bg-[var(--app-surface-soft)] active:cursor-grabbing md:h-5 md:w-5"
+          className="mt-0.5 flex h-4 w-4 shrink-0 cursor-grab items-center justify-center rounded-full text-[#9F7B63] opacity-100 transition hover:bg-[var(--app-surface-soft)] active:cursor-grabbing md:h-5 md:w-5 md:opacity-0 md:group-hover/task-row:opacity-100 md:group-focus-within/task-row:opacity-100"
         >
           <GripVertical size={14} />
         </button>
@@ -7726,11 +7727,25 @@ function TaskRow({
         <Check size={12} />
       </button>
       <div className="min-w-0 flex-1">
-        <p
-          className={`text-[15px] leading-5 ${completed ? "text-[#9a928c] line-through" : "text-[#202020]"}`}
-        >
-          {task.title}
-        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <p
+            className={`min-w-0 text-[15px] leading-5 ${completed ? "text-[#9a928c] line-through" : "text-[#202020]"}`}
+          >
+            {task.title}
+          </p>
+          <span className="inline-flex shrink-0 items-center rounded-full border border-[#E6D8CC] bg-[#F6EFE9] px-2 py-0.5 text-[11px] font-semibold leading-4 text-[#6D4A35]">
+            {locationLabel}
+          </span>
+          {task.recurringRule ? (
+            <span
+              aria-label="Recurring task"
+              title="Recurring task"
+              className={`text-xs ${overdue ? "text-[#d1453b]" : "text-[#806F63]"}`}
+            >
+              ↻
+            </span>
+          ) : null}
+        </div>
         {task.description ? (
           <p
             className={`mt-1 text-sm leading-5 ${completed ? "text-[#a39a93]" : "text-[#6d665e]"}`}
@@ -7743,28 +7758,26 @@ function TaskRow({
             Drop to make subtask
           </p>
         ) : null}
-        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#8a8076]">
-          {depth > 0 ? <span>Subtask</span> : null}
-          {hasVisibleSubtasks ? (
-            <span>
-              {visibleSubtaskCount} subtask
-              {visibleSubtaskCount === 1 ? "" : "s"}
-            </span>
-          ) : null}
-          {dueLabel ? (
-            <span
-              className={`inline-flex items-center gap-1 ${overdue ? "text-[#d1453b]" : "text-[#8a8076]"}`}
-            >
-              <Calendar size={11} />
-              <span>{dueLabel}</span>
-            </span>
-          ) : null}
-          {task.recurringRule ? (
-            <span className={overdue ? "text-[#d1453b]" : ""}>↻</span>
-          ) : null}
-          {task.parentTaskId && depth === 0 ? <span>Subtask</span> : null}
-          <span className="md:hidden">{locationLabel}</span>
-        </div>
+        {showMetadata ? (
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-[#8a8076]">
+            {depth > 0 ? <span>Subtask</span> : null}
+            {hasVisibleSubtasks ? (
+              <span>
+                {visibleSubtaskCount} subtask
+                {visibleSubtaskCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
+            {showDueDate ? (
+              <span
+                className={`inline-flex items-center gap-1 ${overdue ? "text-[#d1453b]" : "text-[#8a8076]"}`}
+              >
+                <Calendar size={11} />
+                <span>{dueLabel}</span>
+              </span>
+            ) : null}
+            {task.parentTaskId && depth === 0 ? <span>Subtask</span> : null}
+          </div>
+        ) : null}
       </div>
       {task.parentTaskId ? (
         <button
@@ -7785,7 +7798,7 @@ function TaskRow({
           {rowActions ? rowActions(task) : null}
         </div>
       ) : null}
-      <div className="pointer-events-none mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
+      <div className="pointer-events-none absolute right-2 top-1/2 z-10 hidden -translate-y-1/2 items-center justify-end gap-1.5 rounded-full bg-[var(--app-surface)]/95 pl-2 text-right text-xs text-[#8a8076] opacity-0 shadow-sm transition group-hover/task-row:pointer-events-auto group-hover/task-row:opacity-100 group-focus-within/task-row:pointer-events-auto group-focus-within/task-row:opacity-100 md:flex">
         {task.parentTaskId ? (
           <button
             type="button"
@@ -7795,18 +7808,17 @@ function TaskRow({
             }}
             aria-label={`Convert ${task.title} to task`}
             title="Convert to task"
-            className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-2 py-1 font-semibold text-[#6D4A35] opacity-0 transition hover:bg-[var(--app-surface-soft)] group-hover/task-row:opacity-100 group-focus-within/task-row:opacity-100"
+            className="inline-flex items-center gap-1 rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-2 py-1 font-semibold text-[#6D4A35] transition hover:bg-[var(--app-surface-soft)]"
           >
             <ListTodo size={12} />
             <span>Convert to task</span>
           </button>
         ) : null}
         {rowActions ? (
-          <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5 opacity-0 transition group-hover/task-row:opacity-100 group-focus-within/task-row:opacity-100">
+          <div className="flex flex-wrap justify-end gap-1.5">
             {rowActions(task)}
           </div>
         ) : null}
-        <div>{locationLabel}</div>
       </div>
     </div>
   );
