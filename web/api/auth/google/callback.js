@@ -6,12 +6,16 @@ import {
   getConfig,
   getOrigin,
   handleApiError,
-  readEncryptedCookie,
+  readOAuthState,
   redirect,
+  safeReturnTo,
+  setNoStore,
   setSessionCookie,
 } from '../../_lib/auth.js';
+import { enforceRateLimit } from '../../_lib/rate-limit.js';
 
 export default async function handler(req, res) {
+  setNoStore(res);
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     res.statusCode = 405;
@@ -20,13 +24,18 @@ export default async function handler(req, res) {
   }
 
   try {
+    await enforceRateLimit(req, res, {
+      name: 'oauth-callback',
+      limit: 60,
+      windowSeconds: 10 * 60,
+    });
     const { cookieSecret } = getConfig();
     const origin = getOrigin(req);
     const url = new URL(req.url, origin);
     const state = url.searchParams.get('state');
     const code = url.searchParams.get('code');
     const error = url.searchParams.get('error');
-    const storedState = readEncryptedCookie(req, OAUTH_STATE_COOKIE, cookieSecret);
+    const storedState = readOAuthState(req, cookieSecret);
 
     clearCookie(res, OAUTH_STATE_COOKIE);
 
@@ -51,7 +60,7 @@ export default async function handler(req, res) {
       },
       cookieSecret,
     );
-    redirect(res, appendAuthSuccessMarker(storedState.returnTo || '/#/today'));
+    redirect(res, appendAuthSuccessMarker(safeReturnTo(storedState.returnTo, origin)));
   } catch (error) {
     handleApiError(res, error);
   }

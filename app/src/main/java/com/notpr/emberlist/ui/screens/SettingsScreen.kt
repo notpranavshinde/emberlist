@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -100,7 +102,12 @@ fun SettingsScreen(padding: PaddingValues) {
         viewModel.handleDriveSignInResult(result.data)
     }
 
-    Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .padding(padding)
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
         Text(text = "Settings", style = MaterialTheme.typography.headlineSmall)
 
         SectionHeader(text = "Preferences")
@@ -115,7 +122,7 @@ fun SettingsScreen(padding: PaddingValues) {
 
         RowSwitch(label = "Use 24h time", checked = settings.use24h, onCheckedChange = viewModel::updateUse24h)
         RowSwitch(
-            label = "Auto backup daily",
+            label = "Daily local backup (keeps 7)",
             checked = settings.autoBackupDaily,
             onCheckedChange = viewModel::updateAutoBackupDaily
         )

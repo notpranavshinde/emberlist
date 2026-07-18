@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.backup.BackupManager
 import com.notpr.emberlist.data.backup.BackupPayload
+import com.notpr.emberlist.data.backup.LocalBackupRetention
 import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.data.model.ActivityType
 import com.notpr.emberlist.data.model.LocationEntity
@@ -20,6 +21,7 @@ import com.notpr.emberlist.data.sync.SyncPayload
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -116,6 +118,47 @@ class BackupManagerTest {
         assertEquals(1, db.activityDao().getAll().size)
 
         db.close()
+    }
+
+    @Test
+    fun localBackupRetentionKeepsNewestBackups() {
+        val directory = temp.newFolder("backups")
+        val backups = (1..5).map { index ->
+            File(directory, "emberlist-backup-$index.json").apply {
+                writeText("backup $index")
+                setLastModified(index.toLong())
+            }
+        }
+
+        LocalBackupRetention.prune(directory, maxBackups = 3)
+
+        assertFalse(backups[0].exists())
+        assertFalse(backups[1].exists())
+        assertTrue(backups[2].exists())
+        assertTrue(backups[3].exists())
+        assertTrue(backups[4].exists())
+    }
+
+    @Test
+    fun localBackupRetentionIgnoresUnrelatedFiles() {
+        val directory = temp.newFolder("mixed-backups")
+        val oldestBackup = File(directory, "emberlist-backup-old.json").apply {
+            writeText("old")
+            setLastModified(1L)
+        }
+        File(directory, "emberlist-backup-new.json").apply {
+            writeText("new")
+            setLastModified(2L)
+        }
+        val exportedBackup = File(directory, "user-export.json").apply {
+            writeText("portable export")
+            setLastModified(0L)
+        }
+
+        LocalBackupRetention.prune(directory, maxBackups = 1)
+
+        assertFalse(oldestBackup.exists())
+        assertTrue(exportedBackup.exists())
     }
 
     private suspend fun seedDatabase(db: EmberlistDatabase) {

@@ -35,6 +35,8 @@ data class BackupPayload(
 class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore {
     private val json = Json { prettyPrint = true; ignoreUnknownKeys = true }
     private companion object {
+        const val MAX_LOCAL_BACKUPS = 7
+        const val BACKUP_FILE_PREFIX = "emberlist-backup-"
         const val PREFS_NAME = "emberlist_sync"
         const val KEY_DEVICE_ID = "device_id"
     }
@@ -86,9 +88,10 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
         val payload = buildBackupPayload(context)
         val output = json.encodeToString(payload)
         val dir = File(context.filesDir, "backup").apply { mkdirs() }
-        val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
-        val file = File(dir, "emberlist-backup-${formatter.format(Date())}.json")
+        val formatter = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US)
+        val file = File(dir, "$BACKUP_FILE_PREFIX${formatter.format(Date())}.json")
         file.writeText(output)
+        LocalBackupRetention.prune(dir, MAX_LOCAL_BACKUPS)
         return file
     }
 
@@ -155,6 +158,24 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
         return runCatching { json.decodeFromString<BackupPayload>(input) }
             .recoverCatching { json.decodeFromString<LegacyBackupPayload>(input).toBackupPayload() }
             .getOrThrow()
+    }
+}
+
+internal object LocalBackupRetention {
+    fun prune(directory: File, maxBackups: Int) {
+        require(maxBackups > 0) { "maxBackups must be positive" }
+        val backups = directory.listFiles()
+            ?.asSequence()
+            ?.filter { file ->
+                file.isFile &&
+                    file.name.startsWith("emberlist-backup-") &&
+                    file.extension.equals("json", ignoreCase = true)
+            }
+            ?.sortedWith(compareByDescending<File> { it.lastModified() }.thenByDescending { it.name })
+            ?.toList()
+            .orEmpty()
+
+        backups.drop(maxBackups).forEach { it.delete() }
     }
 }
 

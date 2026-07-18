@@ -4,6 +4,7 @@
 - Lockfile must be committed and deterministic.
 - Run vulnerability scan on every PR and release build.
 - Generate SBOM for release artifacts.
+- `.github/workflows/web-ci.yml` enforces these requirements for web changes and tagged releases.
 
 ## Blocking thresholds
 - Critical: block release.
