@@ -1,4 +1,10 @@
-import { useMemo, useState, type DragEvent } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import {
   addMonths,
   format,
@@ -51,7 +57,15 @@ export function TaskCalendarView({
     startOfMonth(new Date(todayStartMs)),
   );
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
   const [activeDropKey, setActiveDropKey] = useState<string | null>(null);
+  const pointerDrag = useRef<{
+    taskId: string;
+    startX: number;
+    startY: number;
+    dragging: boolean;
+  } | null>(null);
+  const suppressNextClick = useRef(false);
   const weekStartsOn = getGlobalWebDisplayPreferences().weekStartsOn;
   const calendarDays = useMemo(
     () => buildCalendarMonthDays(visibleMonth, weekStartsOn),
@@ -70,6 +84,97 @@ export function TaskCalendarView({
     [sections],
   );
   const weekdayLabels = calendarDays.slice(0, 7).map((day) => format(day, "EEE"));
+  const dayByKey = useMemo(
+    () => new Map(calendarDays.map((day) => [calendarDateKey(day), day])),
+    [calendarDays],
+  );
+
+  function dropKeyAtPoint(clientX: number, clientY: number): string | null {
+    const target = document.elementFromPoint(clientX, clientY);
+    if (target?.closest("[data-calendar-no-date]")) return "__no_date__";
+    return target
+      ?.closest("[data-calendar-date]")
+      ?.getAttribute("data-calendar-date") ?? null;
+  }
+
+  function beginPointerDrag(
+    event: ReactPointerEvent<HTMLElement>,
+    taskId: string,
+  ) {
+    if (event.button !== 0 || event.pointerType === "mouse") return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointerDrag.current = {
+      taskId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    };
+  }
+
+  function updatePointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const current = pointerDrag.current;
+    if (!current) return;
+    if (
+      !current.dragging &&
+      Math.hypot(
+        event.clientX - current.startX,
+        event.clientY - current.startY,
+      ) >= 6
+    ) {
+      current.dragging = true;
+      setDraggedTaskId(current.taskId);
+    }
+    if (!current.dragging) return;
+    event.preventDefault();
+    setActiveDropKey(dropKeyAtPoint(event.clientX, event.clientY));
+  }
+
+  function finishPointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const current = pointerDrag.current;
+    pointerDrag.current = null;
+    if (!current) return;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+
+    if (!current.dragging) {
+      suppressNextClick.current = true;
+      onOpenTask(current.taskId);
+      return;
+    }
+
+    event.preventDefault();
+    const task = tasks.find((candidate) => candidate.id === current.taskId);
+    const dropKey = dropKeyAtPoint(event.clientX, event.clientY);
+    setDraggedTaskId(null);
+    setActiveDropKey(null);
+    if (!task || !dropKey) return;
+    if (dropKey === "__no_date__") {
+      if (task.dueAt !== null) onRescheduleTasks([task.id], null);
+      return;
+    }
+    const targetDay = dayByKey.get(dropKey);
+    if (!targetDay) return;
+    const dueAt = moveTaskDueAtToCalendarDate(task, targetDay);
+    if (dueAt !== task.dueAt) onRescheduleTasks([task.id], dueAt);
+  }
+
+  function cancelPointerDrag() {
+    pointerDrag.current = null;
+    setDraggedTaskId(null);
+    setActiveDropKey(null);
+  }
+
+  function moveTaskToDate(taskId: string, targetDate: Date | null) {
+    const task = tasks.find((candidate) => candidate.id === taskId);
+    if (!task) return;
+    const dueAt = moveTaskDueAtToCalendarDate(task, targetDate);
+    setMovingTaskId(null);
+    if (dueAt !== task.dueAt) onRescheduleTasks([task.id], dueAt);
+  }
+
+  const movingTask = movingTaskId
+    ? tasks.find((task) => task.id === movingTaskId) ?? null
+    : null;
 
   function beginDrag(event: DragEvent<HTMLElement>, taskId: string) {
     event.dataTransfer.effectAllowed = "move";
@@ -159,6 +264,21 @@ export function TaskCalendarView({
         </div>
       </header>
 
+      {movingTask ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#F0C6B5] bg-[#FFF4EE] px-5 py-3 text-sm text-[#7B4B38] sm:px-6">
+          <span>
+            Moving <strong>“{movingTask.title}”</strong> — choose a date or No date.
+          </span>
+          <button
+            type="button"
+            onClick={() => setMovingTaskId(null)}
+            className="rounded-full border border-[#E7B7A3] bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.12em] text-[#A64F30]"
+          >
+            Cancel move
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="min-w-0 overflow-x-auto">
           <div className="min-w-[620px]">
@@ -182,6 +302,25 @@ export function TaskCalendarView({
                   <div
                     key={key}
                     data-calendar-date={key}
+                    role={movingTask ? "button" : undefined}
+                    tabIndex={movingTask ? 0 : undefined}
+                    aria-label={
+                      movingTask
+                        ? `Move ${movingTask.title} to ${format(day, "MMMM d, yyyy")}`
+                        : undefined
+                    }
+                    onClick={() => {
+                      if (movingTask) moveTaskToDate(movingTask.id, day);
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        movingTask &&
+                        (event.key === "Enter" || event.key === " ")
+                      ) {
+                        event.preventDefault();
+                        moveTaskToDate(movingTask.id, day);
+                      }
+                    }}
                     onDragOver={(event) => allowDrop(event, key)}
                     onDragLeave={(event) => {
                       if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
@@ -221,12 +360,20 @@ export function TaskCalendarView({
                               ? projectById.get(task.projectId)?.color
                               : undefined
                           }
-                          dragging={draggedTaskId === task.id}
+                          dragging={
+                            draggedTaskId === task.id || movingTaskId === task.id
+                          }
                           onDragStart={beginDrag}
                           onDragEnd={() => {
                             setDraggedTaskId(null);
                             setActiveDropKey(null);
                           }}
+                          onPointerDown={beginPointerDrag}
+                          onPointerMove={updatePointerDrag}
+                          onPointerUp={finishPointerDrag}
+                          onPointerCancel={cancelPointerDrag}
+                          onBeginMove={setMovingTaskId}
+                          suppressNextClickRef={suppressNextClick}
                           onOpenTask={onOpenTask}
                           onToggleTask={onToggleTask}
                         />
@@ -241,6 +388,23 @@ export function TaskCalendarView({
 
         <aside
           data-calendar-no-date="true"
+          role={movingTask ? "button" : undefined}
+          tabIndex={movingTask ? 0 : undefined}
+          aria-label={
+            movingTask ? `Move ${movingTask.title} to No date` : undefined
+          }
+          onClick={() => {
+            if (movingTask) moveTaskToDate(movingTask.id, null);
+          }}
+          onKeyDown={(event) => {
+            if (
+              movingTask &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
+              event.preventDefault();
+              moveTaskToDate(movingTask.id, null);
+            }
+          }}
           onDragOver={(event) => allowDrop(event, "__no_date__")}
           onDragLeave={(event) => {
             if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
@@ -284,13 +448,21 @@ export function TaskCalendarView({
                       ? projectById.get(task.projectId)?.color
                       : undefined
                   }
-                  dragging={draggedTaskId === task.id}
+                  dragging={
+                    draggedTaskId === task.id || movingTaskId === task.id
+                  }
                   spacious
                   onDragStart={beginDrag}
                   onDragEnd={() => {
                     setDraggedTaskId(null);
                     setActiveDropKey(null);
                   }}
+                  onPointerDown={beginPointerDrag}
+                  onPointerMove={updatePointerDrag}
+                  onPointerUp={finishPointerDrag}
+                  onPointerCancel={cancelPointerDrag}
+                  onBeginMove={setMovingTaskId}
+                  suppressNextClickRef={suppressNextClick}
                   onOpenTask={onOpenTask}
                   onToggleTask={onToggleTask}
                 />
@@ -315,6 +487,12 @@ function CalendarTaskChip({
   spacious = false,
   onDragStart,
   onDragEnd,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
+  onBeginMove,
+  suppressNextClickRef,
   onOpenTask,
   onToggleTask,
 }: {
@@ -325,6 +503,15 @@ function CalendarTaskChip({
   spacious?: boolean;
   onDragStart: (event: DragEvent<HTMLElement>, taskId: string) => void;
   onDragEnd: () => void;
+  onPointerDown: (
+    event: ReactPointerEvent<HTMLElement>,
+    taskId: string,
+  ) => void;
+  onPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerUp: (event: ReactPointerEvent<HTMLElement>) => void;
+  onPointerCancel: () => void;
+  onBeginMove: (taskId: string) => void;
+  suppressNextClickRef: { current: boolean };
   onOpenTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
 }) {
@@ -337,17 +524,32 @@ function CalendarTaskChip({
       data-calendar-task-id={task.id}
       onDragStart={(event) => onDragStart(event, task.id)}
       onDragEnd={onDragEnd}
-      onClick={() => onOpenTask(task.id)}
+      onPointerDown={(event) => onPointerDown(event, task.id)}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (suppressNextClickRef.current) {
+          suppressNextClickRef.current = false;
+          return;
+        }
+        onOpenTask(task.id);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onOpenTask(task.id);
         }
       }}
-      className={`group/task flex cursor-grab items-start rounded-xl border border-[#E4DAD1] bg-[var(--app-surface)] shadow-[0_2px_8px_rgba(72,51,36,0.06)] transition hover:-translate-y-0.5 hover:border-[#D0B9AA] hover:shadow-md active:cursor-grabbing ${
+      className={`group/task relative flex cursor-grab items-start rounded-xl border border-[#E4DAD1] bg-[var(--app-surface)] shadow-[0_2px_8px_rgba(72,51,36,0.06)] transition hover:-translate-y-0.5 hover:border-[#D0B9AA] hover:shadow-md active:cursor-grabbing ${
         spacious ? "gap-2 p-2.5" : "gap-1 px-1.5 py-1.5"
       } ${dragging ? "opacity-40" : ""}`}
-      style={{ borderLeftColor: projectColor ?? "#EE6A3C", borderLeftWidth: 3 }}
+      style={{
+        borderLeftColor: projectColor ?? "#EE6A3C",
+        borderLeftWidth: 3,
+        touchAction: "none",
+      }}
     >
       {spacious ? (
         <button
@@ -357,6 +559,7 @@ function CalendarTaskChip({
             event.stopPropagation();
             onToggleTask(task.id);
           }}
+          onPointerDown={(event) => event.stopPropagation()}
           className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border border-[#B8AAA0] text-transparent transition hover:border-[#EE6A3C] hover:bg-[#FFF1EB] hover:text-[#EE6A3C]"
         >
           <Check size={10} strokeWidth={3} />
@@ -377,13 +580,19 @@ function CalendarTaskChip({
           </span>
         ) : null}
       </div>
-      {spacious ? (
-        <GripVertical
-          size={13}
-          className="mt-0.5 shrink-0 text-[#B7AAA0] opacity-0 transition group-hover/task:opacity-100"
-          aria-hidden="true"
-        />
-      ) : null}
+      <button
+        type="button"
+        aria-label={`Move ${task.title}`}
+        title="Move task"
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => {
+          event.stopPropagation();
+          onBeginMove(task.id);
+        }}
+        className="absolute right-0.5 top-1 grid h-6 w-5 place-items-center rounded-lg bg-[var(--app-surface)] text-[#A99A90] opacity-0 shadow-sm transition hover:text-[#B64B28] group-hover/task:opacity-100 group-focus-within/task:opacity-100"
+      >
+        <GripVertical size={13} aria-hidden="true" />
+      </button>
     </article>
   );
 }
