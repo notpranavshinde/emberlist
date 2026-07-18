@@ -10,6 +10,8 @@
   --app-surface: color-mix(in srgb, var(--app-shell-bg) 16%, white);
   --app-surface-soft: color-mix(in srgb, var(--app-shell-bg) 34%, white);
   --app-surface-muted: color-mix(in srgb, var(--app-shell-bg) 52%, white);
+  --app-scrollbar-thumb: color-mix(in srgb, #9b8778 38%, transparent);
+  --app-scrollbar-thumb-hover: color-mix(in srgb, #806c5e 58%, transparent);
 }
 
 html, body, #root {
@@ -23,6 +25,40 @@ body {
   color: #221E1C;
   font-family: "Lekton", "Aptos", "Segoe UI", sans-serif;
   font-weight: 500;
+}
+
+* {
+  scrollbar-color: var(--app-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  min-height: 36px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--app-scrollbar-thumb);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scrollbar-thumb-hover);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 button,
