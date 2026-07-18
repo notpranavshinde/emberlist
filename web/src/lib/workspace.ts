@@ -768,7 +768,7 @@ export function rescheduleTasksToDate(payload: SyncPayload, taskIds: string[], d
     return updateTasks(payload, taskIds, task => ({
         ...task,
         dueAt,
-        allDay: dueAt === null ? false : true,
+        allDay: dueAt === null ? false : startOfDay(dueAt).getTime() === dueAt,
     }));
 }
 

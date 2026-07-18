@@ -257,6 +257,18 @@ describe('workspace bulk task helpers', () => {
     });
   });
 
+  it('keeps a non-midnight calendar move as a timed task', () => {
+    const payload = createPayload();
+    const timedDueAt = new Date('2026-04-02T14:35:00').getTime();
+
+    const updated = rescheduleTasksToDate(payload, ['task-open'], timedDueAt);
+
+    expect(updated.tasks.find(task => task.id === 'task-open')).toMatchObject({
+      dueAt: timedDueAt,
+      allDay: false,
+    });
+  });
+
   it('postpones recurring tasks to their next occurrence and non-recurring tasks to tomorrow', () => {
     vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-04-08T09:00:00').getTime());
     const payload = createPayload();

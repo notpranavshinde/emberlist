@@ -61,6 +61,7 @@ import {
   subMonths,
 } from "date-fns";
 import { RecoveryScreen } from "./components/RecoveryScreen";
+import { TaskCalendarView } from "./components/TaskCalendarView";
 import {
   resolveBannerAutoDismissMs,
   shouldDismissBannerOnNavigation,
@@ -4210,6 +4211,19 @@ function UpcomingPage({
   const [activeDropDateKey, setActiveDropDateKey] = useState<string | null>(
     null,
   );
+  const [upcomingView, setUpcomingView] = useState<"agenda" | "calendar">(
+    () =>
+      getStoredItem("emberlist.upcomingView") === "agenda"
+        ? "agenda"
+        : "calendar",
+  );
+  const calendarTasks = useMemo(
+    () =>
+      payload.tasks.filter(
+        (task) => !task.deletedAt && task.status === "OPEN",
+      ),
+    [payload.tasks],
+  );
   const selectedIds = useMemo(
     () =>
       Array.from(selectedTaskIds).filter((taskId) =>
@@ -4227,6 +4241,10 @@ function UpcomingPage({
     [selectedIds, visibleTasks],
   );
   const selectedCount = selectedIds.length;
+
+  useEffect(() => {
+    setStoredItem("emberlist.upcomingView", upcomingView);
+  }, [upcomingView]);
 
   function clearSelection() {
     setSelectionMode(false);
@@ -4373,11 +4391,41 @@ function UpcomingPage({
     );
   }
 
+  const viewToggle = (
+    <PageViewToggle
+      label="Upcoming view"
+      value={upcomingView}
+      options={[
+        { value: "agenda", label: "Agenda" },
+        { value: "calendar", label: "Calendar" },
+      ]}
+      onChange={(value) => setUpcomingView(value as "agenda" | "calendar")}
+    />
+  );
+
+  if (upcomingView === "calendar") {
+    return (
+      <div className="space-y-4">
+        <div className="flex justify-end px-1">{viewToggle}</div>
+        <TaskCalendarView
+          tasks={calendarTasks}
+          projects={projects}
+          sections={payload.sections.filter((section) => !section.deletedAt)}
+          todayStartMs={todayStartMs}
+          onOpenTask={openTaskEditor}
+          onToggleTask={onToggleTask}
+          onRescheduleTasks={onRescheduleTasks}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="space-y-6"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
+      <div className="flex justify-end px-1">{viewToggle}</div>
       {showSelectionButtons || selectionMode ? (
         <div className="flex flex-wrap items-center gap-2 px-3">
           <button
@@ -5723,6 +5771,10 @@ function ProjectPage({
   const [activeDialog, setActiveDialog] = useState<
     null | "reschedule" | "move" | "priority" | "delete"
   >(null);
+  const [projectViewOverride, setProjectViewOverride] = useState<{
+    projectId: string;
+    calendar: boolean;
+  } | null>(null);
   const project = useMemo(
     () => (projectId ? getProjectById(payload, projectId) : undefined),
     [payload, projectId],
@@ -5859,6 +5911,13 @@ function ProjectPage({
   const currentProject = project;
   const unsectionedTasks = tasks.filter((task) => !task.sectionId);
   const projectView = currentProject.viewPreference ?? "BOARD";
+  const storedProjectCalendarOpen =
+    getStoredItem(`emberlist.projectView.${currentProject.id}`) === "calendar";
+  const projectCalendarOpen =
+    projectViewOverride?.projectId === currentProject.id
+      ? projectViewOverride.calendar
+      : storedProjectCalendarOpen;
+  const projectDisplayView = projectCalendarOpen ? "CALENDAR" : projectView;
   const boardColumns = [
     ...(unsectionedTasks.length > 0 || sections.length === 0
       ? [
@@ -5981,10 +6040,27 @@ function ProjectPage({
   }
 
   function setProjectView(viewPreference: Project["viewPreference"]) {
+    setProjectViewOverride({
+      projectId: currentProject.id,
+      calendar: false,
+    });
+    if (projectId) {
+      setStoredItem(`emberlist.projectView.${projectId}`, viewPreference ?? "BOARD");
+    }
     onUpdateProject(currentProject.id, (current) => ({
       ...current,
       viewPreference,
     }));
+  }
+
+  function openProjectCalendar() {
+    setProjectViewOverride({
+      projectId: currentProject.id,
+      calendar: true,
+    });
+    if (projectId) {
+      setStoredItem(`emberlist.projectView.${projectId}`, "calendar");
+    }
   }
 
   function renderProjectRowActions(task: Task) {
@@ -6035,41 +6111,50 @@ function ProjectPage({
       className="space-y-6"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
-      <section className="flex flex-wrap justify-end gap-2 px-1">
-            {showSelectionButtons || selectionMode ? (
-              <button
-                type="button"
-                onClick={() =>
-                  selectionMode ? clearSelection() : openSelection()
-                }
-                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  selectionMode
-                    ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
-                }`}
-              >
-                {selectionMode ? "Cancel selection" : "Select tasks"}
-              </button>
-            ) : null}
-            {selectionMode ? (
-              <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
-                {selectedCount} selected
-              </span>
-            ) : null}
-            <OverflowMenu
-              label="Project actions"
-              items={[
+      <section className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <PageViewToggle
+          label="Project view"
+          value={projectDisplayView}
+          options={[
+            { value: "LIST", label: "List" },
+            { value: "BOARD", label: "Board" },
+            { value: "CALENDAR", label: "Calendar" },
+          ]}
+          onChange={(value) => {
+            if (value === "CALENDAR") {
+              openProjectCalendar();
+            } else {
+              setProjectView(value as "LIST" | "BOARD");
+            }
+          }}
+        />
+        <div className="flex flex-wrap justify-end gap-2">
+          {showSelectionButtons || selectionMode ? (
+            <button
+              type="button"
+              onClick={() =>
+                selectionMode ? clearSelection() : openSelection()
+              }
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                selectionMode
+                  ? "border border-[#F3B7A4] bg-[#FFF5F1] text-[#B64B28] hover:bg-[#FDE9E1]"
+                  : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[var(--app-surface-soft)]"
+              }`}
+            >
+              {selectionMode ? "Cancel selection" : "Select tasks"}
+            </button>
+          ) : null}
+          {selectionMode ? (
+            <span className="rounded-full bg-[var(--app-surface-soft)] px-3 py-2 text-sm font-semibold text-[#6D5C50]">
+              {selectedCount} selected
+            </span>
+          ) : null}
+          <OverflowMenu
+            label="Project actions"
+            items={[
                 {
                   label: "Add section",
                   onSelect: () => setIsAddSectionDialogOpen(true),
-                },
-                {
-                  label:
-                    projectView === "BOARD"
-                      ? "Switch to list view"
-                      : "Switch to board view",
-                  onSelect: () =>
-                    setProjectView(projectView === "BOARD" ? "LIST" : "BOARD"),
                 },
                 {
                   label: "Rename project",
@@ -6089,8 +6174,9 @@ function ProjectPage({
                   tone: "destructive",
                   onSelect: () => setIsProjectDeleteDialogOpen(true),
                 },
-              ]}
-            />
+            ]}
+          />
+        </div>
       </section>
 
       {selectionMode ? (
@@ -6133,7 +6219,17 @@ function ProjectPage({
       ) : null}
 
       <section className="space-y-4">
-        {projectView === "BOARD" ? (
+        {projectDisplayView === "CALENDAR" ? (
+          <TaskCalendarView
+            tasks={tasks}
+            projects={[currentProject]}
+            sections={sections}
+            todayStartMs={todayStartMs}
+            onOpenTask={openTaskEditor}
+            onToggleTask={onToggleTask}
+            onRescheduleTasks={onRescheduleTasks}
+          />
+        ) : projectView === "BOARD" ? (
           <TaskGroupGrid>
             {boardColumns.map((column) => (
               <section
@@ -7117,6 +7213,45 @@ function TaskGroupGrid({ children }: { children: ReactNode }) {
       }}
     >
       {children}
+    </div>
+  );
+}
+
+function PageViewToggle({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex rounded-full border border-[#DED4CA] bg-[var(--app-surface-soft)] p-1 shadow-sm"
+    >
+      {options.map((option) => {
+        const active = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(option.value)}
+            className={`rounded-full px-3.5 py-1.5 text-xs font-bold transition sm:text-sm ${
+              active
+                ? "bg-[var(--app-surface)] text-[#B64B28] shadow-sm"
+                : "text-[#74685F] hover:text-[#2D2926]"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
