@@ -58,6 +58,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -117,15 +118,13 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         expandedState = expanded,
         defaultExpanded = false
     )
-    val todayGroups = remember(todayDisplayParents, subtaskItems, groupMode) {
-        buildTodayGroups(
-            parents = todayDisplayParents,
-            subtasks = subtaskItems,
-            expandedState = expanded,
-            groupMode = TodayGroupMode.valueOf(groupMode),
-            zone = zone
-        )
-    }
+    val todayGroups = buildTodayGroups(
+        parents = todayDisplayParents,
+        subtasks = subtaskItems,
+        expandedState = expanded,
+        groupMode = TodayGroupMode.valueOf(groupMode),
+        zone = zone
+    )
     val completedToday = flattenTaskItemsWithSubtasks(
         parents = completedItems,
         subtasks = subtaskItems,
@@ -212,7 +211,11 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(text = "Today", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        text = "Today",
+                        modifier = Modifier.testTag("today-screen-title"),
+                        style = MaterialTheme.typography.headlineSmall
+                    )
                     Text(
                         text = "${parentItems.size} tasks",
                         style = MaterialTheme.typography.bodySmall,

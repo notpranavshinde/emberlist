@@ -41,6 +41,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.unit.IntOffset
@@ -205,6 +206,7 @@ fun TaskRow(
                         .padding(top = 4.dp, start = 8.dp)
                         .size(18.dp)
                         .rotate(if (expanded) 180f else 0f)
+                        .testTag("task-expand-${item.task.id}")
                         .clickable { onToggleExpand?.invoke() },
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.58f)
                 )
