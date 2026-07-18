@@ -3897,7 +3897,7 @@ function TodayPage({
 
   return (
     <div
-      className="mx-auto max-w-[1080px] space-y-4"
+      className="w-full max-w-[980px] space-y-4"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
       {showSelectionButtons || selectionMode ? (
@@ -7240,7 +7240,7 @@ function TaskGroup({
         onDragLeave={dropTargetState?.onDragLeave}
         onDrop={dropTargetState?.onDrop}
       >
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:gap-4">
           <div>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <h3 className="text-[18px] font-semibold text-[#202020]">
@@ -7261,7 +7261,7 @@ function TaskGroup({
               </p>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2">
             {headerActions}
             {collapsible && tasks.length > 0 ? (
               <button
@@ -7658,7 +7658,7 @@ function TaskRow({
           onPromoteSubtask(task.id);
         }
       }}
-      className={`group/task-row relative flex items-start gap-2 border-b border-[#f1eeeb] px-2 py-1.5 text-left transition last:border-b-0 md:gap-3 md:px-4 ${
+      className={`group/task-row relative flex items-start gap-2 border-b border-[#f1eeeb] px-2 py-2.5 text-left transition last:border-b-0 md:gap-3 md:px-4 ${
         isDropActive
           ? "bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]"
           : selected
