@@ -5,6 +5,7 @@ import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
+import com.notpr.emberlist.data.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
 
 interface TaskRepository {
@@ -18,7 +19,7 @@ interface TaskRepository {
     fun observeProject(projectId: String): Flow<ProjectEntity?>
     suspend fun getProjectByName(name: String): ProjectEntity?
     suspend fun getSectionByName(projectId: String, name: String): SectionEntity?
-    fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>>
+    fun observeProjectTasks(projectId: String, status: TaskStatus = TaskStatus.OPEN): Flow<List<TaskEntity>>
     fun observeSections(projectId: String): Flow<List<SectionEntity>>
     fun observeAllSections(): Flow<List<SectionEntity>>
     fun observeTask(taskId: String): Flow<TaskEntity?>

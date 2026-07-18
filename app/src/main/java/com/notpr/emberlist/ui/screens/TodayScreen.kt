@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -218,8 +219,23 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
                 }
-                IconButton(onClick = { showOrganizeDialog = true }) {
-                    Icon(Icons.Default.Tune, contentDescription = "Sort and group")
+                Row {
+                    IconButton(onClick = { showOrganizeDialog = true }) {
+                        Icon(Icons.Default.Tune, contentDescription = "Sort and group")
+                    }
+                    IconButton(
+                        onClick = { settingsViewModel.syncNow() },
+                        enabled = settings.syncEnabled && driveAuthState.hasDriveScope && !syncUiState.isSyncing
+                    ) {
+                        if (syncUiState.isSyncing) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = "Sync now")
+                        }
+                    }
                 }
             }
         }

@@ -10,6 +10,7 @@ import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
+import com.notpr.emberlist.data.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
 
 class TaskRepositoryImpl(
@@ -44,7 +45,8 @@ class TaskRepositoryImpl(
     override suspend fun getSectionByName(projectId: String, name: String): SectionEntity? =
         sectionDao.getByProjectAndName(projectId, name)
 
-    override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> = taskDao.observeProjectTasks(projectId)
+    override fun observeProjectTasks(projectId: String, status: TaskStatus): Flow<List<TaskEntity>> =
+        taskDao.observeProjectTasks(projectId, status)
 
     override fun observeSections(projectId: String): Flow<List<SectionEntity>> = sectionDao.observeSections(projectId)
 

@@ -6,6 +6,7 @@ import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.ReminderEntity
 import com.notpr.emberlist.data.model.SectionEntity
 import com.notpr.emberlist.data.model.TaskEntity
+import com.notpr.emberlist.data.model.TaskStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 
@@ -29,8 +30,10 @@ class FakeTaskRepository : TaskRepository {
         projects.values.firstOrNull { it.deletedAt == null && it.name.equals(name, ignoreCase = true) }
     override suspend fun getSectionByName(projectId: String, name: String): SectionEntity? =
         sections.values.firstOrNull { it.deletedAt == null && it.projectId == projectId && it.name.equals(name, ignoreCase = true) }
-    override fun observeProjectTasks(projectId: String): Flow<List<TaskEntity>> =
-        flowOf(tasks.values.filter { it.deletedAt == null && it.projectId == projectId })
+    override fun observeProjectTasks(projectId: String, status: TaskStatus): Flow<List<TaskEntity>> =
+        flowOf(tasks.values.filter {
+            it.deletedAt == null && it.projectId == projectId && it.parentTaskId == null && it.status == status
+        })
     override fun observeSections(projectId: String): Flow<List<SectionEntity>> =
         flowOf(sections.values.filter { it.deletedAt == null && it.projectId == projectId })
     override fun observeAllSections(): Flow<List<SectionEntity>> = flowOf(sections.values.filter { it.deletedAt == null })

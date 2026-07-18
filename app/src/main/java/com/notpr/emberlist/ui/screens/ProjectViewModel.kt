@@ -40,6 +40,10 @@ class ProjectViewModel(
         repository.observeProjectTasks(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    fun observeCompletedTasks(projectId: String): StateFlow<List<TaskEntity>> =
+        repository.observeProjectTasks(projectId, TaskStatus.COMPLETED)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun observeSections(projectId: String): StateFlow<List<SectionEntity>> =
         repository.observeSections(projectId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

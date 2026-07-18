@@ -1,6 +1,7 @@
 package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -60,14 +63,17 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val viewModel: ProjectViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val projectFlow = remember(projectId) { viewModel.observeProject(projectId) }
     val tasksFlow = remember(projectId) { viewModel.observeTasks(projectId) }
+    val completedTasksFlow = remember(projectId) { viewModel.observeCompletedTasks(projectId) }
     val sectionsFlow = remember(projectId) { viewModel.observeSections(projectId) }
 
     val project by projectFlow.collectAsState()
     val tasks by tasksFlow.collectAsState()
+    val completedTasks by completedTasksFlow.collectAsState()
     val sections by sectionsFlow.collectAsState()
     val subtasksFlow = remember(projectId, tasks) { viewModel.observeSubtasksForParents(tasks.map { it.id }) }
     val subtasks by subtasksFlow.collectAsState(initial = emptyList())
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
+    var completedExpanded by remember { mutableStateOf(false) }
     val projectById = project?.let { mapOf(it.id to it) }.orEmpty()
     val sectionById = sections.associateBy { it.id }
     var projectTitle by remember(projectId) { mutableStateOf<String?>(null) }
@@ -90,6 +96,14 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
     val zone = ZoneId.systemDefault()
     val startOfToday = startOfTodayMillis(zone)
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
+    val completedTaskItems = completedTasks.map { task ->
+        buildTaskListItem(
+            task = task,
+            projectById = projectById,
+            sectionById = sectionById,
+            isOverdue = false
+        )
+    }
 
     LaunchedEffect(rescheduleTarget) {
         val task = rescheduleTarget ?: return@LaunchedEffect
@@ -262,6 +276,32 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                         )
                     }
                 }
+                item(key = "completed-header") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { completedExpanded = !completedExpanded }
+                            .padding(horizontal = ListHorizontalPadding, vertical = ListSectionHeaderVerticalPadding),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Completed (${completedTaskItems.size})")
+                        Icon(
+                            imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                            contentDescription = if (completedExpanded) "Hide completed tasks" else "Show completed tasks"
+                        )
+                    }
+                }
+                if (completedExpanded) {
+                    items(completedTaskItems, key = { "completed-${it.task.id}" }) { item ->
+                        TaskRow(
+                            item = item,
+                            modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding),
+                            onToggle = viewModel::toggleComplete,
+                            onDelete = viewModel::deleteTask,
+                            onClick = { navController.navigate("task/${item.task.id}") }
+                        )
+                    }
+                }
             }
         } else {
             val grouped = tasks.groupBy { it.sectionId }
@@ -315,6 +355,38 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                             }
                         }
                     )
+                }
+                item(key = "completed-column") {
+                    Column(
+                        modifier = Modifier
+                            .width(280.dp)
+                            .padding(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { completedExpanded = !completedExpanded }
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Completed (${completedTaskItems.size})")
+                            Icon(
+                                imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                                contentDescription = if (completedExpanded) "Hide completed tasks" else "Show completed tasks"
+                            )
+                        }
+                        if (completedExpanded) {
+                            completedTaskItems.forEach { item ->
+                                TaskRow(
+                                    item = item,
+                                    modifier = Modifier.padding(vertical = ListTaskOuterVerticalPadding),
+                                    onToggle = viewModel::toggleComplete,
+                                    onDelete = viewModel::deleteTask,
+                                    onClick = { navController.navigate("task/${item.task.id}") }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

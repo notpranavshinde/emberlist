@@ -68,6 +68,22 @@ class TaskDaoQueryTest {
     }
 
     @Test
+    fun projectTasksCanFilterCompletedTasks() = kotlinx.coroutines.runBlocking {
+        val db = buildDb()
+        val dao = db.taskDao()
+        val now = System.currentTimeMillis()
+        dao.upsert(baseTask("open", "p1", null, now))
+        dao.upsert(baseTask("done", "p1", null, now).copy(status = TaskStatus.COMPLETED, completedAt = now))
+        dao.upsert(baseTask("other", "p2", null, now).copy(status = TaskStatus.COMPLETED, completedAt = now))
+        dao.upsert(baseTask("subtask", "p1", "done", now).copy(status = TaskStatus.COMPLETED, completedAt = now))
+
+        val result = dao.observeProjectTasks("p1", TaskStatus.COMPLETED).first()
+
+        assertEquals(listOf("done"), result.map { it.id })
+        db.close()
+    }
+
+    @Test
     fun subtasksQueriesExcludeCompleted() = kotlinx.coroutines.runBlocking {
         val db = buildDb()
         val dao = db.taskDao()
