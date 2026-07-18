@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
-    <cloud-backup>
-        <include domain="database" path="." />
-        <include domain="sharedpref" path="." />
-        <include domain="file" path="." />
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <!-- Task and location content is excluded. Only non-content settings are
+             eligible, and cloud backup requires client-side encryption. -->
+        <include domain="file" path="datastore/settings.preferences_pb" />
     </cloud-backup>
     <device-transfer>
-        <include domain="database" path="." />
-        <include domain="sharedpref" path="." />
-        <include domain="file" path="." />
+        <include domain="file" path="datastore/settings.preferences_pb" />
     </device-transfer>
 </data-extraction-rules>

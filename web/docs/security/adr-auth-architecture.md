@@ -22,7 +22,12 @@ Use Vercel serverless functions as a small backend-for-frontend for Google Drive
 - Refresh token is encrypted before being stored in a cookie.
 - Browser JavaScript no longer receives Google access or refresh tokens in the default production flow.
 - OAuth `state` is non-guessable, stored server-side in an encrypted HttpOnly cookie, and validated on callback.
+- Session and OAuth-state creation times are validated server-side; expired, future-dated, and malformed cookies are rejected.
+- OAuth return destinations are parsed against the canonical application origin and restricted to non-API paths on that origin.
 - Mutating API methods require same-origin requests.
+- Sensitive API and OAuth responses use `Cache-Control: no-store`.
+- Sync uploads and downloads are capped at 2 MiB and validated for schema, types, string lengths, and entity counts.
+- Auth and sync endpoints are rate-limited by IP and, where available, an opaque hash of the encrypted session cookie.
 - Disconnect revokes the refresh token when possible and clears auth cookies.
 
 ## Required Deployment Configuration
@@ -31,6 +36,9 @@ Use Vercel serverless functions as a small backend-for-frontend for Google Drive
   - `GOOGLE_CLIENT_ID`
   - `GOOGLE_CLIENT_SECRET`
   - `EMBERLIST_AUTH_SECRET` with at least 32 random bytes of entropy.
+- Recommended:
+  - `EMBERLIST_APP_ORIGIN=https://emberlist.dev` pins redirects and same-origin checks to the production origin.
+  - `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` enable distributed rate limits across serverless instances.
 - Optional fallback:
   - `VITE_GOOGLE_AUTH_MODE=legacy_spa` can temporarily restore the old browser-token path for local troubleshooting.
 
@@ -42,6 +50,8 @@ Use Vercel serverless functions as a small backend-for-frontend for Google Drive
 - Friend testers should no longer need a popup on refresh/reopen once connected.
 - Vercel is now part of the sync trust boundary.
 - If `EMBERLIST_AUTH_SECRET` rotates, existing web sync sessions are invalidated and users must reconnect Google Drive.
+- Without the optional Upstash settings, rate limits use a bounded in-memory fallback. This protects each warm serverless instance, but counters do not survive cold starts and are not shared across instances. Platform-level WAF/rate limiting remains recommended for broad launch.
+- If the distributed rate-limit store is temporarily unavailable, the endpoint falls back to its warm-instance counter so sync availability is preserved.
 - A future multi-user backend can replace the encrypted cookie store without changing the Drive merge contract.
 
 ## References

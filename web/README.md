@@ -75,4 +75,7 @@ export default defineConfig([
 ## Security checks
 
 - `npm run security:check` validates required security documentation, required HTTP security headers in `vercel.json`, and centralized local storage usage.
+- `npm audit --audit-level=high` blocks high and critical dependency advisories in CI.
+- Production builds fail when `VITE_GOOGLE_AUTH_MODE=legacy_spa`; use the backend OAuth flow for deployed builds.
+- CI uploads a CycloneDX SBOM artifact for every successful web verification run.
 - Security planning and launch documents are in `docs/security/`.

@@ -6,6 +6,10 @@
    - prototype-pollution style objects
    - unexpected enum values and types
 2. **OAuth/sync resilience**
+   - encoded and literal backslash return destinations stay on the application origin
+   - missing, expired, and future-dated session/state cookies are rejected
+   - upload body size, entity count, and field-length bounds are enforced
+   - rate-limit responses return `429` and `Retry-After`
    - backend refresh-token failures
    - authorization callback state mismatch
    - insufficient permissions handling

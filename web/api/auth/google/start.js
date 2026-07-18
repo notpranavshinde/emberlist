@@ -6,10 +6,13 @@ import {
   handleApiError,
   redirect,
   safeReturnTo,
+  setNoStore,
   setStateCookie,
 } from '../../_lib/auth.js';
+import { enforceRateLimit } from '../../_lib/rate-limit.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
+  setNoStore(res);
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     res.statusCode = 405;
@@ -18,10 +21,15 @@ export default function handler(req, res) {
   }
 
   try {
+    await enforceRateLimit(req, res, {
+      name: 'oauth-start',
+      limit: 30,
+      windowSeconds: 10 * 60,
+    });
     const { cookieSecret } = getConfig();
     const origin = getOrigin(req);
     const url = new URL(req.url, origin);
-    const returnTo = safeReturnTo(url.searchParams.get('returnTo') ?? '');
+    const returnTo = safeReturnTo(url.searchParams.get('returnTo') ?? '', origin);
     const nonce = crypto.randomUUID();
 
     setStateCookie(res, { nonce, returnTo, createdAt: Date.now() }, cookieSecret);

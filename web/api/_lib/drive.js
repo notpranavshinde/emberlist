@@ -1,4 +1,5 @@
 import { refreshAccessToken, requireSession, throwGoogleError } from './auth.js';
+import { MAX_SYNC_BODY_BYTES, validateSyncPayload } from './sync-payload.js';
 
 const SYNC_FILE_NAME = 'emberlist_sync.json';
 
@@ -25,8 +26,42 @@ export async function downloadSyncPayload(accessToken) {
   }
   return {
     fileId,
-    payload: await response.json(),
+    payload: await readDriveSyncPayload(response),
   };
+}
+
+export async function readDriveSyncPayload(response) {
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SYNC_BODY_BYTES) {
+    throwInvalidDrivePayload(`Drive sync file exceeds the ${MAX_SYNC_BODY_BYTES}-byte limit.`);
+  }
+
+  const chunks = [];
+  let size = 0;
+  if (!response.body) throwInvalidDrivePayload('Drive sync file is empty.');
+  for await (const chunk of response.body) {
+    const buffer = Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_SYNC_BODY_BYTES) {
+      throwInvalidDrivePayload(`Drive sync file exceeds the ${MAX_SYNC_BODY_BYTES}-byte limit.`);
+    }
+    chunks.push(buffer);
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throwInvalidDrivePayload('Drive sync file must contain valid JSON.');
+  }
+  try {
+    validateSyncPayload(payload);
+  } catch (error) {
+    throwInvalidDrivePayload(error instanceof Error
+      ? `Drive sync file is invalid: ${error.message}`
+      : 'Drive sync file is invalid.');
+  }
+  return payload;
 }
 
 export async function uploadSyncPayload(accessToken, payload) {
@@ -133,4 +168,10 @@ function parseDriveModifiedTime(value) {
   if (!value) return Number.MIN_SAFE_INTEGER;
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? Number.MIN_SAFE_INTEGER : parsed;
+}
+
+function throwInvalidDrivePayload(message) {
+  const error = new Error(message);
+  error.statusCode = 502;
+  throw error;
 }

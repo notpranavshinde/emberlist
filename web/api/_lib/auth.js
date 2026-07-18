@@ -4,8 +4,8 @@ export const SESSION_COOKIE = '__Host-emberlist_session';
 export const OAUTH_STATE_COOKIE = '__Host-emberlist_oauth_state';
 export const SCOPES = 'openid email https://www.googleapis.com/auth/drive.appdata';
 
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
-const STATE_MAX_AGE_SECONDS = 60 * 10;
+export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
+export const STATE_MAX_AGE_SECONDS = 60 * 10;
 
 export function getConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
@@ -25,19 +25,40 @@ export function getConfig() {
 }
 
 export function getOrigin(req) {
+  const configuredOrigin = process.env.EMBERLIST_APP_ORIGIN;
+  if (configuredOrigin) {
+    const parsed = new URL(configuredOrigin);
+    if (
+      !['https:', 'http:'].includes(parsed.protocol)
+      || parsed.username
+      || parsed.password
+      || parsed.pathname !== '/'
+      || parsed.search
+      || parsed.hash
+    ) {
+      throw new Error('EMBERLIST_APP_ORIGIN must be an HTTP(S) origin.');
+    }
+    return parsed.origin;
+  }
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   const proto = req.headers['x-forwarded-proto'] || 'https';
   return `${proto}://${host}`;
 }
 
+export function setNoStore(res) {
+  res.setHeader('Cache-Control', 'no-store');
+}
+
 export function redirect(res, location, statusCode = 302) {
   res.statusCode = statusCode;
+  setNoStore(res);
   res.setHeader('Location', location);
   res.end();
 }
 
 export function json(res, statusCode, body) {
   res.statusCode = statusCode;
+  setNoStore(res);
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.end(JSON.stringify(body));
 }
@@ -56,7 +77,12 @@ export function parseCookies(req) {
       .split(';')
       .map((cookie) => {
         const [name, ...valueParts] = cookie.trim().split('=');
-        return [name, decodeURIComponent(valueParts.join('='))];
+        const encodedValue = valueParts.join('=');
+        try {
+          return [name, decodeURIComponent(encodedValue)];
+        } catch {
+          return [name, encodedValue];
+        }
       })
       .filter(([name]) => name),
   );
@@ -91,7 +117,11 @@ export function clearCookie(res, name) {
 export function readEncryptedCookie(req, name, secret) {
   const value = parseCookies(req)[name];
   if (!value) return null;
-  return decryptJson(value, secret);
+  try {
+    return decryptJson(value, secret);
+  } catch {
+    return null;
+  }
 }
 
 export function setSessionCookie(res, session, secret) {
@@ -107,14 +137,35 @@ export function clearAuthCookies(res) {
   clearCookie(res, OAUTH_STATE_COOKIE);
 }
 
-export function readSession(req, secret) {
+export function readSession(req, secret, now = Date.now()) {
   const session = readEncryptedCookie(req, SESSION_COOKIE, secret);
-  if (!session || typeof session.refreshToken !== 'string') return null;
+  if (
+    !session
+    || typeof session.refreshToken !== 'string'
+    || !session.refreshToken
+    || !hasValidCreatedAt(session, SESSION_MAX_AGE_SECONDS, now)
+  ) return null;
   return {
     refreshToken: session.refreshToken,
     email: typeof session.email === 'string' ? session.email : null,
     name: typeof session.name === 'string' ? session.name : null,
-    createdAt: typeof session.createdAt === 'number' ? session.createdAt : Date.now(),
+    createdAt: session.createdAt,
+  };
+}
+
+export function readOAuthState(req, secret, now = Date.now()) {
+  const state = readEncryptedCookie(req, OAUTH_STATE_COOKIE, secret);
+  if (
+    !state
+    || typeof state.nonce !== 'string'
+    || !state.nonce
+    || typeof state.returnTo !== 'string'
+    || !hasValidCreatedAt(state, STATE_MAX_AGE_SECONDS, now)
+  ) return null;
+  return {
+    nonce: state.nonce,
+    returnTo: state.returnTo,
+    createdAt: state.createdAt,
   };
 }
 
@@ -139,16 +190,41 @@ export function assertSameOrigin(req) {
   }
 }
 
-export function safeReturnTo(value) {
+export function safeReturnTo(value, origin = 'https://emberlist.invalid') {
   if (typeof value !== 'string' || !value.trim()) return '/#/today';
+  if (!value.startsWith('/') || containsUnsafeRedirectEncoding(value)) return '/#/today';
   try {
-    const decoded = decodeURIComponent(value);
-    if (!decoded.startsWith('/') || decoded.startsWith('//')) return '/#/today';
-    if (decoded.startsWith('/api/')) return '/#/today';
-    return decoded;
+    const canonicalOrigin = new URL(origin).origin;
+    const parsed = new URL(value, canonicalOrigin);
+    if (parsed.origin !== canonicalOrigin) return '/#/today';
+    if (parsed.pathname === '/api' || parsed.pathname.startsWith('/api/')) return '/#/today';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
     return '/#/today';
   }
+}
+
+function containsUnsafeRedirectEncoding(value) {
+  let decoded = value;
+  for (let index = 0; index < 5; index += 1) {
+    if (/\\|[\u0000-\u001f\u007f]/u.test(decoded) || decoded.startsWith('//')) return true;
+    if (!/%(?:[0-9a-f]{2})/iu.test(decoded)) return false;
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) return false;
+      decoded = next;
+    } catch {
+      return true;
+    }
+  }
+  return /%(?:25)*(?:2f|5c)/iu.test(decoded);
+}
+
+function hasValidCreatedAt(value, maxAgeSeconds, now) {
+  return Number.isFinite(value.createdAt)
+    && Number.isFinite(now)
+    && value.createdAt <= now
+    && now - value.createdAt <= maxAgeSeconds * 1000;
 }
 
 export function buildGoogleAuthUrl({ origin, state }) {

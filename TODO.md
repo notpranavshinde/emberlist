@@ -206,3 +206,6 @@
 - [x] Improve Android Google sign-in code 10 messaging with package/SHA-1 guidance.
 - [x] Document signed APK install/update behavior and a real-device sync smoke checklist.
 - [ ] Migrate Android Drive auth from legacy `GoogleSignIn` APIs to Google's newer authorization stack before Play Store submission.
+
+## Android Test Reliability
+- [ ] Repair ambiguous Compose selectors and activity startup handling so `connectedAndroidTest` passes reliably on physical devices.
