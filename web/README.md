@@ -1,81 +1,55 @@
-# React + TypeScript + Vite
+# Emberlist Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Emberlist web client is a React and TypeScript offline-first task app. It stores the local workspace in IndexedDB and optionally syncs the shared `SyncPayload` through Google Drive `appDataFolder` using serverless API endpoints in `api/`.
 
-Currently, two official plugins are available:
+See the [root README](../README.md) for product features, Android setup, architecture, privacy behavior, and release links.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Commands
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev
+npm run lint
+npm test
+npm run security:check
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Configuration
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Client build variable:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```dotenv
+VITE_GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
 ```
 
-## Security checks
+Server-side OAuth variables:
 
-- `npm run security:check` validates required security documentation, required HTTP security headers in `vercel.json`, and centralized local storage usage.
-- `npm audit --audit-level=high` blocks high and critical dependency advisories in CI.
-- Production builds fail when `VITE_GOOGLE_AUTH_MODE=legacy_spa`; use the backend OAuth flow for deployed builds.
-- CI uploads a CycloneDX SBOM artifact for every successful web verification run.
-- Security planning and launch documents are in `docs/security/`.
+```dotenv
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-web-client-secret
+EMBERLIST_AUTH_SECRET=at-least-32-random-bytes
+EMBERLIST_APP_ORIGIN=http://localhost:3000
+```
+
+Optional distributed rate limiting:
+
+```dotenv
+UPSTASH_REDIS_REST_URL=...
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+`npm run dev` starts Vite. OAuth and Drive endpoints require a local runtime capable of serving the functions in `api/`, such as Vercel's development runtime.
+
+## Deployment
+
+`vercel.json` defines the SPA rewrite and production security headers. Deploy with this directory as the project root and `dist/` as the output directory.
+
+Before production activation:
+
+1. Set all client and server environment variables.
+2. Set `EMBERLIST_APP_ORIGIN` to the exact HTTPS application origin.
+3. Register `/api/auth/google/callback` on the Google web OAuth client.
+4. Run `npm audit --audit-level=high`, `npm run lint`, `npm test`, `npm run security:check`, and `npm run build`.
+
+Security architecture, threat modeling, incident response, and launch documents are in [`docs/security/`](docs/security/).

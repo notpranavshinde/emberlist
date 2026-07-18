@@ -1,401 +1,150 @@
-# Emberlist (Offline Task Manager)
+# Emberlist
 
-Emberlist is an offline-first task manager built around fast capture, local-first data, and deterministic sync. It now has a functional Android client and a functional web client sharing the same `SyncPayload` contract and Google Drive appData sync file, so the same workspace can be used across Android and the browser without a custom backend.
+Emberlist is an offline-first task manager for Android and the web. It combines fast natural-language capture, projects, reminders, recurring tasks, backups, and optional Google Drive sync without requiring an Emberlist-hosted task database.
 
-## Features
+- Web app: [emberlist.dev](https://emberlist.dev)
+- Latest signed Android APK: [download](https://github.com/notpranavshinde/emberlist/releases/download/android-latest/emberlist-release.apk)
+- Android release page: [android-latest](https://github.com/notpranavshinde/emberlist/releases/tag/android-latest)
 
-- Offline‑first local database
-- Functional web client with routed `Today`, `Upcoming`, `Search`, `Browse`, `Inbox`, Project, Task, and Settings screens
-- Quick Add with live parsing (due, deadline, priority, project, recurrence, reminders)
-- Bulk paste in Quick Add: paste a multi-line list and create one task or one task per line
-- Live project suggestions when typing `#`
-- Inbox, Today (with Overdue), Upcoming (grouped by date)
-- Projects with sections
-- List + Board views for projects
-- Drag‑and‑drop between sections in Board view
-- Parser-first task detail editor (quick-parser + notes, subtasks, overflow actions, collapsed activity)
-- Task archive/unarchive
-- Subtasks in task detail
-- Bulk paste subtasks from task detail with the same one-vs-many confirmation flow
-- Task activity log with per-entry undo and specific change labels
-- Recurring tasks (due + deadline recurrence)
-- Time‑based reminders with notifications
-- Reminder notifications validate task/reminder state before firing and support working Complete / Snooze 10m / Open actions
-- Optional completed section on Today
-- Notification actions (complete, snooze)
-- Swipe actions on tasks (reschedule via date picker, delete with confirmation)
-- Search
-- Search smart filters (multi-select)
-- Backup export/import (JSON)
-- Google Drive sync through Drive appData
-- Clear completed tasks
+## Highlights
 
-## Current Status
+- Local-first storage: Room on Android and IndexedDB on the web
+- Inbox, Today, Upcoming, Search, projects, sections, list views, and boards
+- Natural-language task entry for dates, deadlines, priorities, projects, recurrence, and reminders
+- Subtasks, bulk entry, multi-select actions, undo, and activity history
+- Time-based Android notifications with complete, snooze, and open actions
+- JSON export, import, and private local Android backups
+- Optional cross-device sync through the user's Google Drive `appDataFolder`
+- Deterministic conflict resolution with tombstones and reference repair
 
-- Android app is the most complete client.
-- Web app is now functional for daily task/project use:
-  - browse inbox and projects
-  - create projects and sections
-  - create, edit, complete, archive, and delete tasks
-  - search tasks with practical filters
-  - sync to the same Google Drive appData file as Android
-  - reset web cache and reset cloud sync for recovery
-  - desktop-first shell and task lists refit toward Todoist-style information density
-- Web parity is not complete yet:
-  - Android-style quick parser is not implemented on web yet
-  - activity history is still Android-first
-  - location reminder authoring/editing is still Android-first
+Android has the deepest device integration, including notifications and background scheduling. The web client supports the core workspace, task-management, backup, and sync workflows.
 
-## Architecture
+## Data and privacy
 
-- **UI**: Jetpack Compose + Navigation Compose
-- **State**: MVVM with `StateFlow`
-- **Data**: Room (local-first Room database on Android)
-- **Background**: AlarmManager for exact reminders, WorkManager fallback
-- **Sync**: `SyncPayload` + `SyncManager` for deterministic merges, Google Drive appData for manual cloud sync
-- **Packages**:
-  - `data` (Room entities, DAO, database, repositories, backup)
-  - `domain` (recurrence engine, task actions)
-  - `ui` (screens/components/theme)
-  - `reminders` (scheduling + notifications)
-  - `parsing` (Quick Add parser)
+Emberlist remains usable offline. Local data is authoritative until the user chooses to sync.
 
-### Key flows
-- Quick Add parses text live into due/deadline/priority/project/recurrence/reminder chips.
-- Completing a recurring task generates the next instance via `RecurrenceEngine` (due + deadline recurrence supported).
-- Reminders are scheduled through `ReminderScheduler` (AlarmManager; WorkManager fallback).
-- Reminders are cancelled immediately when tasks are completed/archived or reminder sets change, and stale alarms are ignored on receipt.
-- Export/import uses JSON via `BackupManager`.
-- Cloud sync uses a separate `SyncPayload` and writes `emberlist_sync.json` to Google Drive appData.
-- Task detail uses the same parser model as Quick Add for live metadata edits, and logs buffered change summaries instead of every keystroke.
-- Repeating tasks can be ended from task detail with a "Complete forever" action that completes the current task and stops future recurrence.
+Google Drive sync is optional. When enabled, Emberlist stores one hidden `emberlist_sync.json` file in the user's Drive app-data folder. The web deployment uses a server-side OAuth code flow and encrypted, secure cookies; it does not maintain a separate Emberlist task database.
 
-## Multi-Device Sync Status
+Android system backup and device transfer include only non-content settings. The task database, location data, sync identity, and private JSON snapshots are excluded. Manual JSON export remains available for user-controlled backups.
 
-### Done so far
-- Android entities are sync-safe:
-  - `deletedAt` tombstones on tasks, projects, and sections
-  - `updatedAt` on reminders and locations
-- Android Room migrations support the sync metadata.
-- Normal Android app queries hide tombstoned rows.
-- Android repository deletes are soft deletes for syncable entities.
-- `SyncPayload` is a first-class transport format, separate from local backup payloads.
-- `SyncManager` performs deterministic merge on Android:
-  - last-writer-wins by `updatedAt`
-  - tombstones beat older live rows
-  - invalid references are repaired after merge
-- Android Google Drive sync is implemented:
-  - Google connect/disconnect
-  - enable/disable sync
-  - manual `Sync now`
-  - app-startup sync
-  - app foreground/resume sync
-  - reconnect sync
-  - debounced local-change sync
-  - periodic background sync
-  - last synced timestamp
-  - pending/offline/error runtime status in Settings
-  - one Drive appData file: `emberlist_sync.json`
-- Web client exists in `web/` and is being developed against the same sync contract:
-  - local IndexedDB cache
-  - sync on load, focus/visibility regain, reconnect, and debounced local changes
-  - visible-tab polling fallback while online
-  - manual `Sync now` and reset actions for recovery
+Security design notes, the threat model, and the release checklist live in [`web/docs/security/`](web/docs/security/).
 
-### Not done yet
-- Full Android feature parity on web
-- More end-to-end conflict validation and sync UX hardening
-- Cleaner production configuration around web deployment and OAuth setup
+## Repository layout
 
-## Android + Web Sync Build Plan
+- `app/src/main/java/` — Kotlin, Jetpack Compose, Room, sync, reminders, and domain logic
+- `app/src/main/res/` — Android resources and backup rules
+- `app/src/test/` — Android JVM tests
+- `app/src/androidTest/` — Android instrumentation and Compose UI tests
+- `web/src/` — React and TypeScript web client
+- `web/api/` — serverless OAuth and Google Drive sync endpoints
+- `web/tests/` — web API security and validation tests
+- `.github/workflows/` — Android release and web verification workflows
 
-### Phase 1: Data contract and merge safety
-These pieces are already in place on Android and should remain the contract for both clients.
+## Android development
 
-1. Keep `SyncPayload` authoritative for cloud sync.
-2. Treat `activity` as local-only, not replicated state.
-3. Use soft deletes with `deletedAt` instead of hard deletion for syncable entities.
-4. Use `updatedAt` on every syncable row that can independently change.
-5. Merge snapshots with deterministic rules:
-   - newer `updatedAt` wins
-   - tombstones beat older live rows
-   - missing rows do not imply deletion
-6. Repair invalid references after merge:
-   - clear dead project/section/parent links on tasks
-   - drop reminders for deleted or invalid tasks
-   - drop invalid location references
+### Requirements
 
-### Phase 2: Android cloud sync completion
-The Android app now supports manual sync plus startup, foreground, reconnect, debounced local-change, and periodic background sync triggers. The next Android steps should focus on validation and UX polish.
+- JDK 17
+- Android SDK 34
+- Android Studio or Gradle with an emulator/USB-debuggable device
 
-1. Harden Android sync UX:
-   - clearer sync state text
-   - last error details
-   - visible “sync in progress” state
-2. Add more Android sync tests:
-   - startup sync worker behavior
-   - local-change debounce behavior against real DB writes
-   - periodic worker scheduling/constraints
-   - repeated manual taps do not overlap
-3. Verify real-device Google account flows:
-   - auth restore after app restart
-   - disconnect/reconnect
-   - sync behavior when Drive permission is revoked externally
+Build and test from the repository root:
 
-### Phase 3: Web client completion
-The web client should follow the same payload and merge rules as Android. Do not invent a second sync model.
-
-1. Keep local-first storage in IndexedDB.
-2. Load local cache first, then sync against Drive.
-3. Use the same Google Cloud project and Drive scope as Android.
-4. Use the same filename and location:
-   - `emberlist_sync.json`
-   - Google Drive `appDataFolder`
-5. Ensure the web merge flow is identical:
-   - download remote payload
-   - merge local + remote
-   - upload merged payload
-   - persist merged result locally
-6. Build out the remaining web product surface:
-   - task/project editing parity where needed
-   - sync status UI polish
-   - import/export tools for testing and recovery
-
-### Phase 4: Cross-device validation
-These are the important end-to-end cases still to verify.
-
-1. Android creates tasks offline, later syncs, and web receives them.
-2. Web edits tasks, Android syncs, and local DB reflects the merged result.
-3. Deletes on one device do not resurrect on another.
-4. Concurrent edits resolve deterministically.
-5. Reminder/task integrity survives merge:
-   - no orphan reminders
-   - no invalid project/section links
-   - no broken parent/subtask references
-
-## Project Setup
-
-1. Open the project root in Android Studio.
-2. Let Gradle sync.
-3. Run the `app` configuration on an emulator or device (Android 8+).
-
-## Android Direct Install
-
-Signed APK builds are published from the `Android Signed APK` GitHub Actions workflow. The stable direct-download release is:
-
-- Latest signed APK: https://github.com/notpranavshinde/emberlist/releases/download/android-latest/emberlist-release.apk
-- Release page: https://github.com/notpranavshinde/emberlist/releases/tag/android-latest
-
-Install notes:
-
-- If you previously installed a debug build from Android Studio, Android may reject the signed APK as a conflicting update because debug and release builds use different signing keys. Uninstall the debug build first.
-- Uninstalling the app removes local-only data. Sync or export before uninstalling if the workspace matters.
-- If Google sign-in fails with code 10, the installed APK signing SHA-1 is not registered on the Android OAuth client in Google Cloud.
-- After connecting Google Drive, Emberlist enables sync and immediately restores/syncs the Drive appData workspace.
-
-## Web Setup
-
-The web client lives in [`web/`](./web).
-
-1. Install dependencies:
-   - `cd web`
-   - `npm install`
-2. Configure the web OAuth client for local development:
-   - create `web/.env.local`
-   - add `GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com`
-   - add `GOOGLE_CLIENT_SECRET=your-web-oauth-client-secret`
-   - add `EMBERLIST_AUTH_SECRET=at-least-32-random-bytes`
-3. Start the dev server:
-   - `npm run dev`
-4. Build for production:
-   - `npm run build`
-
-Example env file:
-
-```bash
-GOOGLE_CLIENT_ID=your-web-oauth-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-web-oauth-client-secret
-EMBERLIST_AUTH_SECRET=replace-with-32-random-bytes-or-more
+```powershell
+.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat test
+.\gradlew.bat installDebug
+.\gradlew.bat connectedAndroidTest
 ```
 
-### Build variants
-- `debug`: default for development
-- `release`: non‑minified by default
+On macOS or Linux, replace `.\gradlew.bat` with `./gradlew`.
 
-## Data Model (Room)
+Android 8.0 (API 26) is the minimum supported version. Debug and signed release builds use different signing keys, so Android will not install one over the other. Export or sync important local data before uninstalling an existing build.
 
-Entities live in `app/src/main/java/com/notpr/emberlist/data/model/Models.kt`.
-- `ProjectEntity`
-- `SectionEntity`
-- `TaskEntity`
-- `ReminderEntity`
-- `ActivityEventEntity`
+### Signed APK releases
 
-Room database: `EmberlistDatabase` in `app/src/main/java/com/notpr/emberlist/data/EmberlistDatabase.kt` with migrations `1 -> 2`, `2 -> 3`, `3 -> 4`, `4 -> 5`, and `5 -> 6`.
+The `Android Signed APK` GitHub Actions workflow builds the release APK. It uses repository secrets for the release keystore and can update the stable `android-latest` release.
 
-## Reminders
+## Web development
 
-- Exact reminders use `AlarmManager.setExactAndAllowWhileIdle`.
-- If exact alarms aren’t allowed, schedules a `WorkManager` one‑time job.
-- Notification actions: Complete, Snooze 10 minutes, Open task.
+### Requirements
 
-## Backup / Restore
+- Node.js 24
+- npm
 
-- Export creates a single JSON file via system file picker.
-- Import supports **Replace** (wipe and restore) or **Merge** (dedupe by IDs is implicit because IDs are UUIDs).
+Install and run the client:
 
-## Google Drive Sync
-
-- Android currently supports:
-  - manual sync from Settings
-  - app-startup sync when sync is enabled and Drive access is available
-  - debounced sync after local DB changes while the app is running
-  - periodic background sync via WorkManager
-- Settings also includes a `Reset cloud sync` action that deletes the hidden Drive appData sync file if it becomes corrupted during testing. Local data is left untouched; the next sync recreates the file.
-- Sync writes one hidden file named `emberlist_sync.json` to the user's Google Drive appData folder.
-- Setup required:
-  - Enable the Google Drive API in your Google Cloud project.
-  - Configure an Android OAuth client for this package name and SHA-1.
-  - Configure the corresponding web OAuth client in the same Google Cloud project.
-  - Use the same Google Cloud project and Drive scope as the web client.
-  - Keep Android and web pointed at the same `SyncPayload` contract and the same Drive appData file.
-  - For the web client, configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET` on the host.
-  - Add every backend callback you will use to the web OAuth client’s **Authorized redirect URIs**.
-    - Development example:
-      - `http://localhost:5173/api/auth/google/callback`
-    - Production example:
-      - `https://emberlist.dev/api/auth/google/callback`
-  - `VITE_GOOGLE_AUTH_MODE=legacy_spa` is available only as a temporary troubleshooting fallback for the older browser-token flow.
-
-## Deploying The Web App
-
-Emberlist’s web client is a Vite app with small Vercel serverless API functions for Google Drive auth and sync. The browser stores a local IndexedDB cache on each machine, and cross-device state is shared through Google Drive appData sync.
-
-### What you need
-
-1. A public HTTPS URL for the web app.
-2. A Google web OAuth client in the same Google Cloud project as Android sync.
-3. The deployment callback URL added to the OAuth client’s **Authorized redirect URIs**.
-4. Server environment variables for `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET`.
-5. The same Google account signed in on both devices if you want both devices to use the same Drive-backed workspace.
-
-### Simplest hosting options
-
-- Vercel:
-  - import the repo
-  - set the web root to `web/` if deploying as a separate project
-  - build command: `npm run build`
-  - output directory: `dist`
-  - environment variables: `GOOGLE_CLIENT_ID=...`, `GOOGLE_CLIENT_SECRET=...`, `EMBERLIST_AUTH_SECRET=...`
-- Cloudflare Pages:
-  - import the repo
-  - build command: `npm run build`
-  - output directory: `dist`
-  - the built-in Vercel API functions must be ported to Cloudflare Workers before Google sync will work there.
-
-### Recommended first production path
-
-1. Push the repo to GitHub.
-2. Deploy `web/` to Vercel.
-3. Add `https://emberlist.dev/api/auth/google/callback` to the Google web OAuth client’s authorized redirect URIs.
-4. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET` in Vercel.
-5. Open the deployed site on your other computer.
-6. Sign in with the same Google account and run `Sync now`.
-
-### Practical behavior after deployment
-
-- Each computer has its own local browser cache.
-- Google Drive appData is the shared cloud state.
-- If you add/change tasks on one machine, sync there, then sync on the other machine, the other machine will pull the merged workspace.
-- Web now syncs automatically on load, focus/visibility regain, reconnect, and after local edits. `Sync now` remains the manual recovery path.
-
-## Tests
-
-- Unit tests:
-  - `QuickAddParserTest`
-  - `RecurrenceEngineTest`
-- Instrumentation tests:
-  - `QuickAddFlowTest`
-  - `TodayViewTest`
-
-Run:
 ```bash
-./gradlew test
-./gradlew connectedAndroidTest
+cd web
+npm ci
+npm run dev
 ```
 
-## Manual Test Checklist
+`npm run dev` runs the Vite client. Google OAuth and Drive sync also require a local runtime that serves the functions in `web/api/`, such as Vercel's development runtime.
 
-1. **Create task offline**
-   - Open app with airplane mode on
-   - Add task via Quick Add
-   - Verify it appears in Inbox
-2. **Quick Add parsing**
-   - Enter: `Pay rent tomorrow 8am p1 #Home remind me 30m before`
-   - Ensure chips appear and task is created with parsed fields
-   - Enter: `Task every 2 days` and `Task this weekend`
-   - Ensure recurrence and due date are parsed correctly
-3. **Quick Add chip editing**
-   - Tap Due/Deadline/Priority/Project/Repeat/Reminders chips and edit values
-   - Verify created task uses edited values
-   - Paste a multi-line list into Quick Add
-   - Verify Emberlist prompts to add 1 task or one task per line
-   - Verify common bullets like `-` and `*` are stripped, while numbered prefixes are preserved
-4. **Today + Upcoming**
-   - Create tasks due today and future
-   - Today shows today + overdue
-   - Upcoming groups by date
-   - Drag a task up/down in Upcoming to reschedule by −1/+1 day
-   - Swipe left on a task and pick a reschedule date
-   - Swipe right on a task to delete with confirmation
-5. **Recurring tasks**
-   - Create a task with `every day`
-   - Complete it, verify a new instance appears for next day
-   - Create a task with `deadline every friday`
-   - Complete it, verify the next instance includes the next deadline
-6. **Reminders**
-   - Add reminder: `remind me at 6pm`
-   - Verify notification fires
-   - Tap snooze and verify it fires 10 minutes later
-   - Delete or complete the task and verify the reminder does not fire later
-   - Remove a reminder from task detail and verify old notifications do not reappear after reboot/time change
-7. **Task detail edits**
-   - Open a task and edit it through the parser field
-   - Verify due/project/priority/reminder/recurrence changes reflect in Today/Upcoming
-   - Verify notes still edit separately
-   - Verify Activity shows specific labels like due/reminder/priority changes and allows undo
-   - Paste a multi-line list into Add subtask
-   - Verify Emberlist prompts to add 1 subtask or one subtask per line
-8. **Board toggle + drag**
-   - Open a project and toggle between List/Board
-   - Drag a task card between section columns
-9. **Backup/Restore**
-   - Export JSON
-   - Clear app data
-   - Import JSON and verify tasks/projects restored
-10. **Google Drive sync**
-   - Connect Google from Settings
-   - Verify sync is enabled automatically after connect
-   - Verify a fresh install with an empty local database can restore tasks from Drive
-   - Tap Sync now
-   - Verify sync completes and Last synced updates
-   - Make a change on web, sync again on Android, and verify the local DB updates
-   - Force-close/reopen Android and verify startup sync does not undo the first local edit
-   - Disconnect/reconnect Google Drive and verify sync recovers without duplicated tasks
-   - Install the latest signed APK over the previous signed APK and verify Android accepts the versionCode update
-11. **Project + section management**
-   - Create, rename, and archive projects from Browse
-   - Create, rename, and delete sections in a project
-12. **Settings data tools**
-   - Clear completed tasks and verify they are removed
-13. **Task deletion**
-   - Open a task and delete from Task Detail
+For Google sync, configure:
 
-## Notes
+```dotenv
+VITE_GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-web-client-secret
+EMBERLIST_AUTH_SECRET=at-least-32-random-bytes
+EMBERLIST_APP_ORIGIN=http://localhost:3000
+```
 
-- The Android app now supports manual Google Drive sync plus startup, foreground, reconnect, debounced local-change, and periodic background sync triggers.
-- The sync architecture is now split cleanly:
-  - `BackupPayload` for user backup/export/import
-  - `SyncPayload` for replicated cloud state
-- The remaining sync work is mostly around UX polish, browser/device validation, and end-to-end conflict testing, not inventing a new merge model.
-- Board view supports drag‑and‑drop between section columns.
+`UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are optional locally and recommended in production for distributed rate limiting.
+
+Production builds intentionally reject the legacy browser-token auth mode.
+
+## Web deployment
+
+The checked-in `web/vercel.json` configures SPA rewrites and security headers for Vercel.
+
+For production:
+
+1. Deploy with `web/` as the project root and `dist/` as the output directory.
+2. Set `VITE_GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `EMBERLIST_AUTH_SECRET`, and `EMBERLIST_APP_ORIGIN`.
+3. Add the deployment callback, such as `https://emberlist.dev/api/auth/google/callback`, to the Google OAuth client's authorized redirect URIs.
+4. Configure Upstash Redis credentials if rate limits must be shared across serverless instances.
+5. Run the security and production-build checks before promotion.
+
+## Verification
+
+Android:
+
+```powershell
+.\gradlew.bat :app:compileDebugKotlin
+.\gradlew.bat test
+.\gradlew.bat connectedAndroidTest
+```
+
+Web:
+
+```bash
+cd web
+npm ci
+npm audit --audit-level=high
+npm run lint
+npm test
+npm run security:check
+npm run build
+```
+
+Web CI runs the locked install, dependency audit, lint, tests, security checks, production build, and CycloneDX SBOM generation.
+
+## Backup and recovery
+
+Android Settings provides:
+
+- JSON export and import
+- Replace or merge import behavior
+- Daily private local backup
+- Manual **Backup now** and **Restore backup** actions
+- Retention of the seven newest private backups
+- Cloud-sync reset without deleting local task data
+
+The web client provides local workspace export/import and cache/cloud recovery controls.
+
+## Open work
+
+Current release and deployment follow-ups are tracked in [`TODO.md`](TODO.md). Completed project history belongs in Git and release notes rather than the active TODO or README.
