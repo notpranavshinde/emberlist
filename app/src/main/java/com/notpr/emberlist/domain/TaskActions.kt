@@ -119,3 +119,16 @@ suspend fun reparentAsSubtask(
     repository.upsertTask(updated)
     return updated
 }
+
+suspend fun promoteSubtaskToTask(
+    repository: TaskRepository,
+    subtask: TaskEntity
+): TaskEntity? {
+    if (subtask.parentTaskId == null) return null
+    val updated = subtask.copy(
+        parentTaskId = null,
+        updatedAt = System.currentTimeMillis()
+    )
+    repository.upsertTask(updated)
+    return updated
+}

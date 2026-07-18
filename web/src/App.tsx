@@ -1366,14 +1366,14 @@ function App() {
       (payload) => promoteSubtask(payload, taskId),
       {
         message: parentTask
-          ? `Moved "${task.title}" out from "${parentTask.title}".`
-          : `Promoted "${task.title}".`,
-        undoMessage: `Moved "${task.title}" back.`,
+          ? `Converted "${task.title}" to a task outside "${parentTask.title}".`
+          : `Converted "${task.title}" to a task.`,
+        undoMessage: `Converted "${task.title}" back to a subtask.`,
         activity: {
           taskIds: [taskId, ...(parentTask ? [parentTask.id] : [])],
-          title: "Promoted subtask",
+          title: "Converted subtask to task",
           detail: parentTask
-            ? `${task.title} moved out from ${parentTask.title}.`
+            ? `${task.title} became a task outside ${parentTask.title}.`
             : task.title,
         },
       },
@@ -7762,12 +7762,41 @@ function TaskRow({
           <span className="md:hidden">{locationLabel}</span>
         </div>
       </div>
+      {task.parentTaskId ? (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onPromoteSubtask(task.id);
+          }}
+          aria-label={`Convert ${task.title} to task`}
+          title="Convert to task"
+          className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] text-[#6D4A35] md:hidden"
+        >
+          <ListTodo size={13} />
+        </button>
+      ) : null}
       {showMobileRowActions ? (
         <div className="mt-0.5 flex shrink-0 items-center gap-1.5 md:hidden">
           {rowActions ? rowActions(task) : null}
         </div>
       ) : null}
       <div className="pointer-events-none mt-0.5 hidden min-w-[120px] shrink-0 items-start justify-end gap-3 text-right text-xs text-[#8a8076] md:flex">
+        {task.parentTaskId ? (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onPromoteSubtask(task.id);
+            }}
+            aria-label={`Convert ${task.title} to task`}
+            title="Convert to task"
+            className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-2 py-1 font-semibold text-[#6D4A35] opacity-0 transition hover:bg-[var(--app-surface-soft)] group-hover/task-row:opacity-100 group-focus-within/task-row:opacity-100"
+          >
+            <ListTodo size={12} />
+            <span>Convert to task</span>
+          </button>
+        ) : null}
         {rowActions ? (
           <div className="pointer-events-auto flex flex-wrap justify-end gap-1.5 opacity-0 transition group-hover/task-row:opacity-100 group-focus-within/task-row:opacity-100">
             {rowActions(task)}

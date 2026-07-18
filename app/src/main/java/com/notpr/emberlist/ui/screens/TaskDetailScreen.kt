@@ -333,6 +333,18 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                         expanded = actionsMenuOpen,
                         onDismissRequest = { actionsMenuOpen = false }
                     ) {
+                        if (task?.parentTaskId != null) {
+                            DropdownMenuItem(
+                                text = { Text("Convert to task") },
+                                onClick = {
+                                    actionsMenuOpen = false
+                                    coroutineScope.launch {
+                                        val current = commitPendingChanges() ?: task
+                                        current?.let(viewModel::convertToTask)
+                                    }
+                                }
+                            )
+                        }
                         DropdownMenuItem(
                             text = { Text(if (task?.status == TaskStatus.ARCHIVED) "Unarchive" else "Archive") },
                             onClick = {

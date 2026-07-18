@@ -16,6 +16,7 @@ import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logActivity
 import com.notpr.emberlist.domain.logTaskActivity
+import com.notpr.emberlist.domain.promoteSubtaskToTask
 import com.notpr.emberlist.parsing.QuickAddResult
 import com.notpr.emberlist.parsing.ReminderSpec
 import com.notpr.emberlist.reminders.ReminderScheduler
@@ -246,6 +247,24 @@ class TaskDetailViewModel(
                         beforeSubtasks.forEach { repository.upsertTask(it) }
                         reminderScheduler.replaceTaskReminders(before, reminders)
                         logTaskActivity(repository, ActivityType.UPDATED, before, withoutRecurrence)
+                    }
+                )
+            )
+        }
+    }
+
+    fun convertToTask(task: TaskEntity) {
+        viewModelScope.launch {
+            flushPendingActivityInternal()
+            val before = task
+            val updated = promoteSubtaskToTask(repository, task) ?: return@launch
+            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
+            undoController.post(
+                UndoEvent(
+                    message = "Undo convert to task: ${task.title}",
+                    undo = {
+                        repository.upsertTask(before)
+                        logTaskActivity(repository, ActivityType.UPDATED, before, updated)
                     }
                 )
             )

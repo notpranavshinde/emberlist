@@ -5,6 +5,7 @@ import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.TaskStatus
 import com.notpr.emberlist.domain.completeTaskAndSubtasks
 import com.notpr.emberlist.domain.completeTaskWithRecurrence
+import com.notpr.emberlist.domain.promoteSubtaskToTask
 import java.time.LocalDateTime
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -88,5 +89,41 @@ class TaskActionsTest {
 
         assertEquals(TaskStatus.COMPLETED, repo.tasks["sub1"]?.status)
         assertEquals(TaskStatus.COMPLETED, repo.tasks["sub2"]?.status)
+    }
+
+    @Test
+    fun promoteSubtaskToTaskKeepsItsLocation() = kotlinx.coroutines.runBlocking {
+        val repo = FakeTaskRepository()
+        val now = System.currentTimeMillis()
+        val subtask = TaskEntity(
+            id = "subtask",
+            title = "Subtask",
+            description = "",
+            projectId = "project",
+            sectionId = "section",
+            priority = Priority.P3,
+            dueAt = null,
+            allDay = false,
+            deadlineAt = null,
+            deadlineAllDay = false,
+            recurringRule = null,
+            deadlineRecurringRule = null,
+            status = TaskStatus.OPEN,
+            completedAt = null,
+            parentTaskId = "parent",
+            locationId = null,
+            locationTriggerType = null,
+            order = 2,
+            createdAt = now,
+            updatedAt = now
+        )
+        repo.upsertTask(subtask)
+
+        val updated = promoteSubtaskToTask(repo, subtask)
+
+        assertEquals(null, updated?.parentTaskId)
+        assertEquals("project", updated?.projectId)
+        assertEquals("section", updated?.sectionId)
+        assertEquals(null, repo.tasks["subtask"]?.parentTaskId)
     }
 }
