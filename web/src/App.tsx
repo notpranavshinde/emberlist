@@ -2590,13 +2590,17 @@ function WorkspaceShell({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--app-shell-bg)] text-[#202020]">
-      <div className="flex min-h-screen flex-col md:flex-row">
+    <div className="min-h-screen bg-[var(--app-shell-bg)] text-[#202020] md:h-screen md:overflow-hidden">
+      <div className="flex min-h-screen flex-col md:h-screen md:flex-row">
         <aside
-          className={`hidden shrink-0 border-r border-[var(--app-shell-border)] bg-[var(--app-shell-bg-sidebar)] px-3 py-3 transition-[width] duration-200 md:flex md:flex-col ${isSidebarCollapsed ? "w-[92px]" : "w-[300px]"}`}
+          className={`hidden h-screen shrink-0 overscroll-contain border-r border-[var(--app-shell-border)] bg-[var(--app-shell-bg-sidebar)] py-3 transition-[width,padding] duration-200 md:flex md:flex-col md:overflow-y-auto ${isSidebarCollapsed ? "w-16 px-2" : "w-[300px] px-3"}`}
         >
-          <div className="flex items-center justify-between rounded-[16px] px-2 py-2">
-            <div className="flex items-center gap-3">
+          <div
+            className={`flex items-center rounded-[16px] py-2 ${isSidebarCollapsed ? "justify-center px-0" : "justify-between px-2"}`}
+          >
+            <div
+              className={`flex items-center ${isSidebarCollapsed ? "justify-center" : "gap-3"}`}
+            >
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#4ea0d8] text-sm font-semibold text-white">
                 {workspaceIdentity.initial}
               </div>
@@ -2610,7 +2614,7 @@ function WorkspaceShell({
 
           <button
             onClick={() => onOpenQuickAdd()}
-            className={`mt-3 flex rounded-[10px] px-3 py-2 text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed] ${isSidebarCollapsed ? "justify-center" : "items-center gap-2"}`}
+            className={`mt-3 flex rounded-[10px] text-sm font-semibold text-[#dc4c3e] transition hover:bg-[#fff1ed] ${isSidebarCollapsed ? "h-10 items-center justify-center px-0 py-0" : "items-center gap-2 px-3 py-2"}`}
             title="Add task (Q)"
           >
             <Plus size={16} />
@@ -2692,7 +2696,7 @@ function WorkspaceShell({
             </button>
           </div>
           <div
-            className={`mt-2 flex-1 space-y-0.5 overflow-y-auto ${isSidebarCollapsed ? "hidden" : ""}`}
+            className={`mt-2 space-y-0.5 ${isSidebarCollapsed ? "hidden" : ""}`}
           >
             {regularProjects.map((project) => (
               <RailLink
@@ -2762,7 +2766,7 @@ function WorkspaceShell({
           </div>
         </aside>
 
-        <div className="flex min-h-screen flex-1 flex-col">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col md:h-screen md:min-h-0 md:overflow-y-auto md:overscroll-contain">
           <header className="sticky top-0 z-20 border-b border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-4 py-4 backdrop-blur md:px-8">
             <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3">
               <div>
@@ -11133,7 +11137,7 @@ function RailLink({
           isActive
             ? "bg-[#fff1ed] text-[#dc4c3e]"
             : "text-[#4f4a45] hover:bg-[#f7f3ef]"
-        } ${compact ? "py-1.5" : ""} ${collapsed ? "justify-center" : "gap-3"}`
+        } ${compact ? "py-1.5" : ""} ${collapsed ? "h-10 justify-center px-0 py-0" : "gap-3"}`
       }
       title={collapsed ? label : undefined}
     >
