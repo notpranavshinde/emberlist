@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createEmptySyncPayload } from './syncPayload';
 import {
   canReparentTaskAsSubtask,
+  createProject,
   createTask as createWorkspaceTask,
   createTaskRelative,
   createTaskDraft,
@@ -147,6 +148,12 @@ function createPayload(): SyncPayload {
 }
 
 describe('workspace bulk task helpers', () => {
+  it('creates projects in board view by default', () => {
+    const result = createProject(createEmptySyncPayload(), 'Research', 'project-research');
+
+    expect(result.projects[0]?.viewPreference).toBe('BOARD');
+  });
+
   it('filters inbox tasks to top-level open inbox tasks only', () => {
     const payload = createPayload();
     payload.tasks.push(

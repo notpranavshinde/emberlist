@@ -3897,7 +3897,7 @@ function TodayPage({
 
   return (
     <div
-      className="w-full max-w-[980px] space-y-4"
+      className="w-full space-y-4"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
       {showSelectionButtons || selectionMode ? (
@@ -3960,77 +3960,79 @@ function TodayPage({
         </section>
       ) : null}
 
-      {data.overdue.length ? (
-        <TaskGroup
-          title="Overdue"
-          subtitle="Open tasks that should already be done."
-          payload={payload}
-          todayStartMs={todayStartMs}
-          tasks={data.overdue}
-          emptyMessage="Nothing overdue."
-          onToggleTask={onToggleTask}
-          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={openTaskEditor}
-          selectionMode={selectionMode}
-          selectedTaskIds={selectedTaskIds}
-          onToggleSelection={toggleSelection}
-          onStartSelection={openSelection}
-          onPromoteSubtask={onPromoteSubtask}
-          rowActions={renderTaskRowActions}
-          headerActions={
-            <button
-              type="button"
-              onClick={() => openDateDialog("reschedule-overdue")}
-              className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-            >
-              Reschedule overdue
-            </button>
-          }
-        />
-      ) : null}
+      <TaskGroupGrid>
+        {data.overdue.length ? (
+          <TaskGroup
+            title="Overdue"
+            subtitle="Open tasks that should already be done."
+            payload={payload}
+            todayStartMs={todayStartMs}
+            tasks={data.overdue}
+            emptyMessage="Nothing overdue."
+            onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onOpenTask={openTaskEditor}
+            selectionMode={selectionMode}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelection={toggleSelection}
+            onStartSelection={openSelection}
+            onPromoteSubtask={onPromoteSubtask}
+            rowActions={renderTaskRowActions}
+            headerActions={
+              <button
+                type="button"
+                onClick={() => openDateDialog("reschedule-overdue")}
+                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
+              >
+                Reschedule overdue
+              </button>
+            }
+          />
+        ) : null}
 
-      <div data-onboarding-target="today-due">
-        <TaskGroup
-          title="Due today"
-          subtitle="Tasks scheduled for today."
-          payload={payload}
-          todayStartMs={todayStartMs}
-          tasks={data.today}
-          emptyMessage="No tasks due today."
-          onToggleTask={onToggleTask}
-          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={openTaskEditor}
-          selectionMode={selectionMode}
-          selectedTaskIds={selectedTaskIds}
-          onToggleSelection={toggleSelection}
-          onStartSelection={openSelection}
-          onPromoteSubtask={onPromoteSubtask}
-          rowActions={renderTaskRowActions}
-          hideDueDate
-        />
-      </div>
+        <div data-onboarding-target="today-due">
+          <TaskGroup
+            title="Due today"
+            subtitle="Tasks scheduled for today."
+            payload={payload}
+            todayStartMs={todayStartMs}
+            tasks={data.today}
+            emptyMessage="No tasks due today."
+            onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onOpenTask={openTaskEditor}
+            selectionMode={selectionMode}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelection={toggleSelection}
+            onStartSelection={openSelection}
+            onPromoteSubtask={onPromoteSubtask}
+            rowActions={renderTaskRowActions}
+            hideDueDate
+          />
+        </div>
 
-      {showCompletedToday ? (
-        <TaskGroup
-          title="Completed today"
-          subtitle="Recently finished work."
-          payload={payload}
-          todayStartMs={todayStartMs}
-          tasks={data.completedToday}
-          emptyMessage="Nothing completed yet today."
-          onToggleTask={onToggleTask}
-          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={openTaskEditor}
-          collapsible
-          defaultCollapsed
-          selectionMode={selectionMode}
-          selectedTaskIds={selectedTaskIds}
-          onToggleSelection={toggleSelection}
-          onStartSelection={openSelection}
-          onPromoteSubtask={onPromoteSubtask}
-          rowActions={renderTaskRowActions}
-        />
-      ) : null}
+        {showCompletedToday ? (
+          <TaskGroup
+            title="Completed today"
+            subtitle="Recently finished work."
+            payload={payload}
+            todayStartMs={todayStartMs}
+            tasks={data.completedToday}
+            emptyMessage="Nothing completed yet today."
+            onToggleTask={onToggleTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onOpenTask={openTaskEditor}
+            collapsible
+            defaultCollapsed
+            selectionMode={selectionMode}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelection={toggleSelection}
+            onStartSelection={openSelection}
+            onPromoteSubtask={onPromoteSubtask}
+            rowActions={renderTaskRowActions}
+          />
+        ) : null}
+      </TaskGroupGrid>
 
       {activeDialog === "reschedule-selected" ? (
         <RescheduleDialog
@@ -5903,7 +5905,7 @@ function ProjectPage({
 
   const currentProject = project;
   const unsectionedTasks = tasks.filter((task) => !task.sectionId);
-  const projectView = currentProject.viewPreference ?? "LIST";
+  const projectView = currentProject.viewPreference ?? "BOARD";
   const boardColumns = [
     {
       id: "__loose__",
@@ -7171,6 +7173,20 @@ function SettingsPage({
           </div>
         </SettingsDisclosure>
       </div>
+    </div>
+  );
+}
+
+function TaskGroupGrid({ children }: { children: ReactNode }) {
+  return (
+    <div
+        className="grid items-start gap-4"
+      style={{
+        gridTemplateColumns:
+          "repeat(auto-fit, minmax(min(100%, 520px), 1fr))",
+      }}
+    >
+      {children}
     </div>
   );
 }
