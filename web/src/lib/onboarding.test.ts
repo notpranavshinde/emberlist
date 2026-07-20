@@ -1,97 +1,140 @@
 import { describe, expect, it } from "vitest";
 import { createEmptySyncPayload } from "./syncPayload";
+import { createProject, createTask } from "./workspace";
 import {
-  advanceOnboardingStep,
-  createOnboardingSetup,
-  createInitialOnboardingState,
-  createOnboardingTourState,
-  getOnboardingPreset,
-  type OnboardingPresetId,
+  completeOnboarding,
+  createActiveOnboardingState,
+  dismissOnboarding,
+  hasLiveTasks,
+  hasLiveWorkspaceContent,
+  initializeOnboardingState,
+  onboardingElapsedBucket,
+  parseOnboardingState,
+  setOnboardingRestorePending,
 } from "./onboarding";
 
-describe("onboarding setup", () => {
-  it("creates a sample project and four tasks for each preset", () => {
+describe("onboarding v2", () => {
+  it("activates an empty workspace", () => {
     const payload = createEmptySyncPayload("test-device");
-    const presets: OnboardingPresetId[] = ["personal", "school", "work"];
+    expect(
+      initializeOnboardingState({
+        storedState: null,
+        legacyDismissed: false,
+        legacyStatePresent: false,
+        payload,
+        now: 100,
+      }),
+    ).toEqual({
+      version: 2,
+      status: "active",
+      startedAt: 100,
+      completedAt: null,
+      completionMethod: null,
+      restorePending: false,
+    });
+  });
 
-    for (const presetId of presets) {
-      const result = createOnboardingSetup(payload, presetId, Date.UTC(2026, 3, 13));
-      const preset = getOnboardingPreset(presetId);
+  it("does not activate for an existing workspace", () => {
+    const payload = createProject(createEmptySyncPayload("test"), "Work", "p1");
+    expect(
+      initializeOnboardingState({
+        storedState: null,
+        legacyDismissed: false,
+        legacyStatePresent: false,
+        payload,
+        now: 200,
+      }).status,
+    ).toBe("completed");
+  });
 
-      expect(result.projectName).toBe(preset.projectName);
-      expect(result.quickAddExample).toBe(preset.quickAddExample);
-      expect(result.sampleTaskTitles).toEqual(
-        preset.sampleTasks.map((task) => task.title),
-      );
+  it("keeps a stored completed or dismissed state after content is deleted", () => {
+    const payload = createEmptySyncPayload("test");
+    for (const status of ["completed", "dismissed"] as const) {
+      const state = {
+        version: 2 as const,
+        status,
+        startedAt: 1,
+        completedAt: status === "completed" ? 2 : null,
+        completionMethod: status === "completed" ? ("first_task" as const) : null,
+        restorePending: false,
+      };
       expect(
-        result.payload.projects.filter((project) => !project.deletedAt),
-      ).toHaveLength(1);
-      expect(
-        result.payload.tasks.filter((task) => !task.deletedAt && task.projectId === result.projectId),
-      ).toHaveLength(4);
+        initializeOnboardingState({
+          storedState: state,
+          legacyDismissed: false,
+          legacyStatePresent: false,
+          payload,
+        }),
+      ).toEqual(state);
     }
   });
 
-  it("preserves recurring sample tasks", () => {
-    const payload = createEmptySyncPayload("test-device");
-    const result = createOnboardingSetup(payload, "personal", Date.UTC(2026, 3, 13));
-
-    const recurringTitles = result.payload.tasks
-      .filter((task) => task.recurringRule)
-      .map((task) => task.title);
-
-    expect(recurringTitles).toEqual(["Plan weekly reset", "Take vitamins"]);
+  it("migrates the legacy dismissed flag and legacy active state", () => {
+    const payload = createEmptySyncPayload("test");
+    expect(
+      initializeOnboardingState({
+        storedState: null,
+        legacyDismissed: true,
+        legacyStatePresent: false,
+        payload,
+        now: 300,
+      }).status,
+    ).toBe("dismissed");
+    expect(
+      initializeOnboardingState({
+        storedState: null,
+        legacyDismissed: false,
+        legacyStatePresent: true,
+        payload,
+        now: 300,
+      }).status,
+    ).toBe("active");
   });
 
-  it("sets due dates relative to the provided onboarding day", () => {
-    const payload = createEmptySyncPayload("test-device");
-    const todayStartMs = Date.UTC(2026, 3, 13);
-    const result = createOnboardingSetup(payload, "work", todayStartMs);
-
-    const prioritiesTask = result.payload.tasks.find(
-      (task) => task.title === "Draft weekly priorities",
-    );
-    const agendaTask = result.payload.tasks.find(
-      (task) => task.title === "Prepare next meeting agenda",
-    );
-
-    expect(prioritiesTask?.dueAt).toBe(todayStartMs);
-    expect(agendaTask?.dueAt).toBe(Date.UTC(2026, 3, 15));
+  it("distinguishes live tasks from other workspace content", () => {
+    let payload = createProject(createEmptySyncPayload("test"), "Work", "p1");
+    expect(hasLiveWorkspaceContent(payload)).toBe(true);
+    expect(hasLiveTasks(payload)).toBe(false);
+    payload = createTask(payload, {
+      title: "Ship",
+      description: "",
+      projectId: "p1",
+      projectName: null,
+      sectionId: null,
+      sectionName: null,
+      priority: "P4",
+      dueAt: null,
+      allDay: true,
+      deadlineAt: null,
+      deadlineAllDay: false,
+      recurringRule: null,
+      deadlineRecurringRule: null,
+      parentTaskId: null,
+      reminders: [],
+    });
+    expect(hasLiveTasks(payload)).toBe(true);
   });
 
-  it("creates deterministic tour state from starter setup", () => {
-    const payload = createEmptySyncPayload("test-device");
-    const setup = createOnboardingSetup(payload, "school", Date.UTC(2026, 3, 13));
-    const state = createOnboardingTourState("school", setup);
-
-    expect(state).toEqual({
-      step: "project",
-      presetId: "school",
-      projectId: setup.projectId,
-      quickAddExample: setup.quickAddExample,
+  it("transitions through restore, completion, and dismissal", () => {
+    const active = createActiveOnboardingState(10);
+    expect(setOnboardingRestorePending(active, true).restorePending).toBe(true);
+    expect(completeOnboarding(active, "drive_restore", 20)).toMatchObject({
+      status: "completed",
+      completedAt: 20,
+      completionMethod: "drive_restore",
+      restorePending: false,
+    });
+    expect(dismissOnboarding(active)).toMatchObject({
+      status: "dismissed",
+      restorePending: false,
     });
   });
 
-  it("advances onboarding steps without changing the chosen preset", () => {
-    const initial = createInitialOnboardingState("work");
-    const projectStep = {
-      ...initial,
-      step: "project" as const,
-      projectId: "proj-1",
-      quickAddExample: "Send weekly update every friday 4pm p2 #Work",
-    };
-
-    expect(advanceOnboardingStep(projectStep, "quick_add")).toEqual({
-      ...projectStep,
-      step: "quick_add",
-    });
-    expect(advanceOnboardingStep(projectStep, "today")).toEqual({
-      ...projectStep,
-      step: "today",
-    });
-    expect(advanceOnboardingStep(projectStep, "sync")).toEqual({
-      ...projectStep,
-      step: "sync",
-    });
+  it("rejects malformed stored state and buckets elapsed time", () => {
+    expect(parseOnboardingState({ version: 1, status: "active" })).toBeNull();
+    expect(onboardingElapsedBucket(0, 20_000)).toBe("under_30s");
+    expect(onboardingElapsedBucket(0, 45_000)).toBe("30_to_60s");
+    expect(onboardingElapsedBucket(0, 120_000)).toBe("1_to_5m");
+    expect(onboardingElapsedBucket(0, 500_000)).toBe("over_5m");
   });
 });

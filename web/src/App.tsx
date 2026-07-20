@@ -63,6 +63,11 @@ import {
 import { RecoveryScreen } from "./components/RecoveryScreen";
 import { TaskCalendarView } from "./components/TaskCalendarView";
 import {
+  FirstRunWelcome,
+  type OnboardingRestoreStatus,
+} from "./components/FirstRunWelcome";
+import { GettingStartedDialog } from "./components/GettingStartedDialog";
+import {
   resolveBannerAutoDismissMs,
   shouldDismissBannerOnNavigation,
 } from "./lib/banner";
@@ -84,15 +89,27 @@ import {
 import { db } from "./lib/db";
 import { reconcileLocalPersistPayload } from "./lib/localSync";
 import {
-  advanceOnboardingStep,
-  createInitialOnboardingState,
-  createOnboardingSetup,
-  createOnboardingTourState,
-  type FirstRunOnboardingState,
-  ONBOARDING_PRESETS,
-  type OnboardingPresetId,
-  type OnboardingSetupResult,
+  completeOnboarding,
+  createActiveOnboardingState,
+  dismissOnboarding,
+  hasLiveTasks,
+  hasLiveWorkspaceContent,
+  initializeOnboardingState,
+  LEGACY_ONBOARDING_DISMISSED_KEY,
+  LEGACY_ONBOARDING_STATE_KEY,
+  onboardingElapsedBucket,
+  ONBOARDING_EXAMPLES,
+  ONBOARDING_STORAGE_KEY,
+  setOnboardingRestorePending,
+  type OnboardingExampleId,
+  type OnboardingState,
 } from "./lib/onboarding";
+import {
+  isAnalyticsEnabled as readAnalyticsEnabled,
+  setAnalyticsEnabled as persistAnalyticsEnabled,
+  startOnboardingAnalyticsDelivery,
+  trackOnboardingEvent,
+} from "./lib/analytics";
 import {
   buildDraftFromParsed,
   buildTaskDetailDraftFromInput,
@@ -193,8 +210,6 @@ const GOOGLE_AUTH_MODE =
   import.meta.env.VITE_GOOGLE_AUTH_MODE?.trim() === "legacy_spa"
     ? "legacy_spa"
     : "backend";
-const FIRST_RUN_WELCOME_DISMISSED_KEY = "emberlist.firstRunWelcomeDismissed";
-const FIRST_RUN_ONBOARDING_STATE_KEY = "emberlist.firstRunOnboardingState";
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: "All", value: "ALL" },
   { label: "Overdue", value: "OVERDUE" },
@@ -224,23 +239,16 @@ type Banner = {
 };
 type CloudStatusTone = "ready" | "idle" | "warning" | "muted";
 type FocusedTaskActionMode = "reschedule" | "move" | "priority" | "delete";
+type CloudSyncOutcome =
+  | { status: "success"; payload: SyncPayload }
+  | { status: "cancelled" }
+  | { status: "skipped" }
+  | { status: "error"; message: string };
 
 let activeDraggedTaskId: string | null = null;
 
 function isPublicMarketingPath(pathname: string) {
   return pathname === "/" || pathname === "/privacy" || pathname === "/terms";
-}
-
-function isWorkspaceEmpty(payload: SyncPayload | null): boolean {
-  if (!payload) return false;
-  const hasLiveProjects = payload.projects.some(
-    (project) => !project.deletedAt,
-  );
-  const hasLiveSections = payload.sections.some(
-    (section) => !section.deletedAt,
-  );
-  const hasLiveTasks = payload.tasks.some((task) => !task.deletedAt);
-  return !hasLiveProjects && !hasLiveSections && !hasLiveTasks;
 }
 
 function normalizeCloudSyncErrorMessage(message: string): string {
@@ -314,10 +322,13 @@ function App() {
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>(() =>
     readStoredActivityEntries(),
   );
-  const [hasDismissedFirstRunWelcome, setHasDismissedFirstRunWelcome] =
-    useState(() => readStoredBoolean(FIRST_RUN_WELCOME_DISMISSED_KEY, false));
-  const [firstRunOnboarding, setFirstRunOnboarding] =
-    useState<FirstRunOnboardingState | null>(() => readStoredOnboardingState());
+  const [onboardingState, setOnboardingState] =
+    useState<OnboardingState | null>(null);
+  const [onboardingRestoreStatus, setOnboardingRestoreStatus] =
+    useState<OnboardingRestoreStatus>({ kind: "idle" });
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(() =>
+    readAnalyticsEnabled(),
+  );
   const [isCloudConnectDialogOpen, setIsCloudConnectDialogOpen] =
     useState(false);
   const [redirectAuthCompletion, setRedirectAuthCompletion] =
@@ -343,9 +354,8 @@ function App() {
     hasCloudSession: syncMode === "google_drive" && Boolean(cloudSession),
   });
   const bannerIdRef = useRef(0);
-  const firstRunOnboardingRef = useRef<FirstRunOnboardingState | null>(
-    firstRunOnboarding,
-  );
+  const onboardingStateRef = useRef<OnboardingState | null>(onboardingState);
+  const onboardingViewedRef = useRef(false);
   const undoActivityMapRef = useRef(
     new Map<
       string,
@@ -538,16 +548,18 @@ function App() {
   }, [activityEntries]);
 
   useEffect(() => {
-    setStoredItem(
-      FIRST_RUN_WELCOME_DISMISSED_KEY,
-      JSON.stringify(hasDismissedFirstRunWelcome),
-    );
-  }, [hasDismissedFirstRunWelcome]);
+    onboardingStateRef.current = onboardingState;
+    if (!onboardingState) return;
+    setStoredItem(ONBOARDING_STORAGE_KEY, JSON.stringify(onboardingState));
+    removeStoredItem(LEGACY_ONBOARDING_DISMISSED_KEY);
+    removeStoredItem(LEGACY_ONBOARDING_STATE_KEY);
+  }, [onboardingState]);
+
+  useEffect(() => startOnboardingAnalyticsDelivery(), []);
 
   useEffect(() => {
-    firstRunOnboardingRef.current = firstRunOnboarding;
-    writeStoredOnboardingState(firstRunOnboarding);
-  }, [firstRunOnboarding]);
+    persistAnalyticsEnabled(analyticsEnabled);
+  }, [analyticsEnabled]);
 
   useEffect(() => {
     const autoDismissMs = resolveBannerAutoDismissMs(banner);
@@ -721,7 +733,7 @@ function App() {
   }: {
     interactiveAuth: boolean;
     automatic: boolean;
-  }) {
+  }): Promise<CloudSyncOutcome> {
     if (!syncService) {
       if (!automatic) {
         const message =
@@ -729,7 +741,7 @@ function App() {
         setLastSyncError(message);
         showBanner("error", message);
       }
-      return;
+      return { status: "skipped" };
     }
 
     if (!cloudSyncEnabled) {
@@ -739,21 +751,21 @@ function App() {
           "Sync mode is set to Local. Switch to Google Drive in Settings to use cloud sync.",
         );
       }
-      return;
+      return { status: "skipped" };
     }
 
-    if (automatic && !autoSyncEnabledRef.current) return;
-    if (automatic && !cloudSessionRef.current) return;
-    if (!interactiveAuth && !isOnlineRef.current) return;
+    if (automatic && !autoSyncEnabledRef.current) return { status: "skipped" };
+    if (automatic && !cloudSessionRef.current) return { status: "skipped" };
+    if (!interactiveAuth && !isOnlineRef.current) return { status: "skipped" };
 
     const backoffUntil = backoffUntilRef.current;
     if (automatic && backoffUntil !== null && Date.now() < backoffUntil) {
-      return;
+      return { status: "skipped" };
     }
 
     if (isSyncingRef.current) {
       followUpSyncRequestedRef.current = true;
-      return;
+      return { status: "skipped" };
     }
 
     clearDebounceTimer();
@@ -786,6 +798,7 @@ function App() {
       } else if (recurringMaintenance) {
         showBanner("info", `${recurringMaintenance} after sync.`);
       }
+      return { status: "success", payload: repaired.payload };
     } catch (error) {
       console.error("Cloud sync failed", error);
       const message = normalizeCloudSyncErrorMessage(
@@ -805,6 +818,14 @@ function App() {
           void runCloudSync({ interactiveAuth: false, automatic: true });
         }, delayMs);
       }
+      if (
+        message.includes("popup_closed") ||
+        message.includes("access_denied") ||
+        message.toLowerCase().includes("sign-in was closed")
+      ) {
+        return { status: "cancelled" };
+      }
+      return { status: "error", message };
     } finally {
       setIsSyncing(false);
       if (followUpSyncRequestedRef.current && isOnlineRef.current) {
@@ -994,19 +1015,80 @@ function App() {
     setBootState("ready");
   }
 
-  async function handleCreateOnboardingWorkspace(
-    presetId: OnboardingPresetId,
-  ): Promise<OnboardingSetupResult | null> {
-    const current = payloadRef.current;
-    if (!current) return null;
+  function updateOnboardingState(next: OnboardingState) {
+    onboardingStateRef.current = next;
+    setOnboardingState(next);
+  }
 
-    const result = createOnboardingSetup(
-      current,
-      presetId,
-      startOfDay(Date.now()).getTime(),
-    );
-    await persistPayload(result.payload, true);
-    return result;
+  function completeFirstRun(method: "first_task" | "drive_restore") {
+    const current = onboardingStateRef.current;
+    if (!current || current.status !== "active") return;
+    const now = Date.now();
+    trackOnboardingEvent("onboarding_completed", {
+      method,
+      elapsedBucket: onboardingElapsedBucket(current.startedAt, now),
+    });
+    updateOnboardingState(completeOnboarding(current, method, now));
+  }
+
+  function applyOnboardingRestoreOutcome(outcome: CloudSyncOutcome) {
+    const current = onboardingStateRef.current;
+    if (!current || current.status !== "active") return;
+    if (outcome.status === "success") {
+      if (hasLiveWorkspaceContent(outcome.payload)) {
+        trackOnboardingEvent("onboarding_restore_result", { result: "success" });
+        completeFirstRun("drive_restore");
+        setOnboardingRestoreStatus({ kind: "idle" });
+        showBanner("success", "Workspace restored from Google Drive.");
+      } else {
+        trackOnboardingEvent("onboarding_restore_result", { result: "empty" });
+        updateOnboardingState(setOnboardingRestorePending(current, false));
+        setOnboardingRestoreStatus({
+          kind: "empty",
+          message:
+            "No Emberlist workspace was found in this Google account. Add your first task or try another account.",
+        });
+      }
+      return;
+    }
+    updateOnboardingState(setOnboardingRestorePending(current, false));
+    if (outcome.status === "cancelled") {
+      trackOnboardingEvent("onboarding_restore_result", { result: "cancelled" });
+      setOnboardingRestoreStatus({ kind: "idle" });
+    } else if (outcome.status === "error") {
+      trackOnboardingEvent("onboarding_restore_result", { result: "error" });
+      setOnboardingRestoreStatus({ kind: "error", message: outcome.message });
+    }
+  }
+
+  async function handleRestoreFromOnboarding() {
+    const current = onboardingStateRef.current;
+    if (!current || current.status !== "active") return;
+    if (!isOnlineRef.current) {
+      trackOnboardingEvent("onboarding_restore_result", { result: "offline" });
+      setOnboardingRestoreStatus({
+        kind: "error",
+        message: "Connect to the internet to restore your workspace.",
+      });
+      return;
+    }
+    if (!syncService || !cloudSyncEnabled) return;
+    trackOnboardingEvent("onboarding_restore_started");
+    updateOnboardingState(setOnboardingRestorePending(current, true));
+    setOnboardingRestoreStatus({
+      kind: "working",
+      message: cloudSessionRef.current
+        ? "Restoring your workspace..."
+        : "Connecting Google Drive...",
+    });
+    const outcome = await runCloudSync({ interactiveAuth: true, automatic: false });
+    applyOnboardingRestoreOutcome(outcome);
+  }
+
+  async function handleUseAnotherRestoreAccount() {
+    await handleDisconnectCloud();
+    setOnboardingRestoreStatus({ kind: "idle" });
+    await handleRestoreFromOnboarding();
   }
 
   async function handleResetCloudSync() {
@@ -1043,6 +1125,7 @@ function App() {
 
     try {
       await syncService.disconnect();
+      cloudSessionRef.current = null;
       setCloudSession(null);
       setLastSyncError(null);
       showBanner(
@@ -1409,25 +1492,25 @@ function App() {
         title: "Created task",
       });
     }
+    const isFirstRunTask =
+      Boolean(createdTask) && onboardingStateRef.current?.status === "active";
     if (!options?.silent) {
       const secondaryBannerAction = createdTask
         ? buildCreatedTaskSecondaryBannerAction(createdTask)
         : undefined;
       showUndoBanner(
-        options?.successMessage ?? `Task "${draft.title.trim()}" created.`,
+        options?.successMessage ??
+          (isFirstRunTask
+            ? "Your first task is saved."
+            : `Task "${draft.title.trim()}" created.`),
         current,
         `Removed "${draft.title.trim()}".`,
         activityId,
         secondaryBannerAction,
       );
     }
-    const onboardingState = firstRunOnboardingRef.current;
-    if (
-      createdTask &&
-      onboardingState?.step === "quick_add" &&
-      onboardingState.projectId === createdTask.projectId
-    ) {
-      setFirstRunOnboarding(advanceOnboardingStep(onboardingState, "today"));
+    if (createdTask && isFirstRunTask) {
+      completeFirstRun("first_task");
       setIsQuickAddOpen(false);
       setQuickAddOverride(null);
     }
@@ -1469,24 +1552,24 @@ function App() {
         title: "Created task",
       });
     }
+    const isFirstRunTask =
+      Boolean(createdTask) && onboardingStateRef.current?.status === "active";
     if (!options?.silent && createdTask) {
       const secondaryBannerAction =
         buildCreatedTaskSecondaryBannerAction(createdTask);
       showUndoBanner(
-        options?.successMessage ?? `Task "${createdTask.title}" created.`,
+        options?.successMessage ??
+          (isFirstRunTask
+            ? "Your first task is saved."
+            : `Task "${createdTask.title}" created.`),
         current,
         `Removed "${createdTask.title}".`,
         activityId,
         secondaryBannerAction,
       );
     }
-    const onboardingState = firstRunOnboardingRef.current;
-    if (
-      createdTask &&
-      onboardingState?.step === "quick_add" &&
-      onboardingState.projectId === createdTask.projectId
-    ) {
-      setFirstRunOnboarding(advanceOnboardingStep(onboardingState, "today"));
+    if (createdTask && isFirstRunTask) {
+      completeFirstRun("first_task");
       setIsQuickAddOpen(false);
       setQuickAddOverride(null);
     }
@@ -1617,31 +1700,32 @@ function App() {
   }, [bootState, cloudSession, cloudSyncEnabled, syncService]);
 
   useEffect(() => {
-    if (bootState !== "ready") return;
-    if (hasDismissedFirstRunWelcome) {
-      if (firstRunOnboarding !== null) {
-        setFirstRunOnboarding(null);
-      }
-      return;
+    if (bootState !== "ready" || !payload || onboardingState) return;
+    const storedRaw = getStoredItem(ONBOARDING_STORAGE_KEY);
+    let storedState: unknown = null;
+    try {
+      storedState = storedRaw ? JSON.parse(storedRaw) : null;
+    } catch {
+      storedState = null;
     }
-    if (firstRunOnboarding) return;
-    if (!isWorkspaceEmpty(payload)) return;
-    setFirstRunOnboarding(createInitialOnboardingState());
-  }, [bootState, firstRunOnboarding, hasDismissedFirstRunWelcome, payload]);
+    const nextState = initializeOnboardingState({
+      storedState,
+      legacyDismissed: readStoredBoolean(
+        LEGACY_ONBOARDING_DISMISSED_KEY,
+        false,
+      ),
+      legacyStatePresent: Boolean(getStoredItem(LEGACY_ONBOARDING_STATE_KEY)),
+      payload,
+    });
+    updateOnboardingState(nextState);
+  }, [bootState, onboardingState, payload]);
 
   useEffect(() => {
-    if (
-      !payload ||
-      !firstRunOnboarding?.projectId ||
-      firstRunOnboarding.step === "setup"
-    ) {
-      return;
-    }
-    if (!getProjectById(payload, firstRunOnboarding.projectId)) {
-      setFirstRunOnboarding(null);
-      setHasDismissedFirstRunWelcome(true);
-    }
-  }, [firstRunOnboarding, payload]);
+    if (onboardingState?.status !== "active") return;
+    if (onboardingViewedRef.current) return;
+    onboardingViewedRef.current = true;
+    trackOnboardingEvent("onboarding_viewed");
+  }, [onboardingState]);
 
   useEffect(() => {
     const previous = previousAutoSyncStateRef.current;
@@ -1755,7 +1839,13 @@ function App() {
           setIsCloudConnectDialogOpen(false);
         }
 
-        await runCloudSync({ interactiveAuth: false, automatic: false });
+        const outcome = await runCloudSync({
+          interactiveAuth: false,
+          automatic: false,
+        });
+        if (onboardingStateRef.current?.restorePending) {
+          applyOnboardingRestoreOutcome(outcome);
+        }
       } finally {
         if (!cancelled) {
           setRedirectAuthCompletion(null);
@@ -1887,32 +1977,48 @@ function App() {
           setIsQuickAddOpen(false);
           setQuickAddOverride(null);
         }}
-        onboardingQuickAddExample={
-          firstRunOnboarding?.step === "quick_add"
-            ? firstRunOnboarding.quickAddExample
-            : null
-        }
         activityEntries={activityEntries}
         onUndoActivity={(activityId) => void handleUndoActivity(activityId)}
         canUndoActivity={(activityId) =>
           undoActivityMapRef.current.has(activityId)
         }
-        firstRunOnboarding={firstRunOnboarding}
+        onboardingState={onboardingState}
+        onboardingRestoreStatus={onboardingRestoreStatus}
         onSkipOnboarding={() => {
-          setFirstRunOnboarding(null);
-          setHasDismissedFirstRunWelcome(true);
+          const current = onboardingStateRef.current;
+          if (current) updateOnboardingState(dismissOnboarding(current));
+          trackOnboardingEvent("onboarding_skipped");
+          setOnboardingRestoreStatus({ kind: "idle" });
           setIsQuickAddOpen(false);
           setQuickAddOverride(null);
         }}
-        onConnectGoogleWelcome={() => {
-          if (cloudConfigured) {
-            setIsCloudConnectDialogOpen(true);
+        onOpenOnboardingTask={(prefill, exampleKind) => {
+          if (exampleKind) {
+            trackOnboardingEvent("onboarding_example_clicked", {
+              exampleKind,
+            });
+          } else {
+            trackOnboardingEvent("onboarding_primary_clicked");
           }
+          setQuickAddOverride({
+            origin: "onboarding",
+            prefill: prefill ?? "",
+            defaultDueToday: true,
+          });
+          setIsQuickAddOpen(true);
         }}
-        onCompleteWelcomeSetup={(presetId) =>
-          handleCreateOnboardingWorkspace(presetId)
+        onRestoreOnboarding={() => void handleRestoreFromOnboarding()}
+        onUseAnotherRestoreAccount={() => void handleUseAnotherRestoreAccount()}
+        onShowOnboardingWelcome={() => {
+          const next = createActiveOnboardingState();
+          onboardingViewedRef.current = false;
+          updateOnboardingState(next);
+          setOnboardingRestoreStatus({ kind: "idle" });
+        }}
+        analyticsEnabled={analyticsEnabled}
+        onToggleAnalyticsEnabled={() =>
+          setAnalyticsEnabled((enabled) => !enabled)
         }
-        onAdvanceOnboarding={(nextState) => setFirstRunOnboarding(nextState)}
         isCloudConnectDialogOpen={isCloudConnectDialogOpen}
         onCloseCloudConnectDialog={() => setIsCloudConnectDialogOpen(false)}
         onConnectCloudDialog={() => {
@@ -1926,139 +2032,22 @@ function App() {
 export default App;
 
 type AppFrameProps = WorkspaceShellProps & {
-  firstRunOnboarding: FirstRunOnboardingState | null;
-  onSkipOnboarding: () => void;
-  onConnectGoogleWelcome: () => void;
-  onCompleteWelcomeSetup: (
-    presetId: OnboardingPresetId,
-  ) => Promise<OnboardingSetupResult | null>;
-  onAdvanceOnboarding: (state: FirstRunOnboardingState | null) => void;
   isCloudConnectDialogOpen: boolean;
   onCloseCloudConnectDialog: () => void;
   onConnectCloudDialog: () => void;
 };
 
 function AppFrame({
-  firstRunOnboarding,
-  onSkipOnboarding,
-  onConnectGoogleWelcome,
-  onCompleteWelcomeSetup,
-  onAdvanceOnboarding,
   isCloudConnectDialogOpen,
   onCloseCloudConnectDialog,
   onConnectCloudDialog,
   ...workspaceShellProps
 }: AppFrameProps) {
   const location = useLocation();
-  const navigate = useNavigate();
   const isPublicRoute = isPublicMarketingPath(location.pathname);
-  const shouldOfferSyncOnboarding =
-    workspaceShellProps.cloudConfigured && !workspaceShellProps.cloudSession;
-
-  useEffect(() => {
-    if (isPublicRoute || !firstRunOnboarding?.projectId) return;
-
-    if (
-      firstRunOnboarding.step === "project" ||
-      firstRunOnboarding.step === "quick_add"
-    ) {
-      const projectPath = `/project/${firstRunOnboarding.projectId}`;
-      if (location.pathname !== projectPath) {
-        navigate(projectPath, { replace: true });
-      }
-      return;
-    }
-
-    if (
-      (firstRunOnboarding.step === "today" ||
-        firstRunOnboarding.step === "sync") &&
-      location.pathname !== "/today"
-    ) {
-      navigate("/today", { replace: true });
-    }
-  }, [firstRunOnboarding, isPublicRoute, location.pathname, navigate]);
-
-  useEffect(() => {
-    if (!firstRunOnboarding || firstRunOnboarding.step !== "sync") return;
-    if (!workspaceShellProps.cloudConfigured || workspaceShellProps.cloudSession) {
-      onSkipOnboarding();
-    }
-  }, [
-    firstRunOnboarding,
-    onSkipOnboarding,
-    workspaceShellProps.cloudConfigured,
-    workspaceShellProps.cloudSession,
-  ]);
-
-  useEffect(() => {
-    if (isPublicRoute || firstRunOnboarding?.step !== "quick_add") return;
-    if (!firstRunOnboarding.projectId) return;
-    if (workspaceShellProps.isQuickAddOpen) return;
-
-    workspaceShellProps.onOpenQuickAdd({
-      defaultProjectId: firstRunOnboarding.projectId,
-      defaultSectionId: null,
-      defaultDueToday: false,
-    });
-  }, [
-    firstRunOnboarding,
-    isPublicRoute,
-    workspaceShellProps.isQuickAddOpen,
-    workspaceShellProps.onOpenQuickAdd,
-  ]);
-
   return (
     <>
       <WorkspaceShell {...workspaceShellProps} />
-
-      {!isPublicRoute &&
-      firstRunOnboarding?.step === "setup" &&
-      !isCloudConnectDialogOpen ? (
-        <OnboardingSetupDialog
-          cloudConfigured={workspaceShellProps.cloudConfigured}
-          onSkip={onSkipOnboarding}
-          onConnectGoogle={onConnectGoogleWelcome}
-          onStart={async (presetId) => {
-            const result = await onCompleteWelcomeSetup(presetId);
-            if (!result) return;
-            navigate(`/project/${result.projectId}`);
-            onAdvanceOnboarding(createOnboardingTourState(presetId, result));
-          }}
-        />
-      ) : null}
-
-      {!isPublicRoute &&
-      firstRunOnboarding &&
-      firstRunOnboarding.step !== "setup" ? (
-        <OnboardingCoachmark
-          step={firstRunOnboarding.step}
-          quickAddExample={firstRunOnboarding.quickAddExample}
-          cloudConfigured={workspaceShellProps.cloudConfigured}
-          cloudSession={workspaceShellProps.cloudSession}
-          onNext={() => {
-            if (firstRunOnboarding.step === "project") {
-              onAdvanceOnboarding(
-                advanceOnboardingStep(firstRunOnboarding, "quick_add"),
-              );
-              return;
-            }
-            if (firstRunOnboarding.step === "today") {
-              if (shouldOfferSyncOnboarding) {
-                onAdvanceOnboarding(
-                  advanceOnboardingStep(firstRunOnboarding, "sync"),
-                );
-              } else {
-                onSkipOnboarding();
-              }
-              return;
-            }
-            if (firstRunOnboarding.step === "sync") {
-              onConnectGoogleWelcome();
-            }
-          }}
-          onSkip={onSkipOnboarding}
-        />
-      ) : null}
 
       {!isPublicRoute && isCloudConnectDialogOpen ? (
         <CloudConnectDialog
@@ -2156,7 +2145,18 @@ type WorkspaceShellProps = {
   quickAddOverride: Partial<QuickAddContext> | null;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onCloseQuickAdd: () => void;
-  onboardingQuickAddExample: string | null;
+  onboardingState: OnboardingState | null;
+  onboardingRestoreStatus: OnboardingRestoreStatus;
+  onSkipOnboarding: () => void;
+  onOpenOnboardingTask: (
+    prefill?: string,
+    exampleKind?: OnboardingExampleId,
+  ) => void;
+  onRestoreOnboarding: () => void;
+  onUseAnotherRestoreAccount: () => void;
+  onShowOnboardingWelcome: () => void;
+  analyticsEnabled: boolean;
+  onToggleAnalyticsEnabled: () => void;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
   canUndoActivity: (activityId: string) => boolean;
@@ -2223,7 +2223,15 @@ function WorkspaceShell({
   quickAddOverride,
   onOpenQuickAdd,
   onCloseQuickAdd,
-  onboardingQuickAddExample,
+  onboardingState,
+  onboardingRestoreStatus,
+  onSkipOnboarding,
+  onOpenOnboardingTask,
+  onRestoreOnboarding,
+  onUseAnotherRestoreAccount,
+  onShowOnboardingWelcome,
+  analyticsEnabled,
+  onToggleAnalyticsEnabled,
   activityEntries,
   onUndoActivity,
   canUndoActivity,
@@ -2239,6 +2247,7 @@ function WorkspaceShell({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
+  const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
   const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] =
     useState(false);
   const [createProjectValue, setCreateProjectValue] = useState("");
@@ -2854,6 +2863,14 @@ function WorkspaceShell({
                   element={
                     <TodayPage
                       payload={payload}
+                      onboardingState={onboardingState}
+                      onboardingRestoreStatus={onboardingRestoreStatus}
+                      cloudConfigured={cloudConfigured}
+                      isOnline={isOnline}
+                      onOpenOnboardingTask={onOpenOnboardingTask}
+                      onRestoreOnboarding={onRestoreOnboarding}
+                      onUseAnotherRestoreAccount={onUseAnotherRestoreAccount}
+                      onSkipOnboarding={onSkipOnboarding}
                       showCompletedToday={showCompletedToday}
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
@@ -3074,6 +3091,11 @@ function WorkspaceShell({
                       isResettingCache={isResettingCache}
                       lastCloudSyncAt={lastCloudSyncAt}
                       lastLocalBackupAt={lastLocalBackupAt}
+                      analyticsEnabled={analyticsEnabled}
+                      onToggleAnalyticsEnabled={onToggleAnalyticsEnabled}
+                      onOpenGettingStarted={() =>
+                        setIsGettingStartedOpen(true)
+                      }
                     />
                   }
                 />
@@ -3110,7 +3132,6 @@ function WorkspaceShell({
           onCreateTask={onCreateTask}
           onCreateTaskRelative={onCreateTaskRelative}
           onSaveTask={onSaveTask}
-          onboardingExample={onboardingQuickAddExample}
           onShowBanner={onShowBanner}
         />
       ) : null}
@@ -3118,6 +3139,22 @@ function WorkspaceShell({
       {isShortcutDialogOpen ? (
         <KeyboardShortcutsDialog
           onClose={() => setIsShortcutDialogOpen(false)}
+        />
+      ) : null}
+
+      {isGettingStartedOpen ? (
+        <GettingStartedDialog
+          workspaceEmpty={!hasLiveTasks(payload)}
+          onClose={() => setIsGettingStartedOpen(false)}
+          onShowWelcome={() => {
+            onShowOnboardingWelcome();
+            setIsGettingStartedOpen(false);
+            navigate("/today");
+          }}
+          onOpenQuickAdd={() => {
+            setIsGettingStartedOpen(false);
+            onOpenQuickAdd();
+          }}
         />
       ) : null}
 
@@ -3267,7 +3304,7 @@ function WorkspaceShell({
   );
 }
 
-const LEGAL_LAST_UPDATED = "April 11, 2026";
+const LEGAL_LAST_UPDATED = "July 19, 2026";
 const SUPPORT_EMAIL = "support@emberlist.dev";
 const GITHUB_REPOSITORY_URL = "https://github.com/notpranavshinde/emberlist";
 
@@ -3508,6 +3545,13 @@ function PrivacyPolicyPage() {
             account email address and basic profile name so the app can show
             which Google account is currently connected.
           </p>
+          <p>
+            When anonymous usage analytics are enabled, Emberlist records web
+            page views and aggregate onboarding events such as viewing,
+            skipping, completing, or attempting a Drive restore. Task content,
+            Google account details, and persistent device identifiers are not
+            included in these events.
+          </p>
         </PublicSection>
 
         <PublicSection title="How data is stored">
@@ -3548,7 +3592,30 @@ function PrivacyPolicyPage() {
               Drive sync
             </li>
             <li>to show which account is connected for sync</li>
+            <li>to measure whether first-run onboarding is understandable</li>
           </ul>
+        </PublicSection>
+
+        <PublicSection title="Anonymous analytics">
+          <p>
+            Web page-view analytics are processed by Vercel. Onboarding events
+            from web and Android are sent to Emberlist and stored as daily
+            aggregate counters in Upstash Redis. Random per-event identifiers
+            are retained for up to 30 days only to prevent duplicate retries;
+            aggregate counters are retained for up to 13 months.
+          </p>
+          <p>
+            Each onboarding event contains only the allowlisted event name,
+            web or Android platform, app and onboarding versions, and optional
+            method, result, example kind, or broad elapsed-time bucket. Raw IP
+            addresses and user agents are not stored with analytics events; a
+            short-lived hashed IP is used only for abuse prevention.
+          </p>
+          <p>
+            Analytics are enabled by default and can be disabled at any time
+            in Settings. Disabling analytics stops new events and clears events
+            waiting to be sent from that browser or device.
+          </p>
         </PublicSection>
 
         <PublicSection title="Sharing and retention">
@@ -3667,6 +3734,14 @@ function buildFeedbackMailto(
 
 function TodayPage({
   payload,
+  onboardingState,
+  onboardingRestoreStatus,
+  cloudConfigured,
+  isOnline,
+  onOpenOnboardingTask,
+  onRestoreOnboarding,
+  onUseAnotherRestoreAccount,
+  onSkipOnboarding,
   showCompletedToday,
   showSelectionButtons,
   onOpenQuickAdd,
@@ -3684,6 +3759,17 @@ function TodayPage({
   onDuplicateTask,
 }: {
   payload: SyncPayload;
+  onboardingState: OnboardingState | null;
+  onboardingRestoreStatus: OnboardingRestoreStatus;
+  cloudConfigured: boolean;
+  isOnline: boolean;
+  onOpenOnboardingTask: (
+    prefill?: string,
+    exampleKind?: OnboardingExampleId,
+  ) => void;
+  onRestoreOnboarding: () => void;
+  onUseAnotherRestoreAccount: () => void;
+  onSkipOnboarding: () => void;
   showCompletedToday: boolean;
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
@@ -3901,6 +3987,19 @@ function TodayPage({
       className="w-full space-y-4"
       data-task-selection-mode={selectionMode ? "true" : undefined}
     >
+      {onboardingState?.status === "active" && !hasLiveTasks(payload) ? (
+        <FirstRunWelcome
+          cloudConfigured={cloudConfigured}
+          isOnline={isOnline}
+          restoreStatus={onboardingRestoreStatus}
+          onAddTask={() => onOpenOnboardingTask()}
+          onChooseExample={(id, value) => onOpenOnboardingTask(value, id)}
+          onRestore={onRestoreOnboarding}
+          onUseAnotherAccount={onUseAnotherRestoreAccount}
+          onSkip={onSkipOnboarding}
+        />
+      ) : null}
+
       {showSelectionButtons || selectionMode ? (
         <div className="flex flex-wrap items-center gap-2 px-3">
           <button
@@ -3996,7 +4095,11 @@ function TodayPage({
             payload={payload}
             todayStartMs={todayStartMs}
             tasks={data.today}
-            emptyMessage="No tasks due today."
+            emptyMessage={
+              !hasLiveTasks(payload)
+                ? "Nothing due today. Use + to add a task; tasks without dates live in Inbox."
+                : "No tasks due today."
+            }
             onToggleTask={onToggleTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onOpenTask={openTaskEditor}
@@ -6831,6 +6934,9 @@ function SettingsPage({
   isResettingCache,
   lastCloudSyncAt,
   lastLocalBackupAt,
+  analyticsEnabled,
+  onToggleAnalyticsEnabled,
+  onOpenGettingStarted,
 }: {
   syncMode: SyncMode;
   onSyncModeChange: (value: SyncMode) => void;
@@ -6863,6 +6969,9 @@ function SettingsPage({
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
   lastLocalBackupAt: number | null;
+  analyticsEnabled: boolean;
+  onToggleAnalyticsEnabled: () => void;
+  onOpenGettingStarted: () => void;
 }) {
   const location = useLocation();
   const cloudStatus = getCloudStatus({
@@ -6888,6 +6997,20 @@ function SettingsPage({
   return (
     <div className="space-y-6">
       <TaskGroupGrid>
+        <SettingsDisclosure
+          title="Getting started"
+          description="A concise guide to capturing, scheduling, organizing, and syncing tasks."
+          defaultOpen
+        >
+          <button
+            type="button"
+            onClick={onOpenGettingStarted}
+            className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
+          >
+            Open Getting Started
+          </button>
+        </SettingsDisclosure>
+
         <SettingsDisclosure
           title="Sync mode"
           description="Choose whether this browser uses Google Drive sync or stays local-only."
@@ -7085,6 +7208,23 @@ function SettingsPage({
           defaultOpen
         >
           <div className="space-y-4">
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
+              <div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Share anonymous usage analytics
+                </p>
+                <p className="mt-1 text-sm text-[#6D5C50]">
+                  Sends page-view and onboarding counts. Task content, account
+                  details, and device identifiers are never included.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={analyticsEnabled}
+                onChange={onToggleAnalyticsEnabled}
+                className="h-5 w-5 accent-[#EE6A3C]"
+              />
+            </label>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -8046,7 +8186,6 @@ function QuickAddDialog({
   onCreateTask,
   onCreateTaskRelative,
   onSaveTask,
-  onboardingExample,
   onShowBanner,
 }: {
   payload: SyncPayload;
@@ -8063,7 +8202,6 @@ function QuickAddDialog({
     options?: { silent?: boolean; successMessage?: string },
   ) => Promise<string | null>;
   onSaveTask: (taskId: string, draft: TaskDraft) => Promise<void> | void;
-  onboardingExample: string | null;
   onShowBanner: (
     tone: Banner["tone"],
     message: string,
@@ -8086,7 +8224,7 @@ function QuickAddDialog({
   const [input, setInput] = useState(() =>
     editTask
       ? serializeTaskToQuickAddInput(payload, editTask, editReminderDrafts)
-      : "",
+      : (context.prefill ?? ""),
   );
   const [description, setDescription] = useState(
     () => editTask?.description ?? "",
@@ -8344,6 +8482,8 @@ function QuickAddDialog({
     context.defaultDueToday ? "today" : "none",
     context.relativeAnchorTaskId ?? "",
     context.relativePosition ?? "",
+    context.origin ?? "standard",
+    context.prefill ?? "",
   ].join("|");
 
   useEffect(() => {
@@ -8417,7 +8557,7 @@ function QuickAddDialog({
   }, [isSaving, onClose, showBulkChoices]);
 
   function resetDialogFields() {
-    setInput("");
+    setInput(context.prefill ?? "");
     setDescription("");
     setSubtaskInput("");
     setShowBulkChoices(false);
@@ -8495,6 +8635,8 @@ function QuickAddDialog({
     context.defaultSectionId,
     context.relativeAnchorTaskId,
     context.relativePosition,
+    context.origin,
+    context.prefill,
     editReminderDrafts,
     editTask?.id,
     editTask,
@@ -8591,26 +8733,31 @@ function QuickAddDialog({
         return;
       }
       const taskId = await createTaskFromQuickAdd(effectiveDraft, {
-        silent: shouldCreateSubtasks,
+        silent: shouldCreateSubtasks && context.origin !== "onboarding",
       });
       if (taskId) {
         if (shouldCreateSubtasks) {
           const createdSubtasks = await createQuickAddSubtasks(taskId);
-          onShowBanner(
-            "success",
-            `Task "${effectiveDraft.title.trim()}" created${createdSubtasks > 0 ? ` with ${createdSubtasks} subtask${createdSubtasks === 1 ? "" : "s"}` : ""}.`,
-            shouldOfferUpcomingBannerAction
-              ? {
-                  actionLabel: "View in Upcoming",
-                  onAction: () => {
-                    window.location.hash = "#/upcoming";
-                  },
-                  persistOnNavigation: true,
-                  autoDismissMs: 8_000,
-                }
-              : undefined,
-          );
-        } else if (shouldOfferUpcomingBannerAction) {
+          if (context.origin !== "onboarding") {
+            onShowBanner(
+              "success",
+              `Task "${effectiveDraft.title.trim()}" created${createdSubtasks > 0 ? ` with ${createdSubtasks} subtask${createdSubtasks === 1 ? "" : "s"}` : ""}.`,
+              shouldOfferUpcomingBannerAction
+                ? {
+                    actionLabel: "View in Upcoming",
+                    onAction: () => {
+                      window.location.hash = "#/upcoming";
+                    },
+                    persistOnNavigation: true,
+                    autoDismissMs: 8_000,
+                  }
+                : undefined,
+            );
+          }
+        } else if (
+          shouldOfferUpcomingBannerAction &&
+          context.origin !== "onboarding"
+        ) {
           onShowBanner("success", `Task "${effectiveDraft.title.trim()}" created.`, {
             actionLabel: "View in Upcoming",
             onAction: () => {
@@ -8674,7 +8821,10 @@ function QuickAddDialog({
           return;
         }
         const taskId = await createTaskFromQuickAdd(mergedDraft, {
-          successMessage: "Combined list into 1 task.",
+          successMessage:
+            context.origin === "onboarding"
+              ? undefined
+              : "Combined list into 1 task.",
         });
         if (taskId) {
           if (context.relativePosition === "after") {
@@ -8686,7 +8836,7 @@ function QuickAddDialog({
       }
 
       let currentAnchorTaskId = relativeAnchorTaskId;
-      for (const line of bulkLines) {
+      for (const [lineIndex, line] of bulkLines.entries()) {
         const parsedLine = parseQuickAdd(line);
         const baseDraft = buildDraftFromParsed(
           payload,
@@ -8715,19 +8865,26 @@ function QuickAddDialog({
             currentAnchorTaskId,
             context.relativePosition,
             draft,
-            { silent: true },
+            {
+              silent:
+                context.origin !== "onboarding" || lineIndex > 0,
+            },
           );
           if (context.relativePosition === "after" && createdTaskId) {
             currentAnchorTaskId = createdTaskId;
           }
         } else {
-          await onCreateTask(draft, { silent: true });
+          await onCreateTask(draft, {
+            silent: context.origin !== "onboarding" || lineIndex > 0,
+          });
         }
       }
       if (context.relativePosition === "after") {
         setRelativeAnchorTaskId(currentAnchorTaskId);
       }
-      onShowBanner("success", `${bulkLines.length} tasks created.`);
+      if (context.origin !== "onboarding") {
+        onShowBanner("success", `${bulkLines.length} tasks created.`);
+      }
       onClose();
     } finally {
       setIsSaving(false);
@@ -8768,7 +8925,11 @@ function QuickAddDialog({
               Quick add
             </p>
             <h3 className="mt-1 text-xl font-semibold text-[#1E2D2F]">
-              {isEditMode ? "Edit task" : "Create a task"}
+              {isEditMode
+                ? "Edit task"
+                : context.origin === "onboarding"
+                  ? "Your first task"
+                  : "Create a task"}
             </h3>
           </div>
           <button
@@ -8802,18 +8963,22 @@ function QuickAddDialog({
               Type it naturally. Dates, projects, priorities, reminders, and
               repeats all work.
             </p>
-            {onboardingExample && !input.trim() ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setInput(onboardingExample);
-                  window.setTimeout(() => inputRef.current?.focus(), 0);
-                }}
-                className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-1.5 text-xs font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1]"
-              >
-                <span>Try example</span>
-                <span className="text-[#8A5A44]">{onboardingExample}</span>
-              </button>
+            {context.origin === "onboarding" && !input.trim() ? (
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="Example tasks">
+                {ONBOARDING_EXAMPLES.map((example) => (
+                  <button
+                    key={example.id}
+                    type="button"
+                    onClick={() => {
+                      setInput(example.label);
+                      window.setTimeout(() => inputRef.current?.focus(), 0);
+                    }}
+                    className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-3 py-1.5 text-xs font-semibold text-[#8A5A44] transition hover:bg-[#FDE9E1]"
+                  >
+                    {example.label}
+                  </button>
+                ))}
+              </div>
             ) : null}
 
             <label className="mt-3 block">
@@ -10404,270 +10569,6 @@ function KeyboardShortcutsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function OnboardingSetupDialog({
-  cloudConfigured,
-  onSkip,
-  onConnectGoogle,
-  onStart,
-}: {
-  cloudConfigured: boolean;
-  onSkip: () => void;
-  onConnectGoogle: () => void;
-  onStart: (presetId: OnboardingPresetId) => Promise<void>;
-}) {
-  const [selectedPresetId, setSelectedPresetId] =
-    useState<OnboardingPresetId>("personal");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const selectedPreset =
-    ONBOARDING_PRESETS.find((preset) => preset.id === selectedPresetId) ??
-    ONBOARDING_PRESETS[0];
-
-  async function submitStart() {
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await onStart(selectedPresetId);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <ChoiceDialog
-      title="Start with a simple workspace"
-      description="Pick one area to manage first. Emberlist will create a sample project, seed a few realistic tasks, and then teach Quick Add in the live app."
-      onClose={onSkip}
-      dialogClassName="max-w-3xl"
-    >
-      <div className="space-y-5">
-        <div className="grid gap-3 md:grid-cols-3">
-          {ONBOARDING_PRESETS.map((preset) => (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => setSelectedPresetId(preset.id)}
-              className={`rounded-[22px] border px-4 py-4 text-left transition ${
-                selectedPresetId === preset.id
-                  ? "border-[#F3B7A4] bg-[#FFF5F1] shadow-sm"
-                  : "border-[#E1D5CA] bg-[var(--app-surface-soft)] hover:bg-[var(--app-surface)]"
-              }`}
-            >
-              <p className="text-base font-semibold text-[#1E2D2F]">
-                {preset.label}
-              </p>
-              <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-                {preset.description}
-              </p>
-            </button>
-          ))}
-        </div>
-
-        <div className="rounded-[22px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-5 py-4">
-          <p className="text-sm font-semibold text-[#1E2D2F]">
-            Starter project: {selectedPreset.projectName}
-          </p>
-          <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-            You will get four example tasks, including recurring work, and then
-            Emberlist will drop you directly into Quick Add so you can try one
-            natural-language task yourself.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            data-dialog-autofocus="true"
-            onClick={() => void submitStart()}
-            disabled={isSubmitting}
-            className="rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#c84335] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSubmitting ? "Setting up..." : "Start with this"}
-          </button>
-          <button
-            type="button"
-            onClick={onSkip}
-            className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
-          >
-            Skip
-          </button>
-          {cloudConfigured ? (
-            <button
-              type="button"
-              onClick={onConnectGoogle}
-              className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)]"
-            >
-              Connect Google Drive first
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </ChoiceDialog>
-  );
-}
-
-function OnboardingCoachmark({
-  step,
-  quickAddExample,
-  cloudConfigured,
-  cloudSession,
-  onNext,
-  onSkip,
-}: {
-  step: Exclude<FirstRunOnboardingState["step"], "setup">;
-  quickAddExample: string | null;
-  cloudConfigured: boolean;
-  cloudSession: CloudSession | null;
-  onNext: () => void;
-  onSkip: () => void;
-}) {
-  const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
-  const stepConfig = getOnboardingCoachmarkContent(
-    step,
-    quickAddExample,
-    cloudConfigured,
-    cloudSession,
-  );
-
-  useEffect(() => {
-    if (typeof document === "undefined") return undefined;
-
-    const updateRect = () => {
-      const target = document.querySelector<HTMLElement>(
-        stepConfig.targetSelector,
-      );
-      setTargetRect(target ? target.getBoundingClientRect() : null);
-    };
-
-    updateRect();
-    const handleChange = () => window.requestAnimationFrame(updateRect);
-
-    window.addEventListener("resize", handleChange);
-    window.addEventListener("scroll", handleChange, true);
-    return () => {
-      window.removeEventListener("resize", handleChange);
-      window.removeEventListener("scroll", handleChange, true);
-    };
-  }, [stepConfig.targetSelector]);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    const target = document.querySelector<HTMLElement>(stepConfig.targetSelector);
-    target?.scrollIntoView({
-      block: "center",
-      inline: "nearest",
-      behavior: "smooth",
-    });
-  }, [stepConfig.targetSelector]);
-
-  const cardStyle = useMemo<CSSProperties>(() => {
-    if (step === "quick_add") {
-      return {
-        top: 24,
-        right: 24,
-        width: Math.min(340, window.innerWidth - 32),
-      };
-    }
-
-    if (!targetRect) {
-      return {
-        left: "50%",
-        top: "50%",
-        transform: "translate(-50%, -50%)",
-        width: Math.min(360, window.innerWidth - 32),
-      };
-    }
-
-    const cardWidth = Math.min(360, window.innerWidth - 32);
-    const canPlaceRight =
-      window.innerWidth - targetRect.right >= cardWidth + 24;
-    const canPlaceLeft = targetRect.left >= cardWidth + 24;
-
-    if (canPlaceRight || canPlaceLeft) {
-      return {
-        top: Math.min(
-          Math.max(16, targetRect.top),
-          window.innerHeight - 240,
-        ),
-        left: canPlaceRight
-          ? targetRect.right + 16
-          : Math.max(16, targetRect.left - cardWidth - 16),
-        width: cardWidth,
-      };
-    }
-
-    const placeBelow = window.innerHeight - targetRect.bottom >= 220;
-    const top = placeBelow
-      ? targetRect.bottom + 16
-      : Math.max(16, targetRect.top - 212);
-    const left = Math.min(
-      Math.max(16, targetRect.left),
-      window.innerWidth - cardWidth - 16,
-    );
-
-    return {
-      top,
-      left,
-      width: cardWidth,
-    };
-  }, [step, targetRect]);
-
-  return (
-    <div className="pointer-events-none fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-[#241b17]/14" />
-      {targetRect ? (
-        <div
-          className="absolute rounded-[24px] border-2 border-[#EE6A3C] bg-transparent shadow-[0_0_0_9999px_rgba(36,27,23,0.14)]"
-          style={{
-            top: Math.max(8, targetRect.top - 8),
-            left: Math.max(8, targetRect.left - 8),
-            width: Math.min(window.innerWidth - 16, targetRect.width + 16),
-            height: Math.min(window.innerHeight - 16, targetRect.height + 16),
-          }}
-        />
-      ) : null}
-
-      <div
-        className="pointer-events-auto absolute rounded-[24px] border border-[#E1D5CA] bg-[var(--app-surface)] p-5 shadow-[0_20px_60px_rgba(36,27,23,0.18)]"
-        style={cardStyle}
-      >
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#B1775C]">
-          Step {stepConfig.stepIndex} of {stepConfig.totalSteps}
-        </p>
-        <h3 className="mt-2 text-lg font-semibold text-[#1E2D2F]">
-          {stepConfig.title}
-        </h3>
-        <p className="mt-2 text-sm leading-6 text-[#6D5C50]">
-          {stepConfig.description}
-        </p>
-        {stepConfig.example ? (
-          <code className="mt-3 block rounded-[16px] border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-3 py-2 text-sm text-[#1E2D2F]">
-            {stepConfig.example}
-          </code>
-        ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
-          {stepConfig.primaryLabel ? (
-            <button
-              type="button"
-              onClick={onNext}
-              className="rounded-full bg-[#dc4c3e] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#c84335]"
-            >
-              {stepConfig.primaryLabel}
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onSkip}
-            className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-2 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
-          >
-            {step === "quick_add" ? "Skip practice" : "Skip"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function CloudConnectDialog({
   lastSyncError,
   onClose,
@@ -11980,123 +11881,6 @@ function parseInputValue(value: string, allDay: boolean): number | null {
   }
   const parsed = new Date(value).getTime();
   return Number.isNaN(parsed) ? null : parsed;
-}
-
-function getOnboardingCoachmarkContent(
-  step: Exclude<FirstRunOnboardingState["step"], "setup">,
-  quickAddExample: string | null,
-  cloudConfigured: boolean,
-  cloudSession: CloudSession | null,
-): {
-  stepIndex: number;
-  totalSteps: number;
-  title: string;
-  description: string;
-  targetSelector: string;
-  primaryLabel: string | null;
-  example: string | null;
-} {
-  const includeSyncStep = cloudConfigured && !cloudSession;
-  switch (step) {
-    case "project":
-      return {
-        stepIndex: 1,
-        totalSteps: includeSyncStep ? 4 : 3,
-        title: "This is your starter project",
-        description:
-          "Projects hold related tasks and sections. Start here to get oriented before you begin capturing your own work.",
-        targetSelector: '[data-onboarding-target="project-task-area"]',
-        primaryLabel: "Next",
-        example: null,
-      };
-    case "quick_add":
-      return {
-        stepIndex: 2,
-        totalSteps: includeSyncStep ? 4 : 3,
-        title: "Try Quick Add once",
-        description:
-          "Use plain language here. Dates, priorities, projects, and repeat rules are all understood directly from what you type.",
-        targetSelector: '[data-onboarding-target="quick-add-parser"]',
-        primaryLabel: null,
-        example: quickAddExample,
-      };
-    case "today":
-      return {
-        stepIndex: 3,
-        totalSteps: includeSyncStep ? 4 : 3,
-        title: "This is what needs attention now",
-        description:
-          "Anything due now or overdue lands here. This is where you will spend most of your time once tasks start moving.",
-        targetSelector: '[data-onboarding-target="today-due"]',
-        primaryLabel:
-          cloudConfigured && !cloudSession ? "Next" : "Finish",
-        example: null,
-      };
-    case "sync":
-      return {
-        stepIndex: 4,
-        totalSteps: 4,
-        title: "Connect Google Drive when you want sync",
-        description:
-          "Emberlist works locally without an account. Connect Google Drive only when you want this workspace available across browsers and devices.",
-        targetSelector: '[data-onboarding-target="sidebar-cloud-sync"]',
-        primaryLabel: "Connect Google Drive",
-        example: null,
-      };
-  }
-}
-
-function readStoredOnboardingState(): FirstRunOnboardingState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = getStoredItem(FIRST_RUN_ONBOARDING_STATE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<FirstRunOnboardingState> | null;
-    if (!parsed || typeof parsed !== "object") return null;
-    const validSteps = new Set<FirstRunOnboardingState["step"]>([
-      "setup",
-      "project",
-      "quick_add",
-      "today",
-      "sync",
-    ]);
-    const validPresets = new Set<OnboardingPresetId>([
-      "personal",
-      "school",
-      "work",
-    ]);
-    if (
-      !validSteps.has(parsed.step as FirstRunOnboardingState["step"]) ||
-      !validPresets.has(parsed.presetId as OnboardingPresetId)
-    ) {
-      return null;
-    }
-    return {
-      step: parsed.step as FirstRunOnboardingState["step"],
-      presetId: parsed.presetId as OnboardingPresetId,
-      projectId: typeof parsed.projectId === "string" ? parsed.projectId : null,
-      quickAddExample:
-        typeof parsed.quickAddExample === "string"
-          ? parsed.quickAddExample
-          : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredOnboardingState(
-  state: FirstRunOnboardingState | null,
-): void {
-  if (typeof window === "undefined") return;
-  if (!state) {
-    removeStoredItem(FIRST_RUN_ONBOARDING_STATE_KEY);
-    return;
-  }
-  setStoredItem(
-    FIRST_RUN_ONBOARDING_STATE_KEY,
-    JSON.stringify(state),
-  );
 }
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {

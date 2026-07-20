@@ -1,183 +1,156 @@
-import { addDays } from "date-fns";
 import type { SyncPayload } from "../types/sync";
-import { createProject, createTask, type TaskDraft } from "./workspace";
 
-export type OnboardingPresetId = "personal" | "school" | "work";
+export const ONBOARDING_VERSION = 2 as const;
+export const ONBOARDING_STORAGE_KEY = "emberlist.onboarding.v2";
+export const LEGACY_ONBOARDING_DISMISSED_KEY =
+  "emberlist.firstRunWelcomeDismissed";
+export const LEGACY_ONBOARDING_STATE_KEY =
+  "emberlist.firstRunOnboardingState";
 
-export type OnboardingPreset = {
-  id: OnboardingPresetId;
-  label: string;
-  description: string;
-  projectName: string;
-  quickAddExample: string;
-  sampleTasks: Array<{
-    title: string;
-    dueOffsetDays: number | null;
-    priority?: TaskDraft["priority"];
-    recurringRule?: string | null;
-  }>;
+export const ONBOARDING_EXAMPLES = [
+  { id: "simple", label: "Buy groceries" },
+  { id: "scheduled", label: "Call the dentist tomorrow 9am" },
+  { id: "recurring", label: "Take vitamins every day 8am" },
+] as const;
+
+export type OnboardingExampleId = (typeof ONBOARDING_EXAMPLES)[number]["id"];
+export type OnboardingStatus = "active" | "completed" | "dismissed";
+export type OnboardingCompletionMethod = "first_task" | "drive_restore";
+
+export type OnboardingState = {
+  version: typeof ONBOARDING_VERSION;
+  status: OnboardingStatus;
+  startedAt: number | null;
+  completedAt: number | null;
+  completionMethod: OnboardingCompletionMethod | null;
+  restorePending: boolean;
 };
 
-export type OnboardingSetupResult = {
-  payload: SyncPayload;
-  projectId: string;
-  projectName: string;
-  quickAddExample: string;
-  sampleTaskTitles: string[];
-};
+export function hasLiveTasks(payload: SyncPayload | null): boolean {
+  return Boolean(payload?.tasks.some((task) => !task.deletedAt));
+}
 
-export type FirstRunOnboardingStep =
-  | "setup"
-  | "project"
-  | "quick_add"
-  | "today"
-  | "sync";
-
-export type FirstRunOnboardingState = {
-  step: FirstRunOnboardingStep;
-  presetId: OnboardingPresetId;
-  projectId: string | null;
-  quickAddExample: string | null;
-};
-
-export const ONBOARDING_PRESETS: OnboardingPreset[] = [
-  {
-    id: "personal",
-    label: "Personal life",
-    description: "Routines, errands, and life admin.",
-    projectName: "Life admin",
-    quickAddExample: "Pay rent every month on the 1st p1 #Life admin",
-    sampleTasks: [
-      { title: "Buy groceries", dueOffsetDays: 0, priority: "P2" },
-      { title: "Call parents", dueOffsetDays: 1 },
-      {
-        title: "Plan weekly reset",
-        dueOffsetDays: 3,
-        recurringRule: "FREQ=WEEKLY",
-      },
-      {
-        title: "Take vitamins",
-        dueOffsetDays: 0,
-        recurringRule: "FREQ=DAILY",
-      },
-    ],
-  },
-  {
-    id: "school",
-    label: "School",
-    description: "Assignments, readings, and repeating study work.",
-    projectName: "Classes",
-    quickAddExample: "Review lecture notes every monday 7pm #Classes",
-    sampleTasks: [
-      { title: "Review lecture notes", dueOffsetDays: 0, priority: "P2" },
-      { title: "Finish lab worksheet", dueOffsetDays: 1, priority: "P1" },
-      { title: "Read next chapter", dueOffsetDays: 3 },
-      {
-        title: "Plan study block",
-        dueOffsetDays: 0,
-        recurringRule: "FREQ=WEEKLY",
-      },
-    ],
-  },
-  {
-    id: "work",
-    label: "Work",
-    description: "Meetings, follow-ups, and recurring deliverables.",
-    projectName: "Work",
-    quickAddExample: "Send weekly update every friday 4pm p2 #Work",
-    sampleTasks: [
-      { title: "Draft weekly priorities", dueOffsetDays: 0, priority: "P2" },
-      { title: "Reply to open follow-ups", dueOffsetDays: 1 },
-      { title: "Prepare next meeting agenda", dueOffsetDays: 2 },
-      {
-        title: "Send weekly update",
-        dueOffsetDays: 4,
-        recurringRule: "FREQ=WEEKLY",
-        priority: "P2",
-      },
-    ],
-  },
-];
-
-export function getOnboardingPreset(
-  presetId: OnboardingPresetId,
-): OnboardingPreset {
+export function hasLiveWorkspaceContent(payload: SyncPayload | null): boolean {
+  if (!payload) return false;
   return (
-    ONBOARDING_PRESETS.find((preset) => preset.id === presetId) ??
-    ONBOARDING_PRESETS[0]
+    payload.tasks.some((task) => !task.deletedAt) ||
+    payload.projects.some((project) => !project.deletedAt) ||
+    payload.sections.some((section) => !section.deletedAt)
   );
 }
 
-export function createInitialOnboardingState(
-  presetId: OnboardingPresetId = "personal",
-): FirstRunOnboardingState {
+export function createActiveOnboardingState(now = Date.now()): OnboardingState {
   return {
-    step: "setup",
-    presetId,
-    projectId: null,
-    quickAddExample: null,
+    version: ONBOARDING_VERSION,
+    status: "active",
+    startedAt: now,
+    completedAt: null,
+    completionMethod: null,
+    restorePending: false,
   };
 }
 
-export function createOnboardingTourState(
-  presetId: OnboardingPresetId,
-  setup: OnboardingSetupResult,
-): FirstRunOnboardingState {
+export function createCompletedOnboardingState(
+  method: OnboardingCompletionMethod | null,
+  now = Date.now(),
+): OnboardingState {
   return {
-    step: "project",
-    presetId,
-    projectId: setup.projectId,
-    quickAddExample: setup.quickAddExample,
+    version: ONBOARDING_VERSION,
+    status: "completed",
+    startedAt: null,
+    completedAt: now,
+    completionMethod: method,
+    restorePending: false,
   };
 }
 
-export function advanceOnboardingStep(
-  state: FirstRunOnboardingState,
-  step: Exclude<FirstRunOnboardingStep, "setup">,
-): FirstRunOnboardingState {
+export function dismissOnboarding(
+  state: OnboardingState,
+): OnboardingState {
+  return { ...state, status: "dismissed", restorePending: false };
+}
+
+export function completeOnboarding(
+  state: OnboardingState,
+  method: OnboardingCompletionMethod,
+  now = Date.now(),
+): OnboardingState {
   return {
     ...state,
-    step,
+    status: "completed",
+    completedAt: now,
+    completionMethod: method,
+    restorePending: false,
   };
 }
 
-export function createOnboardingSetup(
-  payload: SyncPayload,
-  presetId: OnboardingPresetId,
-  todayStartMs: number,
-): OnboardingSetupResult {
-  const preset = getOnboardingPreset(presetId);
-  const projectId = crypto.randomUUID();
-  let nextPayload = createProject(payload, preset.projectName, projectId);
+export function setOnboardingRestorePending(
+  state: OnboardingState,
+  restorePending: boolean,
+): OnboardingState {
+  return { ...state, restorePending };
+}
 
-  for (const sampleTask of preset.sampleTasks) {
-    nextPayload = createTask(nextPayload, {
-      title: sampleTask.title,
-      description: "",
-      projectId,
-      projectName: null,
-      sectionId: null,
-      sectionName: null,
-      priority: sampleTask.priority ?? "P4",
-      dueAt:
-        sampleTask.dueOffsetDays === null
-          ? null
-          : addDays(todayStartMs, sampleTask.dueOffsetDays).getTime(),
-      allDay: true,
-      deadlineAt: null,
-      deadlineAllDay: false,
-      recurringRule: sampleTask.recurringRule ?? null,
-      deadlineRecurringRule: null,
-      parentTaskId: null,
-      reminders: [],
-    });
+export function initializeOnboardingState({
+  storedState,
+  legacyDismissed,
+  legacyStatePresent,
+  payload,
+  now = Date.now(),
+}: {
+  storedState: unknown;
+  legacyDismissed: boolean;
+  legacyStatePresent: boolean;
+  payload: SyncPayload;
+  now?: number;
+}): OnboardingState {
+  const parsed = parseOnboardingState(storedState);
+  if (parsed) return parsed;
+  if (legacyDismissed) {
+    return {
+      ...createCompletedOnboardingState(null, now),
+      status: "dismissed",
+    };
   }
+  if (hasLiveWorkspaceContent(payload)) {
+    return createCompletedOnboardingState(null, now);
+  }
+  if (legacyStatePresent || !hasLiveWorkspaceContent(payload)) {
+    return createActiveOnboardingState(now);
+  }
+  return createCompletedOnboardingState(null, now);
+}
 
-  return {
-    payload: nextPayload,
-    projectId,
-    projectName: preset.projectName,
-    quickAddExample: preset.quickAddExample,
-    sampleTaskTitles: preset.sampleTasks.map((task) => task.title),
-  };
+export function parseOnboardingState(value: unknown): OnboardingState | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<OnboardingState>;
+  if (
+    candidate.version !== ONBOARDING_VERSION ||
+    !["active", "completed", "dismissed"].includes(candidate.status ?? "") ||
+    !isNullableNumber(candidate.startedAt) ||
+    !isNullableNumber(candidate.completedAt) ||
+    ![null, "first_task", "drive_restore"].includes(
+      candidate.completionMethod ?? null,
+    ) ||
+    typeof candidate.restorePending !== "boolean"
+  ) {
+    return null;
+  }
+  return candidate as OnboardingState;
+}
+
+export function onboardingElapsedBucket(
+  startedAt: number | null,
+  now = Date.now(),
+): "under_30s" | "30_to_60s" | "1_to_5m" | "over_5m" {
+  if (startedAt === null) return "over_5m";
+  const elapsed = Math.max(0, now - startedAt);
+  if (elapsed < 30_000) return "under_30s";
+  if (elapsed < 60_000) return "30_to_60s";
+  if (elapsed < 300_000) return "1_to_5m";
+  return "over_5m";
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isFinite(value));
 }

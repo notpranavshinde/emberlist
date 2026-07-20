@@ -12,6 +12,8 @@ export type QuickAddContext = {
   defaultProjectId: string | null;
   defaultSectionId: string | null;
   defaultDueToday: boolean;
+  origin?: 'standard' | 'onboarding';
+  prefill?: string;
   relativeAnchorTaskId?: string | null;
   relativePosition?: 'before' | 'after' | null;
   editTaskId?: string | null;

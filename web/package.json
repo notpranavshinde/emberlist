@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "security:config": "node scripts/validate-security-config.mjs",
     "security:storage": "node scripts/check-storage-usage.mjs",
-    "security:check": "npm run security:config && npm run security:storage"
+    "security:check": "npm run security:config && npm run security:storage",
+    "analytics:report": "node scripts/report-onboarding-analytics.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
