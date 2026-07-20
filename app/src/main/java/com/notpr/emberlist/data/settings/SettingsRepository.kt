@@ -18,6 +18,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val KEY_SHOW_COMPLETED_TODAY = booleanPreferencesKey("show_completed_today")
         val KEY_SYNC_ENABLED = booleanPreferencesKey("sync_enabled")
         val KEY_LAST_SYNCED_AT = stringPreferencesKey("last_synced_at")
+        val KEY_ANALYTICS_ENABLED = booleanPreferencesKey("analytics_enabled")
     }
 
     val settings: Flow<SettingsState> = dataStore.data.map { prefs ->
@@ -28,7 +29,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             autoBackupDaily = prefs[KEY_AUTO_BACKUP] ?: false,
             showCompletedToday = prefs[KEY_SHOW_COMPLETED_TODAY] ?: false,
             syncEnabled = prefs[KEY_SYNC_ENABLED] ?: false,
-            lastSyncedAt = prefs[KEY_LAST_SYNCED_AT]?.toLongOrNull()
+            lastSyncedAt = prefs[KEY_LAST_SYNCED_AT]?.toLongOrNull(),
+            analyticsEnabled = prefs[KEY_ANALYTICS_ENABLED] ?: true
         )
     }
 
@@ -65,6 +67,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             }
         }
     }
+
+    suspend fun updateAnalyticsEnabled(value: Boolean) {
+        dataStore.edit { it[KEY_ANALYTICS_ENABLED] = value }
+    }
 }
 
 data class SettingsState(
@@ -74,5 +80,6 @@ data class SettingsState(
     val autoBackupDaily: Boolean,
     val showCompletedToday: Boolean,
     val syncEnabled: Boolean,
-    val lastSyncedAt: Long?
+    val lastSyncedAt: Long?,
+    val analyticsEnabled: Boolean
 )

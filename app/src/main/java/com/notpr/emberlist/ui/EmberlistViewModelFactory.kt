@@ -12,6 +12,7 @@ import com.notpr.emberlist.ui.screens.TaskDetailViewModel
 import com.notpr.emberlist.ui.screens.TodayViewModel
 import com.notpr.emberlist.ui.screens.UpcomingViewModel
 import com.notpr.emberlist.ui.screens.ActivityViewModel
+import com.notpr.emberlist.ui.screens.OnboardingViewModel
 import com.notpr.emberlist.ui.screens.quickadd.QuickAddViewModel
 
 class EmberlistViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {
@@ -43,7 +44,17 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
                     container.repository,
                     container.driveAuthManager,
                     container.driveSyncService,
-                    container.syncStatusTracker
+                    container.syncStatusTracker,
+                    container.onboardingAnalytics,
+                    container.driveConnectAndSync
+                )
+            modelClass.isAssignableFrom(OnboardingViewModel::class.java) ->
+                OnboardingViewModel(
+                    container.appContext,
+                    container.onboardingRepository,
+                    container.repository,
+                    container.driveConnectAndSync,
+                    container.onboardingAnalytics
                 )
             modelClass.isAssignableFrom(ActivityViewModel::class.java) ->
                 ActivityViewModel(container.repository, container.reminderScheduler)

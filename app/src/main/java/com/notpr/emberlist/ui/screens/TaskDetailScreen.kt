@@ -46,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -257,6 +258,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .testTag("task-detail-input")
                             .focusRequester(parserFocusRequester)
                             .onFocusChanged { focusState ->
                                 projectMenuOpen = focusState.isFocused && projectQuery != null && !hasSlash

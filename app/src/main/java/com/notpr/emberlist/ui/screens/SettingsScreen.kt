@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Card
 import androidx.compose.material3.Divider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,8 +35,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
+import com.notpr.emberlist.R
 import com.notpr.emberlist.data.backup.BackupScheduler
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import kotlinx.coroutines.CoroutineScope
@@ -48,13 +51,18 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun SettingsScreen(padding: PaddingValues) {
+fun SettingsScreen(
+    padding: PaddingValues,
+    onOpenQuickAdd: () -> Unit = {},
+    onShowWelcome: () -> Unit = {}
+) {
     val container = LocalAppContainer.current
     val viewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val settings by viewModel.settings.collectAsState()
     val driveAuthState by viewModel.driveAuthState.collectAsState()
     val syncRuntimeStatus by viewModel.syncRuntimeStatus.collectAsState()
     val syncUiState by viewModel.syncUiState.collectAsState()
+    val workspaceHasContent by viewModel.workspaceHasContent.collectAsState()
     val context = LocalContext.current
     val backupManager = remember { container.backupManager }
     val scope = remember { CoroutineScope(Dispatchers.IO) }
@@ -66,6 +74,7 @@ fun SettingsScreen(padding: PaddingValues) {
     var showConfirmRestore by remember { mutableStateOf(false) }
     var selectedBackup by remember { mutableStateOf<File?>(null) }
     var backups by remember { mutableStateOf<List<File>>(emptyList()) }
+    var showGettingStarted by remember { mutableStateOf(false) }
 
     fun refreshBackups() {
         val dir = File(context.filesDir, "backup")
@@ -131,6 +140,45 @@ fun SettingsScreen(padding: PaddingValues) {
             checked = settings.showCompletedToday,
             onCheckedChange = viewModel::updateShowCompletedToday
         )
+        RowSwitch(
+            label = stringResource(R.string.analytics_setting),
+            checked = settings.analyticsEnabled,
+            onCheckedChange = viewModel::updateAnalyticsEnabled
+        )
+        Text(
+            text = stringResource(R.string.analytics_explanation),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        SectionHeader(text = stringResource(R.string.getting_started))
+        OutlinedButton(
+            onClick = { showGettingStarted = !showGettingStarted },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text(stringResource(R.string.getting_started)) }
+        if (showGettingStarted) {
+            Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(stringResource(R.string.getting_started_capture))
+                    Text(stringResource(R.string.getting_started_language))
+                    Text(stringResource(R.string.getting_started_projects))
+                    Text(stringResource(R.string.getting_started_sync))
+                    Button(onClick = {
+                        if (!workspaceHasContent) onShowWelcome() else onOpenQuickAdd()
+                    }) {
+                        Text(
+                            stringResource(
+                                if (!workspaceHasContent) R.string.getting_started_show_welcome
+                                else R.string.getting_started_open_quick_add
+                            )
+                        )
+                    }
+                }
+            }
+        }
 
         SectionHeader(text = "Cloud Sync")
         Text(

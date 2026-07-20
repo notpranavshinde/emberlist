@@ -2,7 +2,8 @@ package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,13 +38,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
@@ -171,6 +172,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                     ),
                     modifier = Modifier
                         .weight(1f)
+                        .testTag("search-input")
                         .focusRequester(searchFocusRequester)
                 )
                 IconButton(onClick = {
@@ -183,7 +185,11 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                 }
             } else {
                 Column {
-                    Text(text = "Search", style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        text = "Search",
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.testTag("search-screen-title")
+                    )
                     Text(
                         text = "${parentResults.size} tasks",
                         style = MaterialTheme.typography.bodySmall,
@@ -405,6 +411,7 @@ private enum class SmartFilter(
     HAS_REMINDER("Has Reminder", { item, _, reminderTaskIds -> reminderTaskIds.contains(item.task.id) });
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SearchTaskRowSelectable(
     item: com.notpr.emberlist.ui.components.TaskListItem,
@@ -421,17 +428,12 @@ private fun SearchTaskRowSelectable(
 ) {
     val modifier = Modifier
         .fillMaxWidth()
+        .testTag("search-task-${item.task.id}")
         .padding(horizontal = ListHorizontalPadding, vertical = ListTaskOuterVerticalPadding)
-        .pointerInput(selectionMode, selected, item.task.id) {
-            detectTapGestures(
-                onTap = {
-                    if (selectionMode) onSelectToggle(!selected) else onOpen()
-                },
-                onLongPress = {
-                    if (!selectionMode) onEnterSelection()
-                }
-            )
-        }
+        .combinedClickable(
+            onClick = { if (selectionMode) onSelectToggle(!selected) else onOpen() },
+            onLongClick = { if (!selectionMode) onEnterSelection() }
+        )
     Row(modifier = modifier) {
         if (selectionMode) {
             androidx.compose.material3.Checkbox(checked = selected, onCheckedChange = null)

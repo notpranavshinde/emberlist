@@ -2,6 +2,14 @@ package com.notpr.emberlist.ui.screens.quickadd
 
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,7 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Flag
@@ -23,7 +30,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -46,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
@@ -63,6 +71,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
+import com.notpr.emberlist.R
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.parsing.QuickAddResult
 import com.notpr.emberlist.parsing.ReminderSpec
@@ -78,23 +87,22 @@ import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = null) {
-    var open by remember { mutableStateOf(false) }
+fun QuickAddSheet(
+    isOpen: Boolean,
+    origin: QuickAddOrigin = QuickAddOrigin.STANDARD,
+    prefill: String = "",
+    defaultDueToday: Boolean = false,
+    defaultProjectId: String? = null,
+    onOpenChange: (Boolean) -> Unit,
+    onTasksSaved: (Int, Boolean) -> Unit = { _, _ -> }
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val container = LocalAppContainer.current
     val viewModel: QuickAddViewModel = viewModel(factory = EmberlistViewModelFactory(container))
 
-    FloatingActionButton(
-        onClick = { open = true },
-        containerColor = androidx.compose.ui.graphics.Color(0xFFEE6A3C),
-        contentColor = androidx.compose.ui.graphics.Color.White
-    ) {
-        androidx.compose.material3.Icon(Icons.Default.Add, contentDescription = "Quick Add")
-    }
-
-    if (open) {
+    if (isOpen) {
         ModalBottomSheet(
-            onDismissRequest = { open = false },
+            onDismissRequest = { onOpenChange(false) },
             sheetState = sheetState
         ) {
             val input by viewModel.input.collectAsState()
@@ -141,15 +149,47 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
             var moreMenuOpen by remember { mutableStateOf(false) }
             var bulkDialogOpen by remember { mutableStateOf(false) }
             var lastBulkPromptText by remember { mutableStateOf<String?>(null) }
+            var showNotificationRationale by remember { mutableStateOf(false) }
+            var notificationWarning by remember { mutableStateOf(false) }
+            var pendingSave by remember { mutableStateOf<(() -> Unit)?>(null) }
             val bulkLines = remember(inputState.text) { viewModel.bulkTaskLines(inputState.text) }
+            val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { granted ->
+                notificationWarning = !granted
+                pendingSave?.invoke()
+                pendingSave = null
+            }
+
+            fun needsNotificationPermission(): Boolean =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED &&
+                    (parsed.reminders.isNotEmpty() || (parsed.dueAt != null && !parsed.allDay))
+
+            fun savesOnlyToUpcoming(): Boolean {
+                val startOfTomorrow = LocalDate.now(zone).plusDays(1)
+                    .atStartOfDay(zone).toInstant().toEpochMilli()
+                return parsed.dueAt?.let { it >= startOfTomorrow } == true
+            }
 
             fun submitQuickAdd() {
-                if (bulkLines.size > 1) {
-                    bulkDialogOpen = true
-                } else {
-                    viewModel.saveTask { /* keep sheet open */ }
-                    titleFocusRequester.requestFocus()
+                val save = {
+                    if (bulkLines.size > 1) {
+                        bulkDialogOpen = true
+                    } else {
+                        val savedToUpcoming = savesOnlyToUpcoming()
+                        viewModel.saveTask {
+                            onTasksSaved(1, savedToUpcoming)
+                            if (origin == QuickAddOrigin.ONBOARDING) onOpenChange(false)
+                            else titleFocusRequester.requestFocus()
+                        }
+                    }
                 }
+                if (needsNotificationPermission()) {
+                    pendingSave = save
+                    showNotificationRationale = true
+                } else save()
             }
 
             LaunchedEffect(input) {
@@ -157,8 +197,8 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                     inputState = inputState.copy(text = input, selection = TextRange(input.length))
                 }
             }
-            LaunchedEffect(open, defaultDueToday) {
-                if (!open) return@LaunchedEffect
+            LaunchedEffect(isOpen, defaultDueToday) {
+                if (!isOpen) return@LaunchedEffect
                 if (defaultDueToday) {
                     val todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
                     viewModel.setDefaultDueToday(todayStart)
@@ -166,8 +206,8 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                     viewModel.setDefaultDueToday(null)
                 }
             }
-            LaunchedEffect(open, defaultProjectId, projects) {
-                if (!open) return@LaunchedEffect
+            LaunchedEffect(isOpen, defaultProjectId, projects) {
+                if (!isOpen) return@LaunchedEffect
                 if (defaultProjectId == null) {
                     viewModel.setDefaultProjectName(null)
                 } else {
@@ -175,7 +215,10 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                     viewModel.setDefaultProjectName(match)
                 }
             }
-            LaunchedEffect(Unit) {
+            LaunchedEffect(isOpen, prefill, projects, sections) {
+                if (!isOpen) return@LaunchedEffect
+                viewModel.updateInput(prefill, projects, sections)
+                inputState = TextFieldValue(prefill, selection = TextRange(prefill.length))
                 titleFocusRequester.requestFocus()
             }
             LaunchedEffect(inputState.text, bulkLines) {
@@ -190,6 +233,13 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
             }
 
             Column(modifier = Modifier.padding(16.dp)) {
+                if (origin == QuickAddOrigin.ONBOARDING) {
+                    Text(
+                        text = stringResource(R.string.onboarding_first_task_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
                 Box {
                     Column {
                         TextField(
@@ -201,7 +251,7 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                                 projectMenuOpen = nextHashContext != null && !nextHashContext.hasSlash
                                 sectionMenuOpen = nextHashContext?.hasSlash == true
                             },
-                            placeholder = { Text("Task name") },
+                            placeholder = { Text(stringResource(R.string.quick_add_input)) },
                             singleLine = false,
                             minLines = 1,
                             maxLines = 5,
@@ -221,6 +271,7 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .testTag("quick-add-input")
                                 .focusRequester(titleFocusRequester)
                                 .onFocusChanged { focusState ->
                                     projectMenuOpen = focusState.isFocused && shouldSuggestProject
@@ -306,6 +357,24 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                         }
                     }
                 }
+                if (origin == QuickAddOrigin.ONBOARDING && inputState.text.isBlank()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(
+                            stringResource(R.string.onboarding_example_groceries),
+                            stringResource(R.string.onboarding_example_dentist),
+                            stringResource(R.string.onboarding_example_vitamins)
+                        ).forEach { example ->
+                            AssistChip(
+                                onClick = {
+                                    inputState = TextFieldValue(example, selection = TextRange(example.length))
+                                    viewModel.updateInput(example, projects, sections)
+                                    titleFocusRequester.requestFocus()
+                                },
+                                label = { Text(example) }
+                            )
+                        }
+                    }
+                }
                 ParsedChips(
                     parsed = parsed,
                     onDueClick = {
@@ -316,6 +385,20 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                     onReminderClick = { showReminderDialog = true },
                     onMoreClick = { moreMenuOpen = true }
                 )
+                if (notificationWarning) {
+                    Text(
+                        text = stringResource(R.string.notification_delivery_disabled),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    TextButton(onClick = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            }
+                        )
+                    }) { Text(stringResource(R.string.notification_open_settings)) }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -418,20 +501,53 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
                 )
             }
 
+            if (showNotificationRationale) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showNotificationRationale = false
+                        notificationWarning = true
+                        pendingSave?.invoke()
+                        pendingSave = null
+                    },
+                    title = { Text(stringResource(R.string.notification_rationale_title)) },
+                    text = { Text(stringResource(R.string.notification_rationale_body)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showNotificationRationale = false
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }) { Text(stringResource(R.string.notification_continue)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showNotificationRationale = false
+                            notificationWarning = true
+                            pendingSave?.invoke()
+                            pendingSave = null
+                        }) { Text(stringResource(R.string.notification_not_now)) }
+                    }
+                )
+            }
+
             if (bulkDialogOpen && bulkLines.size > 1) {
                 BulkAddConfirmDialog(
                     count = bulkLines.size,
                     onDismiss = { bulkDialogOpen = false },
                     onAddOne = {
                         bulkDialogOpen = false
+                        val savedToUpcoming = savesOnlyToUpcoming()
                         viewModel.saveSingleTaskFromBulk(bulkLines) {
-                            titleFocusRequester.requestFocus()
+                            onTasksSaved(1, savedToUpcoming)
+                            if (origin == QuickAddOrigin.ONBOARDING) onOpenChange(false)
+                            else titleFocusRequester.requestFocus()
                         }
                     },
                     onAddMany = {
                         bulkDialogOpen = false
+                        val savedToUpcoming = savesOnlyToUpcoming()
                         viewModel.saveBulkTasks(bulkLines) {
-                            titleFocusRequester.requestFocus()
+                            onTasksSaved(bulkLines.size, savedToUpcoming)
+                            if (origin == QuickAddOrigin.ONBOARDING) onOpenChange(false)
+                            else titleFocusRequester.requestFocus()
                         }
                     }
                 )
@@ -439,6 +555,8 @@ fun QuickAddSheet(defaultDueToday: Boolean = false, defaultProjectId: String? = 
         }
     }
 }
+
+enum class QuickAddOrigin { STANDARD, ONBOARDING }
 
 @Composable
 private fun BulkAddConfirmDialog(

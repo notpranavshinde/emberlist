@@ -233,7 +233,8 @@ class SyncCoordinatorTest {
             autoBackupDaily = false,
             showCompletedToday = false,
             syncEnabled = syncEnabled,
-            lastSyncedAt = lastSyncedAt
+            lastSyncedAt = lastSyncedAt,
+            analyticsEnabled = true
         )
 }
 

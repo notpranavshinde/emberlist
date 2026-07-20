@@ -1,6 +1,8 @@
 package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -40,6 +43,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,9 +64,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
+import com.notpr.emberlist.R
+import com.notpr.emberlist.data.onboarding.OnboardingState
+import com.notpr.emberlist.data.onboarding.OnboardingStatus
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import com.notpr.emberlist.ui.components.DragToSubtaskState
 import com.notpr.emberlist.ui.components.TaskListItem
@@ -73,7 +81,17 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
+fun TodayScreen(
+    padding: PaddingValues,
+    navController: NavHostController,
+    onboardingState: OnboardingState? = null,
+    restoreState: OnboardingRestoreState = OnboardingRestoreState.Idle,
+    onAddFirstTask: () -> Unit = {},
+    onExample: (String, String) -> Unit = { _, _ -> },
+    onRestore: () -> Unit = {},
+    onUseAnotherAccount: () -> Unit = {},
+    onSkip: () -> Unit = {}
+) {
     val container = LocalAppContainer.current
     val viewModel: TodayViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val settingsViewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
@@ -244,14 +262,25 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
         }
         if (workspaceTaskCount == 0) {
             item(key = "empty_workspace_restore") {
-                EmptyWorkspaceRestoreCard(
-                    driveConnected = driveAuthState.hasDriveScope,
-                    syncEnabled = settings.syncEnabled,
-                    isSyncing = syncUiState.isSyncing,
-                    syncMessage = syncUiState.status ?: syncUiState.error,
-                    onOpenSettings = { navController.navigate("settings") },
-                    onSync = { settingsViewModel.enableSyncAndSyncNow() }
-                )
+                if (onboardingState?.status == OnboardingStatus.ACTIVE) {
+                    FirstRunWelcomeCard(
+                        restoreState = restoreState,
+                        onAddFirstTask = onAddFirstTask,
+                        onExample = onExample,
+                        onRestore = onRestore,
+                        onUseAnotherAccount = onUseAnotherAccount,
+                        onSkip = onSkip
+                    )
+                } else {
+                    EmptyWorkspaceRestoreCard(
+                        driveConnected = driveAuthState.hasDriveScope,
+                        syncEnabled = settings.syncEnabled,
+                        isSyncing = syncUiState.isSyncing,
+                        syncMessage = syncUiState.status ?: syncUiState.error,
+                        onOpenSettings = { navController.navigate("settings") },
+                        onSync = { settingsViewModel.enableSyncAndSyncNow() }
+                    )
+                }
             }
         }
         if (selectionMode) {
@@ -564,6 +593,116 @@ fun TodayScreen(padding: PaddingValues, navController: NavHostController) {
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun FirstRunWelcomeCard(
+    restoreState: OnboardingRestoreState,
+    onAddFirstTask: () -> Unit,
+    onExample: (String, String) -> Unit,
+    onRestore: () -> Unit,
+    onUseAnotherAccount: () -> Unit,
+    onSkip: () -> Unit
+) {
+    val context = LocalContext.current
+    val restoring = restoreState == OnboardingRestoreState.Authorizing ||
+        restoreState == OnboardingRestoreState.Syncing
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = ListHorizontalPadding, vertical = 12.dp)
+            .testTag("onboarding-welcome")
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.onboarding_eyebrow),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = stringResource(R.string.onboarding_heading),
+                style = MaterialTheme.typography.headlineSmall
+            )
+            Text(
+                text = stringResource(R.string.onboarding_body),
+                style = MaterialTheme.typography.bodyMedium
+            )
+            listOf(
+                "simple" to stringResource(R.string.onboarding_example_groceries),
+                "scheduled" to stringResource(R.string.onboarding_example_dentist),
+                "recurring" to stringResource(R.string.onboarding_example_vitamins)
+            ).forEach { (kind, example) ->
+                AssistChip(
+                    onClick = { onExample(kind, example) },
+                    label = { Text(example) },
+                    modifier = Modifier.testTag("onboarding-example-$kind")
+                )
+            }
+            Button(
+                onClick = onAddFirstTask,
+                enabled = !restoring,
+                modifier = Modifier.fillMaxWidth().testTag("onboarding-primary")
+            ) { Text(stringResource(R.string.onboarding_add_first_task)) }
+            OutlinedButton(
+                onClick = onRestore,
+                enabled = !restoring,
+                modifier = Modifier.fillMaxWidth().testTag("onboarding-restore")
+            ) {
+                if (restoring) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp).testTag("onboarding-restore-progress"),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text(stringResource(R.string.onboarding_restore_drive))
+                }
+            }
+            TextButton(
+                onClick = onSkip,
+                enabled = !restoring,
+                modifier = Modifier.fillMaxWidth().testTag("onboarding-skip")
+            ) { Text(stringResource(R.string.onboarding_skip)) }
+            when (restoreState) {
+                OnboardingRestoreState.Empty -> {
+                    Text(
+                        stringResource(R.string.onboarding_restore_empty),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("onboarding-restore-empty")
+                    )
+                    TextButton(onClick = onUseAnotherAccount) {
+                        Text(stringResource(R.string.onboarding_use_another_account))
+                    }
+                }
+                OnboardingRestoreState.Offline -> Text(
+                    stringResource(R.string.onboarding_restore_offline),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.testTag("onboarding-restore-offline")
+                )
+                is OnboardingRestoreState.Failure -> {
+                    Text(
+                        restoreState.message,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("onboarding-restore-failure")
+                    )
+                    TextButton(onClick = onUseAnotherAccount) {
+                        Text(stringResource(R.string.onboarding_use_another_account))
+                    }
+                }
+                else -> Unit
+            }
+            Text(
+                text = stringResource(R.string.onboarding_analytics_footer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://emberlist.dev/#/privacy")))
+            }) { Text(stringResource(R.string.privacy_policy)) }
+        }
     }
 }
 

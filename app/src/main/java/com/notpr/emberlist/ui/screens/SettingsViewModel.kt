@@ -9,14 +9,18 @@ import android.content.Intent
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveAuthState
 import com.notpr.emberlist.data.sync.DriveSyncService
+import com.notpr.emberlist.data.sync.DriveConnectAndSyncUseCase
+import com.notpr.emberlist.data.sync.DriveConnectAndSyncResult
 import com.notpr.emberlist.data.sync.SyncRuntimeStatus
 import com.notpr.emberlist.data.sync.SyncResult
 import com.notpr.emberlist.data.sync.SyncStatusTracker
+import com.notpr.emberlist.data.analytics.OnboardingAnalytics
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
@@ -24,14 +28,23 @@ class SettingsViewModel(
     private val repository: TaskRepository,
     private val driveAuthManager: DriveAuthManager,
     private val driveSyncService: DriveSyncService,
-    private val syncStatusTracker: SyncStatusTracker
+    private val syncStatusTracker: SyncStatusTracker,
+    private val onboardingAnalytics: OnboardingAnalytics,
+    private val driveConnectAndSync: DriveConnectAndSyncUseCase
 ) : ViewModel() {
     val settings: StateFlow<SettingsState> = settingsRepository.settings
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            SettingsState(1, false, "Ember", false, false, false, null)
+            SettingsState(1, false, "Ember", false, false, false, null, true)
         )
+    val workspaceHasContent: StateFlow<Boolean> = combine(
+        repository.observeWorkspaceTaskCount(),
+        repository.observeProjects(),
+        repository.observeAllSections()
+    ) { taskCount, projects, sections ->
+        taskCount > 0 || projects.isNotEmpty() || sections.isNotEmpty()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     val driveAuthState: StateFlow<DriveAuthState> = driveAuthManager.state
     val syncRuntimeStatus: StateFlow<SyncRuntimeStatus> = syncStatusTracker.state
     private val _syncUiState = MutableStateFlow(SyncUiState())
@@ -61,6 +74,13 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.updateShowCompletedToday(value) }
     }
 
+    fun updateAnalyticsEnabled(value: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.updateAnalyticsEnabled(value)
+            if (!value) onboardingAnalytics.clearQueue()
+        }
+    }
+
     fun updateSyncEnabled(value: Boolean) {
         viewModelScope.launch {
             if (!driveAuthState.value.hasDriveScope && value) return@launch
@@ -70,20 +90,15 @@ class SettingsViewModel(
 
     fun handleDriveSignInResult(data: Intent?) {
         viewModelScope.launch {
-            val result = driveAuthManager.handleSignInResult(data)
-            val state = result.state
-            if (state.hasDriveScope) {
-                settingsRepository.updateSyncEnabled(true)
-                syncNowInternal(connectStatus = "Google Drive connected. Syncing your workspace…")
-            } else if (state.isSignedIn) {
-                _syncUiState.value = SyncUiState(
-                    error = result.errorMessage
-                        ?: "Google account connected, but Drive access is still missing. Disconnect and reconnect if this keeps happening."
+            _syncUiState.value = SyncUiState(isSyncing = true, status = "Google Drive connected. Syncing your workspace…")
+            when (val result = driveConnectAndSync.connectResult(data)) {
+                is DriveConnectAndSyncResult.Success -> _syncUiState.value = SyncUiState(
+                    status = if (result.result.remoteCreated) "Google Drive connected. Cloud sync file created."
+                    else "Google Drive connected. Workspace restored and synced."
                 )
-                settingsRepository.updateSyncEnabled(false)
-            } else {
-                _syncUiState.value = SyncUiState(error = result.errorMessage ?: "Google sign-in did not return a usable account.")
-                settingsRepository.updateSyncEnabled(false)
+                DriveConnectAndSyncResult.Cancelled -> _syncUiState.value = SyncUiState()
+                is DriveConnectAndSyncResult.Failure -> _syncUiState.value = SyncUiState(error = result.message)
+                is DriveConnectAndSyncResult.AuthorizationRequired -> _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
             }
         }
     }
@@ -123,14 +138,10 @@ class SettingsViewModel(
             _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
             return
         }
-        syncStatusTracker.setSyncing(true)
-        syncStatusTracker.clearError()
         _syncUiState.value = SyncUiState(isSyncing = true, status = connectStatus ?: "Syncing…")
-        try {
-            when (val result = driveSyncService.sync()) {
-                is SyncResult.Success -> {
-                    settingsRepository.updateLastSyncedAt(result.syncedAt)
-                    syncStatusTracker.onSyncSuccess()
+        when (val operation = driveConnectAndSync.start()) {
+            is DriveConnectAndSyncResult.Success -> {
+                val result = operation.result
                     _syncUiState.value = SyncUiState(
                         status = if (connectStatus != null && result.remoteCreated) {
                             "Google Drive connected. Cloud sync file created."
@@ -142,14 +153,10 @@ class SettingsViewModel(
                             "Sync complete."
                         }
                     )
-                }
-                is SyncResult.Failure -> {
-                    syncStatusTracker.onSyncFailure(result.message)
-                    _syncUiState.value = SyncUiState(error = result.message)
-                }
             }
-        } finally {
-            syncStatusTracker.setSyncing(false)
+            DriveConnectAndSyncResult.Cancelled -> _syncUiState.value = SyncUiState()
+            is DriveConnectAndSyncResult.Failure -> _syncUiState.value = SyncUiState(error = operation.message)
+            is DriveConnectAndSyncResult.AuthorizationRequired -> _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
         }
     }
 

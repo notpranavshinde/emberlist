@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -129,7 +130,11 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
     ) {
         item(key = "upcoming_header") {
             Column(modifier = Modifier.padding(horizontal = ListHorizontalPadding, vertical = ListHeaderVerticalPadding)) {
-                Text(text = "Upcoming", style = MaterialTheme.typography.headlineSmall)
+                Text(
+                    text = "Upcoming",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.testTag("upcoming-screen-title")
+                )
                 Text(
                     text = "${parentItems.size} tasks",
                     style = MaterialTheme.typography.bodySmall,

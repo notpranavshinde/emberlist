@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
@@ -52,12 +53,12 @@ class QuickAddFlowTest {
         }
 
         composeRule.onNodeWithContentDescription("Quick Add").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Task name").assertIsDisplayed().performTextInput("$title #to b")
+        composeRule.onNodeWithTag("quick-add-input").assertIsDisplayed().performTextInput("$title #to b")
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("to buy").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("to buy").performClick()
-        composeRule.onNodeWithText("Task name").performTextInput("/home d")
+        composeRule.onNodeWithTag("quick-add-input").performTextInput("/home d")
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("home decor").fetchSemanticsNodes().isNotEmpty()
         }

@@ -6,8 +6,11 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import com.notpr.emberlist.data.backup.BackupManager
 import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.data.settings.SettingsRepository
+import com.notpr.emberlist.data.analytics.OnboardingAnalytics
+import com.notpr.emberlist.data.onboarding.OnboardingRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveSyncService
+import com.notpr.emberlist.data.sync.DriveConnectAndSyncUseCase
 import com.notpr.emberlist.data.sync.GoogleDriveAppDataClient
 import com.notpr.emberlist.data.sync.observeAppForeground
 import com.notpr.emberlist.data.sync.observeNetworkConnectivity
@@ -18,7 +21,7 @@ import com.notpr.emberlist.data.sync.SyncStatusTracker
 import com.notpr.emberlist.ui.UndoController
 
 class AppContainer(context: Context) {
-    private val appContext = context.applicationContext
+    val appContext: Context = context.applicationContext
 
     val database: EmberlistDatabase = EmberlistDatabase.getInstance(appContext)
 
@@ -35,6 +38,8 @@ class AppContainer(context: Context) {
     )
 
     val settingsRepository = SettingsRepository(settingsStore)
+    val onboardingRepository = OnboardingRepository(settingsStore)
+    val onboardingAnalytics = OnboardingAnalytics(appContext, settingsStore, settingsRepository)
 
     val reminderScheduler = ReminderScheduler(appContext, repository)
     val backupManager = BackupManager(database)
@@ -50,6 +55,12 @@ class AppContainer(context: Context) {
                 GoogleDriveAppDataClient(appContext, account)
             }
         },
+        statusTracker = syncStatusTracker
+    )
+    val driveConnectAndSync = DriveConnectAndSyncUseCase(
+        authManager = driveAuthManager,
+        syncService = driveSyncService,
+        settingsRepository = settingsRepository,
         statusTracker = syncStatusTracker
     )
     val syncCoordinator = SyncCoordinator(

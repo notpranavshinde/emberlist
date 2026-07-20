@@ -3,6 +3,7 @@ package com.notpr.emberlist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
@@ -14,6 +15,6 @@ class UpcomingViewTest {
     @Test
     fun upcomingTabRenders() {
         composeRule.onNodeWithText("Upcoming").assertIsDisplayed().performClick()
-        composeRule.onNodeWithText("Upcoming").assertIsDisplayed()
+        composeRule.onNodeWithTag("upcoming-screen-title").assertIsDisplayed()
     }
 }

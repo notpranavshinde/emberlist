@@ -6,9 +6,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
-import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.espresso.Espresso.pressBack
 import com.notpr.emberlist.data.model.Priority
@@ -28,9 +28,10 @@ class TaskDetailEditTest {
     @Test
     fun openingAndClosingTaskDetailDoesNotMutateExistingSpacedProjectTask() {
         val app = ApplicationProvider.getApplicationContext<Context>() as EmberlistApp
+        val projectName = "to buy open close ${System.currentTimeMillis()}"
         val project = ProjectEntity(
             id = "project-to-buy-open-close-ui",
-            name = "to buy",
+            name = projectName,
             color = "#EE6A3C",
             favorite = false,
             order = 0,
@@ -50,8 +51,12 @@ class TaskDetailEditTest {
             app.container.repository.upsertTask(task)
         }
 
-        openTaskFromSearch(task.title)
-        composeRule.onNodeWithText("${task.title} #to buy").assertIsDisplayed()
+        openTaskFromSearch(task.id, task.title)
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText(task.title, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("task-detail-input")
+            .assertIsDisplayed()
         pressBack()
 
         val persisted = runBlocking { app.container.database.taskDao().getTask(task.id) }!!
@@ -63,9 +68,10 @@ class TaskDetailEditTest {
     @Test
     fun taskDetailCommitsExistingSpacedSectionOnBack() {
         val app = ApplicationProvider.getApplicationContext<Context>() as EmberlistApp
+        val projectName = "to buy detail ${System.currentTimeMillis()}"
         val project = ProjectEntity(
             id = "project-to-buy-task-detail-ui",
-            name = "to buy",
+            name = projectName,
             color = "#EE6A3C",
             favorite = false,
             order = 0,
@@ -95,10 +101,13 @@ class TaskDetailEditTest {
             app.container.repository.upsertTask(task)
         }
 
-        openTaskFromSearch(task.title)
-        composeRule.onNodeWithText("${task.title} #to buy").assertIsDisplayed()
-        composeRule.onNodeWithText("${task.title} #to buy")
-            .performTextReplacement("${task.title} #to buy/home d")
+        openTaskFromSearch(task.id, task.title)
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText(task.title, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("task-detail-input").assertIsDisplayed()
+        composeRule.onNodeWithTag("task-detail-input")
+            .performTextInput("/home d")
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("home decor").fetchSemanticsNodes().isNotEmpty()
         }
@@ -111,14 +120,14 @@ class TaskDetailEditTest {
         assertEquals(section.id, persisted.sectionId)
     }
 
-    private fun openTaskFromSearch(title: String) {
+    private fun openTaskFromSearch(taskId: String, title: String) {
         composeRule.onNodeWithText("Search").performClick()
         composeRule.onNodeWithContentDescription("Search").performClick()
-        composeRule.onNodeWithText("Search").performTextInput(title)
+        composeRule.onNodeWithTag("search-input").performTextInput(title)
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
         }
-        composeRule.onNodeWithText(title).performClick()
+        composeRule.onNodeWithTag("search-task-$taskId").performClick()
     }
 
     private fun task(
