@@ -41,6 +41,55 @@ describe('quickParser parity', () => {
     expect(parseQuickAdd('Task Monday', new Date(2026, 1, 7, 9, 0, 0, 0)).dueAt).not.toBeNull();
   });
 
+  it('removes a bare weekday used as the due date from the title', () => {
+    const sunday = new Date(2026, 6, 19, 9, 0, 0, 0);
+    const cases = [
+      ['mechanics of materials chapter 3 wed', 'mechanics of materials chapter 3', 22],
+      ['mechanics of materials chapter 4 thursday', 'mechanics of materials chapter 4', 23],
+      ['mechanics of materials chapter 5 friday', 'mechanics of materials chapter 5', 24],
+    ] as const;
+
+    for (const [input, title, day] of cases) {
+      expect(parseQuickAdd(input, sunday)).toMatchObject({
+        title,
+        dueAt: new Date(2026, 6, day, 0, 0, 0, 0).getTime(),
+        allDay: true,
+      });
+    }
+  });
+
+  it('cleans a bare weekday alongside time, priority, and project metadata', () => {
+    expect(
+      parseQuickAdd(
+        'mechanics of materials chapter 6 wed 7pm p2 #classes',
+        new Date(2026, 6, 19, 9, 0, 0, 0),
+      ),
+    ).toMatchObject({
+      title: 'mechanics of materials chapter 6',
+      dueAt: new Date(2026, 6, 22, 19, 0, 0, 0).getTime(),
+      allDay: false,
+      priority: 'P2',
+      projectName: 'classes',
+    });
+  });
+
+  it('leaves weekdays inside recurrence, deadline, and project metadata to those parsers', () => {
+    expect(parseQuickAdd('Task every friday', NOW)).toMatchObject({
+      title: 'Task',
+      recurrenceRule: 'FREQ=WEEKLY;BYDAY=FR',
+    });
+    expect(parseQuickAdd('Task deadline friday', NOW)).toMatchObject({
+      title: 'Task',
+      dueAt: null,
+    });
+    expect(parseQuickAdd('Task deadline friday', NOW).deadlineAt).not.toBeNull();
+    expect(parseQuickAdd('Task #Friday', NOW)).toMatchObject({
+      title: 'Task',
+      dueAt: null,
+      projectName: 'Friday',
+    });
+  });
+
   it('parses deadline phrases and reminder phrases', () => {
     const parsed = parseQuickAdd(
       'Review report tomorrow 9am p1 #Work/Reports deadline Friday 5pm remind me 30m before',

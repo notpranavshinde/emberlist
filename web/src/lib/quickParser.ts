@@ -31,13 +31,16 @@ const WEEKDAY_TOKEN_REGEX =
 
 type LocalDate = { year: number; month: number; day: number };
 type LocalTime = { hour: number; minute: number };
+type TextRange = { start: number; end: number };
+type ParsedDue = { dueAt: number | null; consumedTitleRanges: TextRange[] };
 
 export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddResult {
   const tokens = input.trim();
   const priority = parsePriority(tokens) ?? 'P4';
   const [projectName, sectionName] = parseProjectSection(tokens);
   const explicitTime = parseTime(tokens);
-  let dueAt = parseDue(tokens, now);
+  const parsedDue = parseDue(tokens, now);
+  let dueAt = parsedDue.dueAt;
   const deadlinePhrase = extractDeadlinePhrase(tokens);
   const deadlineTime = deadlinePhrase ? parseTime(deadlinePhrase) : null;
   let deadlineAt = deadlinePhrase ? parseDeadline(deadlinePhrase, now) : null;
@@ -72,7 +75,7 @@ export function parseQuickAdd(input: string, now: Date = new Date()): QuickAddRe
   const reminders = parseReminders(tokens, now, dueAt);
 
   return {
-    title: stripTokens(tokens) || 'Untitled task',
+    title: stripTokens(tokens, parsedDue.consumedTitleRanges) || 'Untitled task',
     dueAt,
     deadlineAt,
     allDay,
@@ -131,10 +134,11 @@ function trimProjectSectionToken(token: string): string {
   return (cutIndex === -1 ? token : token.slice(0, cutIndex)).trim();
 }
 
-function parseDue(input: string, now: Date): number | null {
+function parseDue(input: string, now: Date): ParsedDue {
   const lower = input.toLowerCase();
   const time = parseTime(input) ?? { hour: 0, minute: 0 };
   let date: LocalDate | null = null;
+  let consumedWeekdayRange: TextRange | null = null;
 
   if (lower.includes('today')) {
     date = localDateFromDate(now);
@@ -154,14 +158,27 @@ function parseDue(input: string, now: Date): number | null {
       date = parseMonthNameDate(input, localDateFromDate(now));
     } else if (EXPLICIT_DATE_REGEX.test(input)) {
       date = parseExplicitDate(input, localDateFromDate(now));
-    } else if (WEEKDAY_TOKEN_REGEX.test(input)) {
-      date = parseWeekday(input, localDateFromDate(now));
+    } else {
+      const weekdayMatch = findBareDueWeekdayMatch(input);
+      if (weekdayMatch) {
+        date = parseWeekdayToken(weekdayMatch[1], localDateFromDate(now));
+        consumedWeekdayRange = {
+          start: weekdayMatch.index,
+          end: weekdayMatch.index + weekdayMatch[0].length,
+        };
+      }
     }
   }
 
-  if (!date) return null;
+  if (!date) return { dueAt: null, consumedTitleRanges: [] };
   const epochMillis = toEpochMillis(date, time);
-  return Number.isNaN(epochMillis) ? null : epochMillis;
+  if (Number.isNaN(epochMillis)) {
+    return { dueAt: null, consumedTitleRanges: [] };
+  }
+  return {
+    dueAt: epochMillis,
+    consumedTitleRanges: consumedWeekdayRange ? [consumedWeekdayRange] : [],
+  };
 }
 
 function parseDeadline(phrase: string, now: Date): number | null {
@@ -324,6 +341,10 @@ function parseTime(input: string): LocalTime | null {
 
 function parseWeekday(input: string, base: LocalDate): LocalDate {
   const token = WEEKDAY_TOKEN_REGEX.exec(input)?.[1]?.toLowerCase() ?? 'monday';
+  return parseWeekdayToken(token, base);
+}
+
+function parseWeekdayToken(token: string, base: LocalDate): LocalDate {
   const target = token.startsWith('mon')
     ? 1
     : token.startsWith('tue')
@@ -338,6 +359,50 @@ function parseWeekday(input: string, base: LocalDate): LocalDate {
               ? 6
               : 0;
   return nextOrSameWeekday(base, target);
+}
+
+function findBareDueWeekdayMatch(input: string): RegExpExecArray | null {
+  const protectedRanges = getWeekdayMetadataRanges(input);
+  const matcher = new RegExp(WEEKDAY_TOKEN_REGEX.source, 'gi');
+  let match: RegExpExecArray | null;
+
+  while ((match = matcher.exec(input)) !== null) {
+    const matchStart = match.index;
+    if (!protectedRanges.some(range => matchStart >= range.start && matchStart < range.end)) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+function getWeekdayMetadataRanges(input: string): TextRange[] {
+  const ranges: TextRange[] = [];
+  const protectedPatterns = [
+    /\b(?:deadline|by)\s+[^#]+/gi,
+    /\bremind me[^#]+/gi,
+    /\bevery\s+[^#]+/gi,
+  ];
+
+  for (const pattern of protectedPatterns) {
+    for (const match of input.matchAll(pattern)) {
+      if (match.index === undefined) continue;
+      ranges.push({ start: match.index, end: match.index + match[0].length });
+    }
+  }
+
+  const hashIndex = input.lastIndexOf('#');
+  if (hashIndex !== -1) {
+    const rawAfterHash = input.slice(hashIndex + 1);
+    const leadingWhitespace = rawAfterHash.length - rawAfterHash.trimStart().length;
+    const projectSectionToken = trimProjectSectionToken(rawAfterHash.trim());
+    if (projectSectionToken) {
+      const start = hashIndex + 1 + leadingWhitespace;
+      ranges.push({ start, end: start + projectSectionToken.length });
+    }
+  }
+
+  return ranges;
 }
 
 function parseExplicitDate(input: string, base: LocalDate): LocalDate | null {
@@ -403,8 +468,8 @@ function monthNameToNumber(token: string): number | null {
   return null;
 }
 
-function stripTokens(input: string): string {
-  return input
+function stripTokens(input: string, consumedTitleRanges: TextRange[] = []): string {
+  return removeConsumedRanges(input, consumedTitleRanges)
     .replace(/#.+$/g, '')
     .replace(/\bp[1-4]\b/gi, '')
     .replace(/today|tomorrow|next week|this weekend|next weekend|in\s+\d+\s+days/gi, '')
@@ -423,6 +488,15 @@ function stripTokens(input: string): string {
     .replace(DAY_MONTH_NAME_REGEX, '')
     .replace(/\d{1,2}(:\d{2})?\s?(am|pm)/gi, '')
     .trim();
+}
+
+function removeConsumedRanges(input: string, ranges: TextRange[]): string {
+  return [...ranges]
+    .sort((left, right) => right.start - left.start)
+    .reduce(
+      (value, range) => value.slice(0, range.start) + value.slice(range.end),
+      input,
+    );
 }
 
 function extractDeadlinePhrase(input: string): string | null {

@@ -4,6 +4,7 @@ import com.notpr.emberlist.parsing.QuickAddParser
 import com.notpr.emberlist.parsing.ReminderSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDateTime
@@ -79,6 +80,61 @@ class QuickAddParserTest {
 
         assertEquals("Doctor", result.title)
         assertEquals(expectedDue, result.dueAt)
+    }
+
+    @Test
+    fun parseBareWeekdaysRemovesDueTokenFromTitle() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.JULY, 19, 9, 0)
+        val cases = listOf(
+            Triple("mechanics of materials chapter 3 wed", "mechanics of materials chapter 3", 22),
+            Triple("mechanics of materials chapter 4 thursday", "mechanics of materials chapter 4", 23),
+            Triple("mechanics of materials chapter 5 friday", "mechanics of materials chapter 5", 24)
+        )
+
+        cases.forEach { (input, expectedTitle, day) ->
+            val result = parser.parse(input, now)
+            val expectedDue = LocalDateTime.of(2026, Month.JULY, day, 0, 0)
+                .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+            assertEquals(expectedTitle, result.title)
+            assertEquals(expectedDue, result.dueAt)
+            assertTrue(result.allDay)
+        }
+    }
+
+    @Test
+    fun parseBareWeekdayWithTimePriorityAndProject() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.JULY, 19, 9, 0)
+        val result = parser.parse("mechanics of materials chapter 6 wed 7pm p2 #classes", now)
+        val expectedDue = LocalDateTime.of(2026, Month.JULY, 22, 19, 0)
+            .atZone(ZoneId.of("UTC")).toInstant().toEpochMilli()
+
+        assertEquals("mechanics of materials chapter 6", result.title)
+        assertEquals(expectedDue, result.dueAt)
+        assertTrue(!result.allDay)
+        assertEquals(com.notpr.emberlist.data.model.Priority.P2, result.priority)
+        assertEquals("classes", result.projectName)
+    }
+
+    @Test
+    fun parseWeekdaysInsideOtherMetadataRemainOwnedByThoseParsers() {
+        val parser = QuickAddParser(ZoneId.of("UTC"))
+        val now = LocalDateTime.of(2026, Month.FEBRUARY, 6, 9, 0)
+
+        val recurring = parser.parse("Task every friday", now)
+        assertEquals("Task", recurring.title)
+        assertEquals("FREQ=WEEKLY;BYDAY=FR", recurring.recurrenceRule)
+
+        val deadline = parser.parse("Task deadline friday", now)
+        assertEquals("Task", deadline.title)
+        assertNull(deadline.dueAt)
+        assertNotNull(deadline.deadlineAt)
+
+        val project = parser.parse("Task #Friday", now)
+        assertEquals("Task", project.title)
+        assertNull(project.dueAt)
+        assertEquals("Friday", project.projectName)
     }
 
     @Test

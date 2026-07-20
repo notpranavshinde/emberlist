@@ -31,6 +31,11 @@ data class QuickAddResult(
 )
 
 class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
+    private data class ParsedDue(
+        val dueAt: Long?,
+        val consumedTitleRanges: List<IntRange> = emptyList()
+    )
+
     private val timeRegex = Regex("(\\d{1,2})(?::(\\d{2}))?\\s?(am|pm)", RegexOption.IGNORE_CASE)
     private val explicitDateRegex = Regex("(\\d{4})-(\\d{1,2})-(\\d{1,2})|(\\d{1,2})/(\\d{1,2})(?:/(\\d{2,4}))?")
     private val monthNameRegex = Regex(
@@ -51,7 +56,8 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         val priority = parsePriority(tokens) ?: Priority.P4
         val (project, section) = parseProjectSection(tokens)
         val explicitTime = parseTime(tokens)
-        var due = parseDue(tokens, now)
+        val parsedDue = parseDue(tokens, now)
+        var due = parsedDue.dueAt
         val deadlinePhrase = extractDeadlinePhrase(tokens)
         val deadlineTime = deadlinePhrase?.let { parseTime(it) }
         var deadline = deadlinePhrase?.let { parseDeadline(it, now) }
@@ -85,7 +91,7 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
 
         val reminders = parseReminders(tokens, now, due)
 
-        val title = stripTokens(tokens)
+        val title = stripTokens(tokens, parsedDue.consumedTitleRanges)
         return QuickAddResult(
             title = title.ifBlank { "Untitled task" },
             dueAt = due,
@@ -123,7 +129,8 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         return project.ifBlank { null } to section.ifBlank { null }
     }
 
-    private fun parseDue(input: String, now: LocalDateTime): Long? {
+    private fun parseDue(input: String, now: LocalDateTime): ParsedDue {
+        val weekdayMatch = findBareDueWeekdayMatch(input)
         val duePhrase = when {
             input.contains("today", ignoreCase = true) -> "today"
             input.contains("tomorrow", ignoreCase = true) -> "tomorrow"
@@ -131,11 +138,11 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             input.contains("this weekend", ignoreCase = true) -> "this weekend"
             input.contains("next weekend", ignoreCase = true) -> "next weekend"
             Regex("in\\s+\\d+\\s+days", RegexOption.IGNORE_CASE).containsMatchIn(input) -> "in"
-            weekdayTokenRegex.containsMatchIn(input) -> "weekday"
+            weekdayMatch != null -> "weekday"
             explicitDateRegex.containsMatchIn(input) -> "explicit"
             monthNameRegex.containsMatchIn(input) || dayMonthNameRegex.containsMatchIn(input) -> "monthName"
             else -> null
-        } ?: return null
+        } ?: return ParsedDue(null)
 
         val time = parseTime(input) ?: LocalTime.MIDNIGHT
         val date = when (duePhrase) {
@@ -149,12 +156,16 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
                     .find(input)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
                 now.toLocalDate().plusDays(days)
             }
-            "weekday" -> parseWeekday(input, now.toLocalDate())
+            "weekday" -> parseWeekdayToken(weekdayMatch!!.value, now.toLocalDate())
             "monthName" -> parseMonthNameDate(input, now.toLocalDate())
             else -> parseExplicitDate(input, now.toLocalDate())
-        } ?: return null
+        } ?: return ParsedDue(null)
 
-        return LocalDateTime.of(date, time).atZone(zoneId).toInstant().toEpochMilli()
+        val dueAt = LocalDateTime.of(date, time).atZone(zoneId).toInstant().toEpochMilli()
+        return ParsedDue(
+            dueAt = dueAt,
+            consumedTitleRanges = if (duePhrase == "weekday") listOf(weekdayMatch!!.range) else emptyList()
+        )
     }
 
     private fun parseDeadline(phrase: String, now: LocalDateTime): Long? {
@@ -384,7 +395,11 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
 
     private fun parseWeekday(input: String, base: LocalDate): LocalDate {
         val match = weekdayTokenRegex.find(input) ?: return base
-        val token = match.value.lowercase()
+        return parseWeekdayToken(match.value, base)
+    }
+
+    private fun parseWeekdayToken(value: String, base: LocalDate): LocalDate {
+        val token = value.lowercase()
         val target = when {
             token.startsWith("mon") -> DayOfWeek.MONDAY
             token.startsWith("tue") -> DayOfWeek.TUESDAY
@@ -396,6 +411,37 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             else -> DayOfWeek.MONDAY
         }
         return base.with(TemporalAdjusters.nextOrSame(target))
+    }
+
+    private fun findBareDueWeekdayMatch(input: String): MatchResult? {
+        val protectedRanges = getWeekdayMetadataRanges(input)
+        return weekdayTokenRegex.findAll(input).firstOrNull { match ->
+            protectedRanges.none { range -> match.range.first in range }
+        }
+    }
+
+    private fun getWeekdayMetadataRanges(input: String): List<IntRange> {
+        val ranges = mutableListOf<IntRange>()
+        listOf(
+            Regex("\\b(?:deadline|by)\\s+[^#]+", RegexOption.IGNORE_CASE),
+            Regex("\\bremind me[^#]+", RegexOption.IGNORE_CASE),
+            Regex("\\bevery\\s+[^#]+", RegexOption.IGNORE_CASE)
+        ).forEach { pattern ->
+            ranges += pattern.findAll(input).map { it.range }
+        }
+
+        val hashIndex = input.lastIndexOf('#')
+        if (hashIndex != -1) {
+            val rawAfterHash = input.substring(hashIndex + 1)
+            val leadingWhitespace = rawAfterHash.length - rawAfterHash.trimStart().length
+            val projectSectionToken = rawAfterHash.trimStart().takeWhile { !it.isWhitespace() }
+            if (projectSectionToken.isNotBlank()) {
+                val start = hashIndex + 1 + leadingWhitespace
+                ranges += start until (start + projectSectionToken.length)
+            }
+        }
+
+        return ranges
     }
 
     private fun parseExplicitDate(input: String, base: LocalDate): LocalDate? {
@@ -450,8 +496,8 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
         }
     }
 
-    private fun stripTokens(input: String): String {
-        return input
+    private fun stripTokens(input: String, consumedTitleRanges: List<IntRange> = emptyList()): String {
+        return removeConsumedRanges(input, consumedTitleRanges)
             .replace(Regex("#[^\\s]+"), "")
             .replace(Regex("p[1-4]", RegexOption.IGNORE_CASE), "")
             .replace(Regex("today|tomorrow|next week|this weekend|next weekend|in\\s+\\d+\\s+days", RegexOption.IGNORE_CASE), "")
@@ -470,6 +516,12 @@ class QuickAddParser(private val zoneId: ZoneId = ZoneId.systemDefault()) {
             .replace(dayMonthNameRegex, "")
             .replace(Regex("\\d{1,2}(:\\d{2})?\\s?(am|pm)", RegexOption.IGNORE_CASE), "")
             .trim()
+    }
+
+    private fun removeConsumedRanges(input: String, ranges: List<IntRange>): String {
+        return ranges.sortedByDescending { it.first }.fold(input) { value, range ->
+            value.removeRange(range.first, range.last + 1)
+        }
     }
 
     private fun extractDeadlinePhrase(input: String): String? {
