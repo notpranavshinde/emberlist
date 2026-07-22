@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,12 +37,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
+import kotlinx.coroutines.launch
 
 @Composable
 fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
     val container = LocalAppContainer.current
     val viewModel: BrowseViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val projectRows by viewModel.projectRows.collectAsState()
+    val analyticsScope = rememberCoroutineScope()
 
     var showCreateDialog by remember { mutableStateOf(false) }
 
@@ -139,7 +142,10 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
             initial = "",
             onDismiss = { showCreateDialog = false },
             onSave = {
-                if (it.isNotBlank()) viewModel.createProject(it.trim())
+                if (it.isNotBlank()) {
+                    viewModel.createProject(it.trim())
+                    analyticsScope.launch { container.onboardingAnalytics.track("project_created") }
+                }
                 showCreateDialog = false
             }
         )

@@ -15,6 +15,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -26,6 +27,7 @@ import com.notpr.emberlist.ui.EmberlistViewModelFactory
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 @Composable
 fun ActivityScreen(padding: PaddingValues, navController: NavHostController) {
@@ -34,6 +36,7 @@ fun ActivityScreen(padding: PaddingValues, navController: NavHostController) {
     val events by viewModel.events.collectAsState()
     val zone = ZoneId.systemDefault()
     val formatter = DateTimeFormatter.ofPattern("MMM d, h:mm a")
+    val analyticsScope = rememberCoroutineScope()
 
     LazyColumn(
         contentPadding = padding,
@@ -63,7 +66,10 @@ fun ActivityScreen(padding: PaddingValues, navController: NavHostController) {
                         modifier = Modifier.weight(1f)
                     )
                     if (viewModel.canUndo(event)) {
-                        TextButton(onClick = { viewModel.undo(event) }) {
+                        TextButton(onClick = {
+                            viewModel.undo(event)
+                            analyticsScope.launch { container.onboardingAnalytics.track("undo_used", mapOf("action" to "undo")) }
+                        }) {
                             Text("Undo")
                         }
                     }

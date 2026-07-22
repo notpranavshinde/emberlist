@@ -47,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,6 +85,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,6 +113,7 @@ fun QuickAddSheet(
             val projects by viewModel.projects.collectAsState()
             val sections by viewModel.sections.collectAsState()
             val context = LocalContext.current
+            val analyticsScope = rememberCoroutineScope()
             val zone = ZoneId.systemDefault()
             val focusManager = LocalFocusManager.current
             val titleFocusRequester = remember { FocusRequester() }
@@ -157,6 +160,16 @@ fun QuickAddSheet(
                 ActivityResultContracts.RequestPermission()
             ) { granted ->
                 notificationWarning = !granted
+                analyticsScope.launch {
+                    container.onboardingAnalytics.track(
+                        "reminder_action",
+                        mapOf(
+                            "action" to "request_permission",
+                            "result" to if (granted) "success" else "denied",
+                            "permission" to if (granted) "granted" else "denied"
+                        )
+                    )
+                }
                 pendingSave?.invoke()
                 pendingSave = null
             }
@@ -173,6 +186,43 @@ fun QuickAddSheet(
                 return parsed.dueAt?.let { it >= startOfTomorrow } == true
             }
 
+            fun trackSaved(count: Int, bulk: Boolean) {
+                analyticsScope.launch {
+                    container.onboardingAnalytics.track(
+                        "task_create_result",
+                        properties = mapOf(
+                            "result" to "success",
+                            "countBucket" to when { count <= 1 -> "1"; count <= 5 -> "2_to_5"; else -> "6_plus" }
+                        ),
+                        booleans = mapOf(
+                            "scheduled" to (parsed.dueAt != null),
+                            "recurring" to !parsed.recurrenceRule.isNullOrBlank(),
+                            "reminder" to parsed.reminders.isNotEmpty(),
+                            "priority" to (parsed.priority != Priority.P4),
+                            "subtask" to false,
+                            "bulk" to bulk
+                        )
+                    )
+                    if (parsed.reminders.isNotEmpty()) {
+                        val permission = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            "not_required"
+                        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                            "granted"
+                        } else {
+                            "denied"
+                        }
+                        container.onboardingAnalytics.track(
+                            "reminder_action",
+                            mapOf(
+                                "action" to "schedule",
+                                "result" to if (permission == "denied") "denied" else "success",
+                                "permission" to permission
+                            )
+                        )
+                    }
+                }
+            }
+
             fun submitQuickAdd() {
                 val save = {
                     if (bulkLines.size > 1) {
@@ -180,6 +230,7 @@ fun QuickAddSheet(
                     } else {
                         val savedToUpcoming = savesOnlyToUpcoming()
                         viewModel.saveTask {
+                            trackSaved(1, false)
                             onTasksSaved(1, savedToUpcoming)
                             if (origin == QuickAddOrigin.ONBOARDING) onOpenChange(false)
                             else titleFocusRequester.requestFocus()
@@ -505,6 +556,12 @@ fun QuickAddSheet(
                 AlertDialog(
                     onDismissRequest = {
                         showNotificationRationale = false
+                        analyticsScope.launch {
+                            container.onboardingAnalytics.track(
+                                "reminder_action",
+                                mapOf("action" to "request_permission", "result" to "cancelled", "permission" to "denied")
+                            )
+                        }
                         notificationWarning = true
                         pendingSave?.invoke()
                         pendingSave = null
@@ -520,6 +577,12 @@ fun QuickAddSheet(
                     dismissButton = {
                         TextButton(onClick = {
                             showNotificationRationale = false
+                            analyticsScope.launch {
+                                container.onboardingAnalytics.track(
+                                    "reminder_action",
+                                    mapOf("action" to "request_permission", "result" to "cancelled", "permission" to "denied")
+                                )
+                            }
                             notificationWarning = true
                             pendingSave?.invoke()
                             pendingSave = null
@@ -536,6 +599,7 @@ fun QuickAddSheet(
                         bulkDialogOpen = false
                         val savedToUpcoming = savesOnlyToUpcoming()
                         viewModel.saveSingleTaskFromBulk(bulkLines) {
+                            trackSaved(1, false)
                             onTasksSaved(1, savedToUpcoming)
                             if (origin == QuickAddOrigin.ONBOARDING) onOpenChange(false)
                             else titleFocusRequester.requestFocus()
@@ -545,6 +609,7 @@ fun QuickAddSheet(
                         bulkDialogOpen = false
                         val savedToUpcoming = savesOnlyToUpcoming()
                         viewModel.saveBulkTasks(bulkLines) {
+                            trackSaved(bulkLines.size, true)
                             onTasksSaved(bulkLines.size, savedToUpcoming)
                             if (origin == QuickAddOrigin.ONBOARDING) onOpenChange(false)
                             else titleFocusRequester.requestFocus()

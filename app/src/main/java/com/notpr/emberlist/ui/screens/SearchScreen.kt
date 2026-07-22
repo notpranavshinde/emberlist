@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -45,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
@@ -55,6 +59,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.DayOfWeek
 import java.time.temporal.TemporalAdjusters
+import kotlinx.coroutines.launch
 
 @Composable
 fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
@@ -68,6 +73,7 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
     var searchActive by remember { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val analyticsScope = rememberCoroutineScope()
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     var rescheduleTarget by remember { mutableStateOf<com.notpr.emberlist.data.model.TaskEntity?>(null) }
@@ -163,6 +169,17 @@ fun SearchScreen(padding: PaddingValues, navController: NavHostController) {
                     },
                     placeholder = { Text("Search") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        val count = flattenedResults.size
+                        analyticsScope.launch {
+                            container.onboardingAnalytics.track(
+                                "search_used",
+                                mapOf("resultCountBucket" to when { count == 0 -> "0"; count == 1 -> "1"; count <= 5 -> "2_to_5"; else -> "6_plus" })
+                            )
+                        }
+                        focusManager.clearFocus()
+                    }),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,

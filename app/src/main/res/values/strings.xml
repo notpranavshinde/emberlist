@@ -27,7 +27,9 @@
     <string name="getting_started_show_welcome">Show welcome on Today</string>
     <string name="getting_started_open_quick_add">Open Quick Add</string>
     <string name="analytics_setting">Share anonymous usage analytics</string>
-    <string name="analytics_explanation">Sends anonymous onboarding counts only. Task content and Google account details are never sent.</string>
+    <string name="analytics_explanation">Shares product usage, reliability, and onboarding counts with a resettable anonymous installation ID. Task content, dates, project names, locations, and Google identity are never sent.</string>
+    <string name="analytics_id_reset">Reset anonymous analytics ID</string>
+    <string name="analytics_id_reset_done">Anonymous analytics ID reset.</string>
     <string name="privacy_policy">Privacy policy</string>
     <string name="notification_rationale_title">Allow task reminders?</string>
     <string name="notification_rationale_body">Emberlist needs notification access to deliver the reminder you requested. Your task is saved even if you decline.</string>

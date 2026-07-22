@@ -77,8 +77,12 @@ class SettingsViewModel(
     fun updateAnalyticsEnabled(value: Boolean) {
         viewModelScope.launch {
             settingsRepository.updateAnalyticsEnabled(value)
-            if (!value) onboardingAnalytics.clearQueue()
+            if (!value) onboardingAnalytics.clearQueueAndId()
         }
+    }
+
+    fun resetAnalyticsId() {
+        viewModelScope.launch { onboardingAnalytics.resetInstallId() }
     }
 
     fun updateSyncEnabled(value: Boolean) {
@@ -142,6 +146,10 @@ class SettingsViewModel(
         when (val operation = driveConnectAndSync.start()) {
             is DriveConnectAndSyncResult.Success -> {
                 val result = operation.result
+                    onboardingAnalytics.track(
+                        "sync_action",
+                        mapOf("action" to "sync", "result" to "success", "origin" to "settings")
+                    )
                     _syncUiState.value = SyncUiState(
                         status = if (connectStatus != null && result.remoteCreated) {
                             "Google Drive connected. Cloud sync file created."
@@ -154,8 +162,14 @@ class SettingsViewModel(
                         }
                     )
             }
-            DriveConnectAndSyncResult.Cancelled -> _syncUiState.value = SyncUiState()
-            is DriveConnectAndSyncResult.Failure -> _syncUiState.value = SyncUiState(error = operation.message)
+            DriveConnectAndSyncResult.Cancelled -> {
+                onboardingAnalytics.track("sync_action", mapOf("action" to "sync", "result" to "cancelled", "origin" to "settings"))
+                _syncUiState.value = SyncUiState()
+            }
+            is DriveConnectAndSyncResult.Failure -> {
+                onboardingAnalytics.track("sync_action", mapOf("action" to "sync", "result" to "failure", "origin" to "settings", "errorCategory" to normalizeAnalyticsError(operation.message)))
+                _syncUiState.value = SyncUiState(error = operation.message)
+            }
             is DriveConnectAndSyncResult.AuthorizationRequired -> _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
         }
     }
@@ -193,3 +207,15 @@ data class SyncUiState(
     val status: String? = null,
     val error: String? = null
 )
+
+private fun normalizeAnalyticsError(message: String): String {
+    val value = message.lowercase()
+    return when {
+        "offline" in value || "internet" in value -> "offline"
+        "auth" in value || "sign" in value || "token" in value -> "auth"
+        "schema" in value || "newer" in value -> "schema"
+        "permission" in value -> "permission"
+        "network" in value -> "network"
+        else -> "unknown"
+    }
+}

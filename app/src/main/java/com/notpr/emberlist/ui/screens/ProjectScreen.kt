@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -56,10 +57,12 @@ import com.notpr.emberlist.ui.startOfTodayMillis
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.launch
 
 @Composable
 fun ProjectScreen(padding: PaddingValues, projectId: String, navController: androidx.navigation.NavHostController) {
     val container = LocalAppContainer.current
+    val analyticsScope = rememberCoroutineScope()
     val viewModel: ProjectViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val projectFlow = remember(projectId) { viewModel.observeProject(projectId) }
     val tasksFlow = remember(projectId) { viewModel.observeTasks(projectId) }
@@ -401,6 +404,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                 val name = it.trim()
                 if (name.isNotBlank()) {
                     viewModel.createSection(projectId, name)
+                    analyticsScope.launch { container.onboardingAnalytics.track("section_created") }
                 }
                 showCreateSection = false
             }

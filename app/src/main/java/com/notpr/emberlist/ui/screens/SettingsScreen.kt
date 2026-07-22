@@ -98,13 +98,27 @@ fun SettingsScreen(
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
-            scope.launch { backupManager.exportToUri(context, context.contentResolver, uri) }
+            scope.launch {
+                val result = runCatching { backupManager.exportToUri(context, context.contentResolver, uri) }
+                container.onboardingAnalytics.track(
+                    "backup_action",
+                    if (result.isSuccess) mapOf("action" to "export", "result" to "success", "origin" to "settings")
+                    else mapOf("action" to "export", "result" to "failure", "origin" to "settings", "errorCategory" to "storage")
+                )
+            }
         }
     }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
-            scope.launch { backupManager.importFromUri(context.contentResolver, uri, importModeReplace) }
+            scope.launch {
+                val result = runCatching { backupManager.importFromUri(context.contentResolver, uri, importModeReplace) }
+                container.onboardingAnalytics.track(
+                    "backup_action",
+                    if (result.isSuccess) mapOf("action" to "import", "result" to "success", "origin" to "settings")
+                    else mapOf("action" to "import", "result" to "failure", "origin" to "settings", "errorCategory" to "storage")
+                )
+            }
         }
     }
     val driveSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -150,6 +164,14 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        OutlinedButton(
+            onClick = {
+                viewModel.resetAnalyticsId()
+                Toast.makeText(context, R.string.analytics_id_reset_done, Toast.LENGTH_SHORT).show()
+            },
+            enabled = settings.analyticsEnabled,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) { Text(stringResource(R.string.analytics_id_reset)) }
 
         SectionHeader(text = stringResource(R.string.getting_started))
         OutlinedButton(
@@ -291,6 +313,7 @@ fun SettingsScreen(
                 onClick = {
                     scope.launch {
                         val file = backupManager.exportToFile(context)
+                        container.onboardingAnalytics.track("backup_action", mapOf("action" to "save", "result" to "success", "origin" to "settings"))
                         refreshBackups()
                         withContext(Dispatchers.Main) {
                             Toast.makeText(context, "Backup saved: ${file.name}", Toast.LENGTH_SHORT).show()
@@ -384,6 +407,7 @@ fun SettingsScreen(
                     if (file != null) {
                         scope.launch {
                             backupManager.importFromFile(file, replace = true)
+                            container.onboardingAnalytics.track("backup_action", mapOf("action" to "restore", "result" to "success", "origin" to "settings"))
                             showConfirmRestore = false
                             showRestoreDialog = false
                             withContext(Dispatchers.Main) {

@@ -104,6 +104,16 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
         onboardingViewModel.handleAuthorizationResult(result.data)
     }
 
+    LaunchedEffect(Unit) {
+        container.onboardingAnalytics.trackAppOpened()
+    }
+
+    LaunchedEffect(currentRoute) {
+        currentRoute?.let { route ->
+            container.onboardingAnalytics.track("screen_viewed", mapOf("route" to analyticsRoute(route)))
+        }
+    }
+
     LaunchedEffect(restoreState) {
         if (restoreState == com.notpr.emberlist.ui.screens.OnboardingRestoreState.Success) {
             snackbarHostState.showSnackbar(workspaceRestoredMessage)
@@ -112,6 +122,12 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
 
     fun openQuickAdd(origin: QuickAddOrigin = QuickAddOrigin.STANDARD, prefill: String = "") {
         quickAddRequest = QuickAddRequest(true, origin, prefill)
+        scope.launch {
+            container.onboardingAnalytics.track(
+                "quick_add_opened",
+                mapOf("origin" to if (origin == QuickAddOrigin.ONBOARDING) "onboarding" else "fab")
+            )
+        }
     }
 
     LaunchedEffect(openTaskId) {
@@ -265,6 +281,16 @@ private data class QuickAddRequest(
     val origin: QuickAddOrigin = QuickAddOrigin.STANDARD,
     val prefill: String = ""
 )
+
+private fun analyticsRoute(route: String): String = when {
+    route == NavRoute.Today.route -> "today"
+    route == NavRoute.Upcoming.route -> "upcoming"
+    route == NavRoute.Inbox.route -> "inbox"
+    route == NavRoute.Search.route -> "search"
+    route == "settings" -> "settings"
+    route.startsWith("project") -> "project"
+    else -> "unknown"
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

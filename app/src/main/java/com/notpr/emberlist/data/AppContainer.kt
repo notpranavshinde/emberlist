@@ -7,6 +7,7 @@ import com.notpr.emberlist.data.backup.BackupManager
 import com.notpr.emberlist.reminders.ReminderScheduler
 import com.notpr.emberlist.data.settings.SettingsRepository
 import com.notpr.emberlist.data.analytics.OnboardingAnalytics
+import com.notpr.emberlist.data.analytics.ProductActivityAnalyticsBridge
 import com.notpr.emberlist.data.onboarding.OnboardingRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveSyncService
@@ -40,6 +41,7 @@ class AppContainer(context: Context) {
     val settingsRepository = SettingsRepository(settingsStore)
     val onboardingRepository = OnboardingRepository(settingsStore)
     val onboardingAnalytics = OnboardingAnalytics(appContext, settingsStore, settingsRepository)
+    val productActivityAnalyticsBridge = ProductActivityAnalyticsBridge(repository, onboardingAnalytics)
 
     val reminderScheduler = ReminderScheduler(appContext, repository)
     val backupManager = BackupManager(database)
