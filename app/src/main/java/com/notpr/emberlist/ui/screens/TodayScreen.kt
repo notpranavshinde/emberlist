@@ -1,8 +1,6 @@
 package com.notpr.emberlist.ui.screens
 
 import android.app.DatePickerDialog
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -14,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -54,7 +53,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -159,6 +160,8 @@ fun TodayScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var completedExpanded by remember { mutableStateOf(false) }
     val projects by viewModel.projects.collectAsState()
+    val onboardingActive = workspaceTaskCount == 0 &&
+        onboardingState?.status == OnboardingStatus.ACTIVE
 
     LaunchedEffect(rescheduleTarget) {
         val task = rescheduleTarget ?: return@LaunchedEffect
@@ -217,10 +220,17 @@ fun TodayScreen(
         dialog.show()
     }
 
-    LazyColumn(
-        contentPadding = padding,
-        modifier = Modifier.background(MaterialTheme.colorScheme.background)
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            contentPadding = padding,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .then(
+                    if (onboardingActive) Modifier.blur(5.dp).alpha(0.38f)
+                    else Modifier
+                )
+        ) {
         item(key = "today_header") {
             Row(
                 modifier = Modifier
@@ -260,27 +270,16 @@ fun TodayScreen(
                 }
             }
         }
-        if (workspaceTaskCount == 0) {
+        if (workspaceTaskCount == 0 && !onboardingActive) {
             item(key = "empty_workspace_restore") {
-                if (onboardingState?.status == OnboardingStatus.ACTIVE) {
-                    FirstRunWelcomeCard(
-                        restoreState = restoreState,
-                        onAddFirstTask = onAddFirstTask,
-                        onExample = onExample,
-                        onRestore = onRestore,
-                        onUseAnotherAccount = onUseAnotherAccount,
-                        onSkip = onSkip
-                    )
-                } else {
-                    EmptyWorkspaceRestoreCard(
-                        driveConnected = driveAuthState.hasDriveScope,
-                        syncEnabled = settings.syncEnabled,
-                        isSyncing = syncUiState.isSyncing,
-                        syncMessage = syncUiState.status ?: syncUiState.error,
-                        onOpenSettings = { navController.navigate("settings") },
-                        onSync = { settingsViewModel.enableSyncAndSyncNow() }
-                    )
-                }
+                EmptyWorkspaceRestoreCard(
+                    driveConnected = driveAuthState.hasDriveScope,
+                    syncEnabled = settings.syncEnabled,
+                    isSyncing = syncUiState.isSyncing,
+                    syncMessage = syncUiState.status ?: syncUiState.error,
+                    onOpenSettings = { navController.navigate("settings") },
+                    onSync = { settingsViewModel.enableSyncAndSyncNow() }
+                )
             }
         }
         if (selectionMode) {
@@ -470,6 +469,26 @@ fun TodayScreen(
                 }
             }
         }
+        }
+        if (onboardingActive) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.32f))
+            )
+            FirstRunWelcomeCard(
+                restoreState = restoreState,
+                onAddFirstTask = onAddFirstTask,
+                onExample = onExample,
+                onRestore = onRestore,
+                onUseAnotherAccount = onUseAnotherAccount,
+                onSkip = onSkip,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(padding)
+                    .padding(top = 44.dp)
+            )
+        }
     }
 
     if (showPriorityPicker) {
@@ -603,13 +622,13 @@ private fun FirstRunWelcomeCard(
     onExample: (String, String) -> Unit,
     onRestore: () -> Unit,
     onUseAnotherAccount: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val restoring = restoreState == OnboardingRestoreState.Authorizing ||
         restoreState == OnboardingRestoreState.Syncing
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = ListHorizontalPadding, vertical = 12.dp)
             .testTag("onboarding-welcome")
@@ -619,17 +638,8 @@ private fun FirstRunWelcomeCard(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = stringResource(R.string.onboarding_eyebrow),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
                 text = stringResource(R.string.onboarding_heading),
                 style = MaterialTheme.typography.headlineSmall
-            )
-            Text(
-                text = stringResource(R.string.onboarding_body),
-                style = MaterialTheme.typography.bodyMedium
             )
             listOf(
                 "simple" to stringResource(R.string.onboarding_example_groceries),
@@ -694,14 +704,6 @@ private fun FirstRunWelcomeCard(
                 }
                 else -> Unit
             }
-            Text(
-                text = stringResource(R.string.onboarding_analytics_footer),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            TextButton(onClick = {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://emberlist.dev/#/privacy")))
-            }) { Text(stringResource(R.string.privacy_policy)) }
         }
     }
 }

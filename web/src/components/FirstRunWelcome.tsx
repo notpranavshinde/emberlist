@@ -32,22 +32,20 @@ export function FirstRunWelcome({
   const restoring = restoreStatus.kind === "working";
 
   return (
-    <section
-      data-testid="first-run-welcome"
-      className="mx-auto w-full max-w-3xl rounded-[30px] border border-[#E7D4C6] bg-[linear-gradient(145deg,var(--app-surface),#fff4ee)] p-6 shadow-[0_18px_50px_rgba(84,55,39,0.10)] sm:p-8"
-    >
-      <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#B25B3C]">
-        Welcome to Emberlist
-      </p>
-      <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#1E2D2F] sm:text-3xl">
-        What do you need to get done?
-      </h2>
-      <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6D5C50] sm:text-base">
-        Add one real task. Include a date, time, priority, or repeat schedule if
-        you want—Emberlist will understand it.
-      </p>
+    <>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-30 bg-[rgba(250,246,242,0.38)] backdrop-blur-[4px]"
+      />
+      <section
+        data-testid="first-run-welcome"
+        className="relative z-40 mx-auto w-full max-w-3xl rounded-[30px] border border-[#E7D4C6] bg-[linear-gradient(145deg,var(--app-surface),#fff4ee)] p-6 shadow-[0_24px_70px_rgba(84,55,39,0.18)] sm:p-8"
+      >
+        <h2 className="text-2xl font-bold tracking-tight text-[#1E2D2F] sm:text-3xl">
+          What do you need to get done?
+        </h2>
 
-      <div className="mt-5 flex flex-wrap gap-2" aria-label="Example tasks">
+        <div className="mt-5 flex flex-wrap gap-2" aria-label="Example tasks">
         {ONBOARDING_EXAMPLES.map((example) => (
           <button
             key={example.id}
@@ -58,9 +56,9 @@ export function FirstRunWelcome({
             {example.label}
           </button>
         ))}
-      </div>
+        </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
         <button
           type="button"
           data-testid="onboarding-add-first-task"
@@ -90,9 +88,9 @@ export function FirstRunWelcome({
         >
           Skip for now
         </button>
-      </div>
+        </div>
 
-      {!cloudConfigured ? (
+        {!cloudConfigured ? (
         <p className="mt-3 text-sm text-[#8A5A44]">
           Google Drive restore is unavailable in this deployment.
         </p>
@@ -100,9 +98,9 @@ export function FirstRunWelcome({
         <p className="mt-3 text-sm text-[#8A5A44]">
           Connect to the internet to restore your workspace.
         </p>
-      ) : null}
+        ) : null}
 
-      {restoreStatus.kind !== "idle" ? (
+        {restoreStatus.kind !== "idle" ? (
         <div
           aria-live="polite"
           data-testid="onboarding-restore-status"
@@ -123,15 +121,8 @@ export function FirstRunWelcome({
             </button>
           ) : null}
         </div>
-      ) : null}
-
-      <p className="mt-5 text-xs leading-5 text-[#8B7A6E]">
-        Anonymous usage counts help improve Emberlist. Task content is never
-        sent. You can change this in Settings. {" "}
-        <a href="#/privacy" className="font-semibold underline underline-offset-2">
-          Privacy
-        </a>
-      </p>
-    </section>
+        ) : null}
+      </section>
+    </>
   );
 }

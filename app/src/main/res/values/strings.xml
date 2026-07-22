@@ -5,9 +5,7 @@
     <string name="upcoming">Upcoming</string>
     <string name="browse">Browse</string>
     <string name="search">Search</string>
-    <string name="onboarding_eyebrow">Welcome to Emberlist</string>
     <string name="onboarding_heading">What do you need to get done?</string>
-    <string name="onboarding_body">Add one real task. Include a date, time, priority, or repeat schedule if you want—Emberlist will understand it.</string>
     <string name="onboarding_add_first_task">Add your first task</string>
     <string name="onboarding_restore_drive">Restore from Google Drive</string>
     <string name="onboarding_skip">Skip for now</string>
@@ -21,7 +19,6 @@
     <string name="onboarding_restore_empty">No Emberlist workspace was found in this Google account. Add your first task or try another account.</string>
     <string name="onboarding_restore_offline">Connect to the internet to restore your workspace.</string>
     <string name="onboarding_use_another_account">Use another Google account</string>
-    <string name="onboarding_analytics_footer">Anonymous usage counts help improve Emberlist. Task content is never sent. You can change this in Settings.</string>
     <string name="getting_started">Getting started</string>
     <string name="getting_started_capture">Capture tasks with the + button.</string>
     <string name="getting_started_language">Dates, times, priorities, and recurrence work in plain language.</string>

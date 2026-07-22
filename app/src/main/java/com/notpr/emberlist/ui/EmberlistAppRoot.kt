@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -86,6 +88,14 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     val onboardingState by onboardingViewModel.state.collectAsState()
     val restoreState by onboardingViewModel.restoreState.collectAsState()
     var quickAddRequest by remember { mutableStateOf(QuickAddRequest()) }
+    val onboardingFocused = currentRoute == NavRoute.Today.route &&
+        onboardingState?.status == com.notpr.emberlist.data.onboarding.OnboardingStatus.ACTIVE &&
+        !quickAddRequest.isOpen
+    val onboardingBackgroundModifier = if (onboardingFocused) {
+        Modifier.blur(5.dp).alpha(0.38f)
+    } else {
+        Modifier
+    }
     val scope = rememberCoroutineScope()
     val firstTaskSavedMessage = stringResource(R.string.onboarding_saved)
     val workspaceRestoredMessage = stringResource(R.string.onboarding_restored)
@@ -126,7 +136,13 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
 
     Scaffold(
         topBar = { TopBar(navController) },
-        bottomBar = { BottomBar(navController, navItems) },
+        bottomBar = {
+            BottomBar(
+                navController = navController,
+                items = navItems,
+                modifier = onboardingBackgroundModifier
+            )
+        },
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState
@@ -156,6 +172,7 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
         floatingActionButton = {
             FloatingActionButton(
                 onClick = { openQuickAdd() },
+                modifier = onboardingBackgroundModifier,
                 containerColor = androidx.compose.ui.graphics.Color(0xFFEE6A3C),
                 contentColor = androidx.compose.ui.graphics.Color.White
             ) {
@@ -282,10 +299,15 @@ private fun TopBar(navController: NavHostController) {
 }
 
 @Composable
-private fun BottomBar(navController: NavHostController, items: List<NavRoute>) {
+private fun BottomBar(
+    navController: NavHostController,
+    items: List<NavRoute>,
+    modifier: Modifier = Modifier
+) {
     val currentBackStack by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStack?.destination?.route
     NavigationBar(
+        modifier = modifier,
         containerColor = androidx.compose.material3.MaterialTheme.colorScheme.background,
         tonalElevation = 0.dp
     ) {
