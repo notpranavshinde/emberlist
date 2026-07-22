@@ -18,6 +18,9 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 EMBERLIST_AUTH_SECRET=at-least-32-random-bytes
+ANALYTICS_ID_SECRET=a-different-32-byte-random-secret
+EMBERLIST_ADMIN_AUTH_SECRET=another-32-byte-random-secret
+EMBERLIST_ANALYTICS_ADMIN_EMAILS=notpranavshinde@gmail.com
 EMBERLIST_APP_ORIGIN=http://localhost:3000
 ```
 
@@ -27,6 +30,8 @@ Optional distributed rate limiting:
 UPSTASH_REDIS_REST_URL=...
 UPSTASH_REDIS_REST_TOKEN=...
 ```
+
+The private aggregate dashboard is served at `/#/stats` without initializing the task workspace. Its OAuth callback is `/api/admin/auth/google/callback` and must be registered separately from the Drive callback. `npm run analytics:report -- YYYY-MM-DD YYYY-MM-DD` prints the same core operational metrics directly from Redis.
 
 ## Verify
 

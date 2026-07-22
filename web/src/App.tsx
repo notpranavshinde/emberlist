@@ -106,9 +106,11 @@ import {
 } from "./lib/onboarding";
 import {
   isAnalyticsEnabled as readAnalyticsEnabled,
+  resetAnalyticsId,
   setAnalyticsEnabled as persistAnalyticsEnabled,
   startOnboardingAnalyticsDelivery,
   trackOnboardingEvent,
+  trackProductEvent,
 } from "./lib/analytics";
 import {
   buildDraftFromParsed,
@@ -712,6 +714,7 @@ function App() {
       undoRecord.undoMessage,
     );
     showBanner("info", undoRecord.undoMessage);
+    trackProductEvent("undo_used", { action: "undo" });
   }
 
   function downloadPayloadBackup(nextPayload: SyncPayload) {
@@ -788,6 +791,11 @@ function App() {
       );
       backoffAttemptRef.current = 0;
       backoffUntilRef.current = null;
+      trackProductEvent("sync_action", {
+        action: "sync",
+        result: "success",
+        origin: automatic ? "system" : "settings",
+      });
       if (!automatic) {
         showBanner(
           "success",
@@ -823,8 +831,19 @@ function App() {
         message.includes("access_denied") ||
         message.toLowerCase().includes("sign-in was closed")
       ) {
+        trackProductEvent("sync_action", {
+          action: "sync",
+          result: "cancelled",
+          origin: automatic ? "system" : "settings",
+        });
         return { status: "cancelled" };
       }
+      trackProductEvent("sync_action", {
+        action: "sync",
+        result: "failure",
+        origin: automatic ? "system" : "settings",
+        errorCategory: analyticsErrorCategory(message),
+      });
       return { status: "error", message };
     } finally {
       setIsSyncing(false);
@@ -977,12 +996,14 @@ function App() {
           ? `Imported JSON was merged. ${recurringMaintenance}.`
           : "Imported JSON was merged into your local workspace.",
       );
+      trackProductEvent("backup_action", { action: "import", result: "success", origin: "settings" });
     } catch (error) {
       console.error("Failed to import JSON", error);
       showBanner(
         "error",
         error instanceof Error ? error.message : "Failed to import JSON.",
       );
+      trackProductEvent("backup_action", { action: "import", result: "failure", origin: "settings", errorCategory: analyticsErrorCategory(error instanceof Error ? error.message : "unknown") });
     }
   }
 
@@ -1153,6 +1174,7 @@ function App() {
         undoMessage: `Removed project "${trimmed}".`,
       },
     );
+    trackProductEvent("project_created");
     return projectId;
   }
 
@@ -1192,6 +1214,7 @@ function App() {
         undoMessage: `Removed section "${trimmed}".`,
       },
     );
+    trackProductEvent("section_created");
   }
 
   async function handleUpdateSection(
@@ -1242,6 +1265,9 @@ function App() {
         },
       },
     );
+    trackProductEvent(completed ? "task_reopened" : "task_completed", {
+      subtask: Boolean(task.parentTaskId),
+    });
   }
 
   async function handleArchiveTask(taskId: string) {
@@ -1339,6 +1365,7 @@ function App() {
         },
       },
     );
+    trackProductEvent("task_moved", { origin: "project" });
   }
 
   async function handleMoveTasksToSection(
@@ -1366,6 +1393,7 @@ function App() {
         },
       },
     );
+    trackProductEvent("task_moved", { origin: "project" });
   }
 
   async function handleSetTasksPriority(taskIds: string[], priority: Priority) {
@@ -1383,10 +1411,17 @@ function App() {
         },
       },
     );
+    trackProductEvent("organize_changed", {
+      action: "change",
+      countBucket: analyticsCountBucket(taskIds.length),
+    });
   }
 
   async function handleDeleteTasks(taskIds: string[]) {
     if (!taskIds.length) return;
+    const includesSubtask = taskIds.some((id) =>
+      Boolean(payloadRef.current?.tasks.find((task) => task.id === id)?.parentTaskId),
+    );
     await applyUndoablePayloadUpdate(
       (current) => deleteTasks(current, taskIds),
       {
@@ -1399,6 +1434,10 @@ function App() {
         },
       },
     );
+    trackProductEvent("task_deleted", {
+      countBucket: analyticsCountBucket(taskIds.length),
+      subtask: includesSubtask,
+    });
   }
 
   async function handleReparentTaskAsSubtask(
@@ -1432,6 +1471,7 @@ function App() {
         },
       },
     );
+    trackProductEvent("subtask_created");
   }
 
   async function handlePromoteSubtask(taskId: string) {
@@ -1462,6 +1502,7 @@ function App() {
         },
       },
     );
+    trackProductEvent("subtask_promoted");
   }
 
   async function handleCreateTask(
@@ -1470,6 +1511,10 @@ function App() {
   ): Promise<string | null> {
     if (!draft.title.trim()) {
       showBanner("error", "Task title is required.");
+      trackProductEvent("task_create_result", {
+        result: "failure",
+        errorCategory: "validation",
+      });
       return null;
     }
 
@@ -1492,6 +1537,16 @@ function App() {
         title: "Created task",
       });
     }
+    trackProductEvent("task_create_result", createdTask ? {
+      result: "success",
+      countBucket: "1",
+      scheduled: draft.dueAt !== null,
+      recurring: Boolean(draft.recurringRule),
+      reminder: draft.reminders.length > 0,
+      priority: draft.priority !== "P4",
+      subtask: Boolean(draft.parentTaskId),
+      bulk: Boolean(options?.silent),
+    } : { result: "failure", errorCategory: "storage" });
     const isFirstRunTask =
       Boolean(createdTask) && onboardingStateRef.current?.status === "active";
     if (!options?.silent) {
@@ -1640,6 +1695,7 @@ function App() {
     if (!current) return;
     downloadPayloadBackup(current);
     showBanner("success", "Downloaded a JSON backup of this workspace.");
+    trackProductEvent("backup_action", { action: "export", result: "success", origin: "settings" });
   }
 
   function handleSaveBrowserBackupNow() {
@@ -1647,6 +1703,7 @@ function App() {
     if (!current) return;
     saveBrowserBackupSnapshot(current, false);
     showBanner("success", "Saved a browser backup snapshot.");
+    trackProductEvent("backup_action", { action: "save", result: "success", origin: "settings" });
   }
 
   async function handleRestoreBrowserBackup() {
@@ -1675,6 +1732,7 @@ function App() {
           ? `Restored the stored browser backup snapshot. ${recurringMaintenance}.`
           : "Restored the stored browser backup snapshot.",
       );
+      trackProductEvent("backup_action", { action: "restore", result: "success", origin: "settings" });
     } catch (error) {
       console.error("Failed to restore browser backup snapshot", error);
       showBanner(
@@ -1683,6 +1741,7 @@ function App() {
           ? error.message
           : "Failed to restore the browser backup snapshot.",
       );
+      trackProductEvent("backup_action", { action: "restore", result: "failure", origin: "settings", errorCategory: analyticsErrorCategory(error instanceof Error ? error.message : "unknown") });
     }
   }
 
@@ -1970,6 +2029,9 @@ function App() {
         isQuickAddOpen={isQuickAddOpen}
         quickAddOverride={quickAddOverride}
         onOpenQuickAdd={(overrides) => {
+          trackProductEvent("quick_add_opened", {
+            origin: analyticsQuickAddOrigin(overrides?.origin),
+          });
           setQuickAddOverride(overrides ?? null);
           setIsQuickAddOpen(true);
         }}
@@ -2019,6 +2081,10 @@ function App() {
         onToggleAnalyticsEnabled={() =>
           setAnalyticsEnabled((enabled) => !enabled)
         }
+        onResetAnalyticsId={() => {
+          resetAnalyticsId();
+          showBanner("success", "Anonymous analytics ID reset.");
+        }}
         isCloudConnectDialogOpen={isCloudConnectDialogOpen}
         onCloseCloudConnectDialog={() => setIsCloudConnectDialogOpen(false)}
         onConnectCloudDialog={() => {
@@ -2157,6 +2223,7 @@ type WorkspaceShellProps = {
   onShowOnboardingWelcome: () => void;
   analyticsEnabled: boolean;
   onToggleAnalyticsEnabled: () => void;
+  onResetAnalyticsId: () => void;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
   canUndoActivity: (activityId: string) => boolean;
@@ -2232,12 +2299,19 @@ function WorkspaceShell({
   onShowOnboardingWelcome,
   analyticsEnabled,
   onToggleAnalyticsEnabled,
+  onResetAnalyticsId,
   activityEntries,
   onUndoActivity,
   canUndoActivity,
 }: WorkspaceShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    trackProductEvent("screen_viewed", {
+      route: analyticsRouteName(location.pathname),
+    });
+  }, [location.pathname]);
   const todayStartMs = useTodayStartMs();
   const previousPathRef = useRef(location.key);
   const goSequenceTimeoutRef = useRef<number | null>(null);
@@ -3093,6 +3167,7 @@ function WorkspaceShell({
                       lastLocalBackupAt={lastLocalBackupAt}
                       analyticsEnabled={analyticsEnabled}
                       onToggleAnalyticsEnabled={onToggleAnalyticsEnabled}
+                      onResetAnalyticsId={onResetAnalyticsId}
                       onOpenGettingStarted={() =>
                         setIsGettingStartedOpen(true)
                       }
@@ -3304,7 +3379,7 @@ function WorkspaceShell({
   );
 }
 
-const LEGAL_LAST_UPDATED = "July 19, 2026";
+const LEGAL_LAST_UPDATED = "July 21, 2026";
 const SUPPORT_EMAIL = "support@emberlist.dev";
 const GITHUB_REPOSITORY_URL = "https://github.com/notpranavshinde/emberlist";
 
@@ -3547,10 +3622,10 @@ function PrivacyPolicyPage() {
           </p>
           <p>
             When anonymous usage analytics are enabled, Emberlist records web
-            page views and aggregate onboarding events such as viewing,
-            skipping, completing, or attempting a Drive restore. Task content,
-            Google account details, and persistent device identifiers are not
-            included in these events.
+            page views and allowlisted product events covering onboarding,
+            navigation, task actions, feature use, sync, reminders, backups,
+            and normalized errors. It never sends task content, task dates,
+            project names, locations, Google identity, or raw error messages.
           </p>
         </PublicSection>
 
@@ -3592,29 +3667,34 @@ function PrivacyPolicyPage() {
               Drive sync
             </li>
             <li>to show which account is connected for sync</li>
-            <li>to measure whether first-run onboarding is understandable</li>
+            <li>to understand onboarding, feature adoption, and reliability</li>
           </ul>
         </PublicSection>
 
         <PublicSection title="Anonymous analytics">
           <p>
-            Web page-view analytics are processed by Vercel. Onboarding events
-            from web and Android are sent to Emberlist and stored as daily
-            aggregate counters in Upstash Redis. Random per-event identifiers
-            are retained for up to 30 days only to prevent duplicate retries;
-            aggregate counters are retained for up to 13 months.
+            Web page-view analytics are processed by Vercel. First-party events
+            from web and Android are processed by Emberlist and stored as daily
+            counters, anonymous active-install sets, cohorts, feature-use sets,
+            and version breakdowns in Upstash Redis. Random per-event IDs are
+            retained for 30 days for retry deduplication; aggregate data is
+            retained for up to 400 days.
           </p>
           <p>
-            Each onboarding event contains only the allowlisted event name,
-            web or Android platform, app and onboarding versions, and optional
-            method, result, example kind, or broad elapsed-time bucket. Raw IP
-            addresses and user agents are not stored with analytics events; a
+            Each event includes an event name, platform, app version, timestamp,
+            a random event ID, a resettable anonymous installation ID, and only
+            event-specific enums, booleans, or broad buckets. Emberlist hashes
+            the installation ID with HMAC-SHA256 before storage and never stores
+            its raw value. Raw IP addresses and user agents are not stored; a
             short-lived hashed IP is used only for abuse prevention.
           </p>
           <p>
             Analytics are enabled by default and can be disabled at any time
-            in Settings. Disabling analytics stops new events and clears events
-            waiting to be sent from that browser or device.
+            in Settings. Disabling analytics immediately stops new events and
+            clears queued events and the local anonymous ID. Enabling it later
+            creates a new ID. You can also reset the ID independently in
+            Settings. Aggregate reports are available only through the private,
+            allowlisted Emberlist admin dashboard.
           </p>
         </PublicSection>
 
@@ -5136,6 +5216,14 @@ function SearchPage({
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && query.trim()) {
+                const count = results.length + completedResults.length + archivedResults.length;
+                trackProductEvent("search_used", {
+                  resultCountBucket: count === 0 ? "0" : count === 1 ? "1" : count <= 5 ? "2_to_5" : "6_plus",
+                });
+              }
+            }}
             placeholder="Search tasks, projects, and notes"
             className="w-full bg-transparent text-sm outline-none placeholder:text-[#9F7B63]"
           />
@@ -6936,6 +7024,7 @@ function SettingsPage({
   lastLocalBackupAt,
   analyticsEnabled,
   onToggleAnalyticsEnabled,
+  onResetAnalyticsId,
   onOpenGettingStarted,
 }: {
   syncMode: SyncMode;
@@ -6971,6 +7060,7 @@ function SettingsPage({
   lastLocalBackupAt: number | null;
   analyticsEnabled: boolean;
   onToggleAnalyticsEnabled: () => void;
+  onResetAnalyticsId: () => void;
   onOpenGettingStarted: () => void;
 }) {
   const location = useLocation();
@@ -7214,8 +7304,9 @@ function SettingsPage({
                   Share anonymous usage analytics
                 </p>
                 <p className="mt-1 text-sm text-[#6D5C50]">
-                  Sends page-view and onboarding counts. Task content, account
-                  details, and device identifiers are never included.
+                  Shares product usage, reliability, and onboarding counts with
+                  a resettable anonymous installation ID. Task content, dates,
+                  project names, locations, and Google identity are never sent.
                 </p>
               </div>
               <input
@@ -7225,6 +7316,20 @@ function SettingsPage({
                 className="h-5 w-5 accent-[#EE6A3C]"
               />
             </label>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
+              <p className="max-w-xl text-sm leading-6 text-[#6D5C50]">
+                Resetting starts a new anonymous installation history and clears
+                queued analytics from this browser.
+              </p>
+              <button
+                type="button"
+                onClick={onResetAnalyticsId}
+                disabled={!analyticsEnabled}
+                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Reset anonymous analytics ID
+              </button>
+            </div>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
               <div>
                 <p className="text-sm font-semibold text-[#1E2D2F]">
@@ -11969,6 +12074,38 @@ function writeStoredCloudSession(session: CloudSession | null) {
     "emberlist.cloudSession",
     JSON.stringify(session),
   );
+}
+
+function analyticsCountBucket(count: number): "1" | "2_to_5" | "6_plus" {
+  if (count <= 1) return "1";
+  return count <= 5 ? "2_to_5" : "6_plus";
+}
+
+function analyticsQuickAddOrigin(origin: QuickAddContext["origin"] | undefined) {
+  return origin === "onboarding" ? "onboarding" as const : "fab" as const;
+}
+
+function analyticsRouteName(pathname: string) {
+  if (pathname === "/" || pathname === "/today") return "today" as const;
+  if (pathname.startsWith("/project/")) return "project" as const;
+  if (pathname.startsWith("/upcoming")) return "upcoming" as const;
+  if (pathname.startsWith("/inbox")) return "inbox" as const;
+  if (pathname.startsWith("/search")) return "search" as const;
+  if (pathname.startsWith("/calendar")) return "calendar" as const;
+  if (pathname.startsWith("/settings")) return "settings" as const;
+  if (pathname.includes("completed")) return "completed" as const;
+  if (pathname.includes("archived")) return "archived" as const;
+  return "unknown" as const;
+}
+
+function analyticsErrorCategory(message: string) {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("offline") || normalized.includes("internet")) return "offline" as const;
+  if (normalized.includes("auth") || normalized.includes("sign-in") || normalized.includes("token")) return "auth" as const;
+  if (normalized.includes("schema") || normalized.includes("newer")) return "schema" as const;
+  if (normalized.includes("config")) return "configuration" as const;
+  if (normalized.includes("network") || normalized.includes("fetch")) return "network" as const;
+  return "unknown" as const;
 }
 
 

@@ -85,10 +85,13 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 EMBERLIST_AUTH_SECRET=at-least-32-random-bytes
+ANALYTICS_ID_SECRET=a-different-32-byte-random-secret
+EMBERLIST_ADMIN_AUTH_SECRET=another-32-byte-random-secret
+EMBERLIST_ANALYTICS_ADMIN_EMAILS=notpranavshinde@gmail.com
 EMBERLIST_APP_ORIGIN=http://localhost:3000
 ```
 
-Production deployments should also configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for rate limiting across serverless instances.
+Production deployments should also configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for rate limiting and anonymous aggregate analytics. Add `https://emberlist.dev/api/admin/auth/google/callback` to the Google web OAuth client. The private dashboard is available at `emberlist.dev/#/stats`; it requests only Google profile/email access and is independent of Drive authorization.
 
 ## Testing
 

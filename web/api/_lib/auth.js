@@ -306,6 +306,7 @@ export async function fetchGoogleProfile(accessToken) {
   return {
     email: typeof body.email === 'string' ? body.email : null,
     name: typeof body.name === 'string' ? body.name : null,
+    emailVerified: body.email_verified === true,
   };
 }
 

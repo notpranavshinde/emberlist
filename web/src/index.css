@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+.stats-panel { border: 1px solid #ded4cc; border-radius: 1.25rem; background: rgba(255,255,255,.88); box-shadow: 0 2px 14px rgba(60,42,31,.035); }
+.stats-primary { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: #ee6a3c; padding: .75rem 1.25rem; color: white; font-size: .875rem; font-weight: 700; }
+.stats-primary:hover { background: #d75e33; }
+.stats-secondary { display: inline-flex; height: 2.5rem; align-items: center; gap: .5rem; border: 1px solid #d8cec6; border-radius: .75rem; background: white; padding: 0 .875rem; font-size: .875rem; font-weight: 700; }
+.stats-secondary:disabled { opacity: .5; }
+.stats-icon { display: inline-flex; height: 2.5rem; width: 2.5rem; align-items: center; justify-content: center; border: 1px solid #d8cec6; border-radius: .75rem; background: white; }
+.stats-control { display: flex; height: 2.5rem; min-width: 8rem; align-items: center; border: 1px solid #dfd5cc; border-radius: .75rem; background: white; padding: 0 .75rem; color: #2f3839; font-size: .875rem; font-weight: 500; text-transform: none; letter-spacing: normal; }
+.stats-control select, .stats-control input { width: 100%; background: transparent; outline: none; }
+
 :root {
   /* Change this one value to try different warm shell colors. */
   --app-shell-bg: #fdf8ec;
