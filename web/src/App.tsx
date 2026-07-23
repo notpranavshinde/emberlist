@@ -1,4 +1,12 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import type {
   CSSProperties,
   ChangeEvent,
@@ -8232,7 +8240,41 @@ function ChoiceDialog({
     fallbackTarget?.focus();
   }, []);
 
-  return (
+  useLayoutEffect(() => {
+    if (!anchorRect) return;
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const positionDialog = () => {
+      const viewportMargin = 16;
+      const anchorGap = 8;
+      const left = Math.min(
+        Math.max(anchorRect.left, viewportMargin),
+        Math.max(
+          viewportMargin,
+          window.innerWidth - dialog.offsetWidth - viewportMargin,
+        ),
+      );
+      const top = Math.min(
+        Math.max(anchorRect.bottom + anchorGap, viewportMargin),
+        Math.max(
+          viewportMargin,
+          window.innerHeight - dialog.offsetHeight - viewportMargin,
+        ),
+      );
+
+      dialog.style.left = `${left}px`;
+      dialog.style.top = `${top}px`;
+      dialog.style.visibility = "visible";
+    };
+
+    positionDialog();
+    window.addEventListener("resize", positionDialog);
+    return () => window.removeEventListener("resize", positionDialog);
+  }, [anchorRect]);
+
+  return createPortal(
     <div
       data-overlay-dialog="true"
       onMouseDown={stopDialogEvent}
@@ -8246,10 +8288,12 @@ function ChoiceDialog({
         style={
           anchorRect
             ? {
-                position: "absolute",
-                top: Math.min(anchorRect.bottom + 8, window.innerHeight - 400),
-                left: Math.min(anchorRect.left, window.innerWidth - 680), // Approx width calculation
+                position: "fixed",
+                top: 16,
+                left: 16,
+                width: "calc(100vw - 32px)",
                 maxHeight: "min(82vh, 760px)",
+                visibility: "hidden",
               }
             : undefined
         }
@@ -8280,7 +8324,8 @@ function ChoiceDialog({
         ) : null}
         {footer ? <div className="mt-4 shrink-0">{footer}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
