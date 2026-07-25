@@ -80,7 +80,9 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -196,7 +198,9 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
     BackHandler {
         coroutineScope.launch {
             commitPendingChanges()
-            navController.popBackStack()
+            withContext(Dispatchers.Main.immediate) {
+                navController.popBackStack()
+            }
         }
     }
 

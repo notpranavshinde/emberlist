@@ -17,10 +17,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class QuickAddFlowTest {
-    @get:Rule
+    private val boundDriveWorkspaceRule = BoundDriveWorkspaceRule()
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val rules: RuleChain = RuleChain
+        .outerRule(boundDriveWorkspaceRule)
+        .around(composeRule)
 
     @Test
     fun quickAddReusesExistingSpacedProjectAndSectionSuggestions() {

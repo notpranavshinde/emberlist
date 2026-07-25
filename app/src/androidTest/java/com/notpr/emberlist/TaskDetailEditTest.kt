@@ -10,7 +10,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.espresso.Espresso.pressBack
 import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.data.model.ProjectEntity
 import com.notpr.emberlist.data.model.SectionEntity
@@ -20,10 +19,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class TaskDetailEditTest {
-    @get:Rule
+    private val boundDriveWorkspaceRule = BoundDriveWorkspaceRule()
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val rules: RuleChain = RuleChain
+        .outerRule(boundDriveWorkspaceRule)
+        .around(composeRule)
 
     @Test
     fun openingAndClosingTaskDetailDoesNotMutateExistingSpacedProjectTask() {
@@ -57,7 +62,7 @@ class TaskDetailEditTest {
         }
         composeRule.onNodeWithTag("task-detail-input")
             .assertIsDisplayed()
-        pressBack()
+        pressBackThroughActivity()
 
         val persisted = runBlocking { app.container.database.taskDao().getTask(task.id) }!!
         assertEquals(task.title, persisted.title)
@@ -112,7 +117,7 @@ class TaskDetailEditTest {
             composeRule.onAllNodesWithText("home decor").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("home decor").performClick()
-        pressBack()
+        pressBackThroughActivity()
 
         val persisted = runBlocking { app.container.database.taskDao().getTask(task.id) }!!
         assertEquals(task.title, persisted.title)
@@ -128,6 +133,13 @@ class TaskDetailEditTest {
             composeRule.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithTag("search-task-$taskId").performClick()
+    }
+
+    private fun pressBackThroughActivity() {
+        composeRule.runOnUiThread {
+            composeRule.activity.onBackPressedDispatcher.onBackPressed()
+        }
+        composeRule.waitForIdle()
     }
 
     private fun task(

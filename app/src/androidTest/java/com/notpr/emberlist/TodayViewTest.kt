@@ -22,12 +22,14 @@ import org.junit.rules.RuleChain
 class TodayViewTest {
     private val notificationPermissionRule =
         GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
+    private val boundDriveWorkspaceRule = BoundDriveWorkspaceRule()
 
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @get:Rule
     val rules: RuleChain = RuleChain
         .outerRule(notificationPermissionRule)
+        .around(boundDriveWorkspaceRule)
         .around(composeRule)
 
     @Test

@@ -13,10 +13,16 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class OnboardingFlowTest {
-    @get:Rule
+    private val boundDriveWorkspaceRule = BoundDriveWorkspaceRule()
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val rules: RuleChain = RuleChain
+        .outerRule(boundDriveWorkspaceRule)
+        .around(composeRule)
 
     @Before
     fun resetWorkspaceAndOnboarding() {

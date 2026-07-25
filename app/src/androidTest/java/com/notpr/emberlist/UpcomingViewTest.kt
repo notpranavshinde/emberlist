@@ -7,10 +7,16 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class UpcomingViewTest {
-    @get:Rule
+    private val boundDriveWorkspaceRule = BoundDriveWorkspaceRule()
     val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @get:Rule
+    val rules: RuleChain = RuleChain
+        .outerRule(boundDriveWorkspaceRule)
+        .around(composeRule)
 
     @Test
     fun upcomingTabRenders() {
