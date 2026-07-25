@@ -13,9 +13,9 @@ Set CSP via HTTP response headers in production (configured in `web/vercel.json`
 
 ```text
 default-src 'self';
-script-src 'self' https://accounts.google.com;
-connect-src 'self' https://www.googleapis.com https://accounts.google.com;
-frame-src https://accounts.google.com/gsi/;
+script-src 'self';
+connect-src 'self';
+frame-src 'none';
 style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
 font-src 'self' https://fonts.gstatic.com;
 img-src 'self' data:;
@@ -25,7 +25,7 @@ form-action 'self';
 object-src 'none';
 ```
 
-The default production auth path now calls Google only from Vercel functions. The Google origins remain in CSP so the explicit `legacy_spa` fallback and Google redirect pages can still operate during troubleshooting.
+The browser reaches Google through top-level OAuth redirects. Google API calls happen only in Vercel functions, so Google script, frame, and connection origins are not allowed by the application CSP.
 
 ## Rollout
 1. Run as `Content-Security-Policy-Report-Only` from HTTP headers.

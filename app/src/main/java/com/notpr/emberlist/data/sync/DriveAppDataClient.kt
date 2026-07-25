@@ -1,8 +1,5 @@
 package com.notpr.emberlist.data.sync
 
-import android.content.Context
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport
 import com.google.api.client.http.ByteArrayContent
 import com.google.api.client.json.gson.GsonFactory
@@ -24,23 +21,16 @@ interface DriveAppDataClient {
     suspend fun listSyncFiles(name: String): List<DriveFileRef>
     suspend fun downloadPayload(fileId: String): SyncPayload?
     suspend fun uploadPayload(name: String, payload: SyncPayload, existingFileId: String?): String
-    suspend fun deleteFile(fileId: String)
 }
 
 class GoogleDriveAppDataClient(
-    context: Context,
-    account: GoogleSignInAccount
+    accessToken: String
 ) : DriveAppDataClient {
     private val json = syncPayloadJson
     private val service: Drive = Drive.Builder(
         GoogleNetHttpTransport.newTrustedTransport(),
         GsonFactory.getDefaultInstance(),
-        GoogleAccountCredential.usingOAuth2(
-            context.applicationContext,
-            listOf(DriveScopes.DRIVE_APPDATA)
-        ).apply {
-            selectedAccount = account.account
-        }
+        { request -> request.headers.authorization = "Bearer $accessToken" }
     )
         .setApplicationName("Emberlist")
         .build()
@@ -79,12 +69,6 @@ class GoogleDriveAppDataClient(
             }
             request.setFields("id").execute().id
         }
-
-    override suspend fun deleteFile(fileId: String) {
-        withContext(Dispatchers.IO) {
-        service.files().delete(fileId).execute()
-        }
-    }
 }
 
 internal val syncPayloadJson = Json {

@@ -172,11 +172,34 @@ class DriveSyncServiceTest {
 
         assertTrue(result is SyncResult.Failure)
         assertEquals(
-            "Cloud sync file is invalid or corrupted. Local data was not changed. Use Reset cloud sync to recreate it.",
+            "Cloud sync file is invalid or corrupted. Local data was not changed.",
             (result as SyncResult.Failure).message
         )
         assertTrue(store.importedPayloads.isEmpty())
         assertNull(drive.lastUploadedPayload)
+    }
+
+    @Test
+    fun confirmedCorruptRecoveryOverwritesNewestFileWithLocalPayload() = runBlocking {
+        val local = payload(taskTitle = "Local recovery")
+        val drive = FakeDriveAppDataClient(
+            files = mutableListOf(
+                DriveFileRef("older", modifiedTimeMs = 10L),
+                DriveFileRef("newest", modifiedTimeMs = 20L)
+            )
+        )
+        val service = DriveSyncService(
+            context = context,
+            payloadStore = FakeSyncPayloadStore(local),
+            syncManager = SyncManager(nowProvider = { 100L }, payloadIdFactory = { "merged" }),
+            driveClientProvider = { drive },
+            nowProvider = { 100L }
+        )
+
+        val result = service.replaceCorruptRemoteWithLocal()
+
+        assertTrue(result is SyncResult.Success)
+        assertEquals("Local recovery", drive.lastUploadedPayload?.tasks?.single()?.title)
     }
 
     @Test
@@ -203,28 +226,6 @@ class DriveSyncServiceTest {
 
         assertEquals(2, drive.listCalls)
         assertEquals(1, drive.maxConcurrentCalls)
-    }
-
-    @Test
-    fun resetRemoteSyncFileDeletesAllMatchingCloudFiles() = runBlocking {
-        val drive = FakeDriveAppDataClient(
-            files = mutableListOf(
-                DriveFileRef("file-1", modifiedTimeMs = 10L),
-                DriveFileRef("file-2", modifiedTimeMs = 20L)
-            )
-        )
-        val service = DriveSyncService(
-            context = context,
-            payloadStore = FakeSyncPayloadStore(payload(taskTitle = "Local")),
-            syncManager = SyncManager(nowProvider = { 100L }, payloadIdFactory = { "merged" }),
-            driveClientProvider = { drive },
-            nowProvider = { 100L }
-        )
-
-        val result = service.resetRemoteSyncFile()
-
-        assertTrue(result is SyncResult.Success)
-        assertEquals(listOf("file-1", "file-2"), drive.deletedFileIds)
     }
 
     private fun payload(
@@ -338,7 +339,6 @@ private open class FakeDriveAppDataClient(
     private val payloads: MutableMap<String, SyncPayload> = mutableMapOf()
 ) : DriveAppDataClient {
     var lastUploadedPayload: SyncPayload? = null
-    val deletedFileIds = mutableListOf<String>()
 
     override suspend fun listSyncFiles(name: String): List<DriveFileRef> = files.toList()
 
@@ -352,12 +352,6 @@ private open class FakeDriveAppDataClient(
         }
         lastUploadedPayload = payload
         return fileId
-    }
-
-    override suspend fun deleteFile(fileId: String) {
-        deletedFileIds += fileId
-        files.removeAll { it.id == fileId }
-        payloads.remove(fileId)
     }
 }
 
@@ -380,6 +374,4 @@ private class BlockingDriveAppDataClient(
     override suspend fun downloadPayload(fileId: String): SyncPayload? = null
 
     override suspend fun uploadPayload(name: String, payload: SyncPayload, existingFileId: String?): String = "new-file"
-
-    override suspend fun deleteFile(fileId: String) = Unit
 }

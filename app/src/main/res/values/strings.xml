@@ -23,7 +23,7 @@
     <string name="getting_started_capture">Capture tasks with the + button.</string>
     <string name="getting_started_language">Dates, times, priorities, and recurrence work in plain language.</string>
     <string name="getting_started_projects">Projects are optional and useful when tasks need grouping.</string>
-    <string name="getting_started_sync">Google Drive sync is optional.</string>
+    <string name="getting_started_sync">Google Drive sync is automatic and always on.</string>
     <string name="getting_started_show_welcome">Show welcome on Today</string>
     <string name="getting_started_open_quick_add">Open Quick Add</string>
     <string name="analytics_setting">Share anonymous usage analytics</string>

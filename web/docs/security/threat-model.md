@@ -15,7 +15,7 @@
 - Task/workspace data (projects, tasks, reminders, locations).
 - Google refresh token encrypted in the server-auth cookie.
 - Short-lived Google access token used inside serverless API calls.
-- Cloud session profile hints (email/name in localStorage).
+- Cloud session profile hints and stable account binding (subject/email/name in localStorage and IndexedDB metadata).
 
 ## Top threats (STRIDE)
 - **Spoofing**: account confusion if stale login hint or multi-account browser context.
@@ -30,6 +30,9 @@
 - Browser JavaScript does not receive Google access or refresh tokens in the default production flow.
 - Refresh token cookie is encrypted, `Secure`, `HttpOnly`, and `SameSite=Lax`.
 - Sync file scope limited to `drive.appdata`.
+- Workspace routes are blocked until a backend Google session is present.
+- IndexedDB workspace data is bound to the stable Google subject identifier; a mismatched account is rejected before merge.
+- Sign-out requires a final sync, then clears workspace storage without deleting the remote Drive file.
 
 ## Required mitigations before broad launch
 1. Enforce CSP + security headers in production.

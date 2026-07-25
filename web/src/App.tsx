@@ -81,9 +81,9 @@ import {
 } from "./lib/banner";
 import {
   AUTO_SYNC_DEBOUNCE_MS,
+  resolveDebouncedSyncDelay,
   shouldRunActivationSync,
   shouldRunConnectivityRegainSync,
-  shouldScheduleDebouncedSync,
 } from "./lib/autoSync";
 import {
   appendActivityEntry,
@@ -94,7 +94,7 @@ import {
   extractBulkQuickAddLines,
   shouldPromptBulkQuickAdd,
 } from "./lib/bulkQuickAdd";
-import { db } from "./lib/db";
+import { db, type AccountBinding } from "./lib/db";
 import { reconcileLocalPersistPayload } from "./lib/localSync";
 import {
   completeOnboarding,
@@ -160,7 +160,12 @@ import {
   type WeekStartsOn,
 } from "./lib/webPreferences";
 import { resolveGoShortcut, shortcutSections } from "./lib/webShortcuts";
-import { getStoredItem, removeStoredItem, setStoredItem } from "./lib/webStorage";
+import {
+  getStoredItem,
+  removeStoredItem,
+  removeStoredItemsByPrefix,
+  setStoredItem,
+} from "./lib/webStorage";
 import {
   archiveTask,
   canReparentTaskAsSubtask,
@@ -215,11 +220,6 @@ import type {
 } from "./types/sync";
 
 const syncEngine = new SyncEngine();
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim() ?? "";
-const GOOGLE_AUTH_MODE =
-  import.meta.env.VITE_GOOGLE_AUTH_MODE?.trim() === "legacy_spa"
-    ? "legacy_spa"
-    : "backend";
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: "All", value: "ALL" },
   { label: "Overdue", value: "OVERDUE" },
@@ -235,7 +235,7 @@ const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
 ];
 
 type BootState = "loading" | "ready" | "error";
-type SyncMode = "google_drive" | "local";
+type SyncMode = "google_drive";
 type Banner = {
   id: number;
   tone: "success" | "error" | "info";
@@ -287,7 +287,6 @@ function App() {
   );
   const [hasPendingLocalChanges, setHasPendingLocalChanges] = useState(false);
   const [isResettingCache, setIsResettingCache] = useState(false);
-  const [isResettingCloud, setIsResettingCloud] = useState(false);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [quickAddOverride, setQuickAddOverride] =
@@ -310,15 +309,11 @@ function App() {
       getDefaultWebDisplayPreferences().use24HourTime,
     ),
   );
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState(() =>
-    readStoredBoolean("emberlist.autoSyncEnabled", true),
-  );
+  const autoSyncEnabled = true;
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(() =>
     readStoredBoolean("emberlist.autoBackupEnabled", true),
   );
-  const [syncMode, setSyncMode] = useState<SyncMode>(() =>
-    readStoredSyncMode("emberlist.syncMode", "google_drive"),
-  );
+  const [syncMode, setSyncMode] = useState<SyncMode>("google_drive");
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() =>
     readStoredNumber("emberlist.lastCloudSyncAt"),
   );
@@ -328,6 +323,9 @@ function App() {
   const [cloudSession, setCloudSession] = useState<CloudSession | null>(() =>
     readStoredCloudSession(),
   );
+  const [workspaceBinding, setWorkspaceBinding] =
+    useState<AccountBinding | null>(null);
+  const [accountMismatch, setAccountMismatch] = useState<CloudSession | null>(null);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
   const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>(() =>
     readStoredActivityEntries(),
@@ -378,25 +376,25 @@ function App() {
     >(),
   );
   const syncService = useMemo<CloudSyncService | null>(
-    () =>
-      createCloudSyncService({
-        clientId: GOOGLE_CLIENT_ID,
-        authMode: GOOGLE_AUTH_MODE,
-      }),
+    () => createCloudSyncService(),
     [],
   );
-  const cloudSyncEnabled = syncMode === "google_drive";
-  const cloudConfigured = cloudSyncEnabled && Boolean(syncService);
-  const activeCloudSession = cloudSyncEnabled ? cloudSession : null;
+  const cloudSyncEnabled = true;
+  const cloudConfigured = true;
+  const activeCloudSession = cloudSession;
 
   useEffect(() => {
     if (!syncService) return;
     void syncService
       .init()
-      .then(() => {
+      .then(async () => {
         const session = syncService.getSession();
         if (session) {
           setCloudSession(session);
+          const metadata = await db.getWorkspaceMetadata();
+          if (metadata.binding && metadata.binding.accountId !== session.accountId) {
+            setAccountMismatch(session);
+          }
         }
       })
       .catch((error) => {
@@ -452,10 +450,6 @@ function App() {
   }, [cloudSession]);
 
   useEffect(() => {
-    syncService?.setPreferredLoginHint(cloudSession?.email ?? null);
-  }, [cloudSession?.email, syncService]);
-
-  useEffect(() => {
     isSyncingRef.current = isSyncing;
   }, [isSyncing]);
 
@@ -506,10 +500,7 @@ function App() {
   }, [use24HourTime]);
 
   useEffect(() => {
-    setStoredItem(
-      "emberlist.autoSyncEnabled",
-      JSON.stringify(autoSyncEnabled),
-    );
+    removeStoredItem("emberlist.autoSyncEnabled");
   }, [autoSyncEnabled]);
 
   useEffect(() => {
@@ -520,7 +511,7 @@ function App() {
   }, [autoBackupEnabled]);
 
   useEffect(() => {
-    setStoredItem("emberlist.syncMode", syncMode);
+    removeStoredItem("emberlist.syncMode");
   }, [syncMode]);
 
   useEffect(() => {
@@ -568,6 +559,20 @@ function App() {
   useEffect(() => startOnboardingAnalyticsDelivery(), []);
 
   useEffect(() => {
+    const handleAccountEvent = (event: StorageEvent) => {
+      if (event.key !== "emberlist.accountEvent") return;
+      payloadRef.current = null;
+      cloudSessionRef.current = null;
+      setPayload(null);
+      setCloudSession(null);
+      setWorkspaceBinding(null);
+      setHasPendingLocalChanges(false);
+    };
+    window.addEventListener("storage", handleAccountEvent);
+    return () => window.removeEventListener("storage", handleAccountEvent);
+  }, []);
+
+  useEffect(() => {
     persistAnalyticsEnabled(analyticsEnabled);
   }, [analyticsEnabled]);
 
@@ -585,7 +590,14 @@ function App() {
       setBootState("loading");
       setBootError(null);
       try {
-        const data = await db.getPayload();
+        const [data, metadata] = await Promise.all([
+          db.getPayload(),
+          db.getWorkspaceMetadata(),
+        ]);
+        setWorkspaceBinding(metadata.binding);
+        setHasPendingLocalChanges(
+          metadata.mutationGeneration !== metadata.uploadedGeneration,
+        );
         const repaired = repairRecurringTasks(data);
         const recurringMaintenance = describeRecurringMaintenance(repaired);
         if (recurringMaintenance) {
@@ -745,27 +757,7 @@ function App() {
     interactiveAuth: boolean;
     automatic: boolean;
   }): Promise<CloudSyncOutcome> {
-    if (!syncService) {
-      if (!automatic) {
-        const message =
-          "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
-        setLastSyncError(message);
-        showBanner("error", message);
-      }
-      return { status: "skipped" };
-    }
-
-    if (!cloudSyncEnabled) {
-      if (!automatic) {
-        showBanner(
-          "info",
-          "Sync mode is set to Local. Switch to Google Drive in Settings to use cloud sync.",
-        );
-      }
-      return { status: "skipped" };
-    }
-
-    if (automatic && !autoSyncEnabledRef.current) return { status: "skipped" };
+    if (!syncService) return { status: "skipped" };
     if (automatic && !cloudSessionRef.current) return { status: "skipped" };
     if (!interactiveAuth && !isOnlineRef.current) return { status: "skipped" };
 
@@ -793,9 +785,29 @@ function App() {
         getRecurringMaintenanceChangeCount(repaired) > 0,
       );
       setLastCloudSyncAt(Date.now());
-      setCloudSession(syncService.getSession());
+      const session = syncService.getSession();
+      setCloudSession(session);
+      if (session) {
+        const metadata = await db.getWorkspaceMetadata();
+        if (!metadata.binding) {
+          const binding: AccountBinding = {
+            accountId: session.accountId,
+            email: session.email,
+            name: session.name,
+            boundAt: Date.now(),
+            initialSyncCompleted: true,
+          };
+          await db.bindWorkspace(binding);
+          setWorkspaceBinding(binding);
+        } else if (metadata.binding.accountId !== session.accountId) {
+          setAccountMismatch(session);
+          throw new Error("A different Google account owns this browser cache.");
+        }
+      }
+      const syncedMetadata = await db.getWorkspaceMetadata();
       setHasPendingLocalChanges(
-        getRecurringMaintenanceChangeCount(repaired) > 0,
+        syncedMetadata.mutationGeneration !== syncedMetadata.uploadedGeneration ||
+          getRecurringMaintenanceChangeCount(repaired) > 0,
       );
       backoffAttemptRef.current = 0;
       backoffUntilRef.current = null;
@@ -822,7 +834,15 @@ function App() {
       );
       setLastSyncError(message);
       if (!automatic) {
-        showBanner("error", message);
+        if (message.toLowerCase().includes("invalid or corrupted")) {
+          showBanner("error", message, {
+            actionLabel: "Replace cloud copy",
+            persistOnNavigation: true,
+            onAction: handleReplaceCorruptCloudWorkspace,
+          });
+        } else {
+          showBanner("error", message);
+        }
       } else {
         const delayMs = Math.min(
           5 * 60_000,
@@ -872,6 +892,7 @@ function App() {
     const storedPayload = await db.getPayload();
     const reconciled = reconcileLocalPersistPayload(storedPayload, nextPayload);
     await db.savePayload(reconciled.payload);
+    if (markDirty) await db.markLocalMutation();
     payloadRef.current = reconciled.payload;
     setPayload(reconciled.payload);
     saveBrowserBackupSnapshot(reconciled.payload, markDirty);
@@ -879,9 +900,8 @@ function App() {
       setHasPendingLocalChanges(true);
       if (isSyncingRef.current) {
         followUpSyncRequestedRef.current = true;
-      } else if (
-        syncService &&
-        shouldScheduleDebouncedSync({
+      } else if (syncService) {
+        const syncDelay = resolveDebouncedSyncDelay({
           autoSyncEnabled: autoSyncEnabledRef.current,
           hasCloudSession: Boolean(cloudSessionRef.current),
           isOnline: isOnlineRef.current,
@@ -889,12 +909,13 @@ function App() {
           applyingRemoteChanges: false,
           lastSyncedAt: lastCloudSyncAtRef.current,
           now: Date.now(),
-        })
-      ) {
-        clearDebounceTimer();
-        debounceTimerRef.current = window.setTimeout(() => {
-          void runCloudSync({ interactiveAuth: false, automatic: true });
-        }, AUTO_SYNC_DEBOUNCE_MS);
+        });
+        if (syncDelay !== null) {
+          clearDebounceTimer();
+          debounceTimerRef.current = window.setTimeout(() => {
+            void runCloudSync({ interactiveAuth: false, automatic: true });
+          }, syncDelay);
+        }
       }
     }
   }
@@ -1017,8 +1038,7 @@ function App() {
 
   async function handleCloudSync() {
     if (!syncService) {
-      const message =
-        "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
+      const message = "Google Drive sync is temporarily unavailable.";
       setLastSyncError(message);
       showBanner("error", message);
       return;
@@ -1120,46 +1140,40 @@ function App() {
     await handleRestoreFromOnboarding();
   }
 
-  async function handleResetCloudSync() {
-    if (!syncService) {
-      const message =
-        "Cloud sync is not configured for this deployment. Set VITE_GOOGLE_CLIENT_ID and redeploy.";
-      setLastSyncError(message);
-      showBanner("error", message);
-      return;
-    }
-
-    setIsResettingCloud(true);
-    try {
-      await syncService.resetRemoteSyncFile();
-      setLastCloudSyncAt(null);
-      setLastSyncError(null);
-      showBanner(
-        "success",
-        "Cloud sync storage was reset. Sync again from the side with the data you want to keep.",
-      );
-    } catch (error) {
-      console.error("Failed to reset cloud sync", error);
-      showBanner(
-        "error",
-        error instanceof Error ? error.message : "Failed to reset cloud sync.",
-      );
-    } finally {
-      setIsResettingCloud(false);
-    }
-  }
-
   async function handleDisconnectCloud() {
     if (!syncService) return;
 
     try {
+      if (!isOnlineRef.current) {
+        throw new Error("Connect to the internet before signing out.");
+      }
+      const outcome = await runCloudSync({
+        interactiveAuth: false,
+        automatic: false,
+      });
+      if (outcome.status !== "success") {
+        throw new Error("The workspace must sync successfully before signing out.");
+      }
       await syncService.disconnect();
+      await db.clearWorkspace();
+      removeStoredItem("emberlist.browserBackup");
+      removeStoredItem("emberlist.activityEntries");
+      removeStoredItem(ONBOARDING_STORAGE_KEY);
+      removeStoredItem("emberlist.cloudSession");
+      removeStoredItemsByPrefix("emberlist.projectView.");
+      setActivityEntries([]);
+      setOnboardingState(null);
+      payloadRef.current = null;
+      setPayload(null);
+      setWorkspaceBinding(null);
+      setHasPendingLocalChanges(false);
       cloudSessionRef.current = null;
       setCloudSession(null);
       setLastSyncError(null);
+      setStoredItem("emberlist.accountEvent", String(Date.now()));
       showBanner(
         "info",
-        "Signed out of Google Drive for this browser session.",
+        "Signed out. Your Google Drive workspace was preserved.",
       );
     } catch (error) {
       showBanner(
@@ -1168,6 +1182,88 @@ function App() {
           ? error.message
           : "Failed to disconnect Google Drive.",
       );
+    }
+  }
+
+  async function handleDiscardCacheForAccount() {
+    if (!isOnlineRef.current) {
+      setLastSyncError("Connect to the internet before switching Google accounts.");
+      return;
+    }
+    if (!window.confirm(
+      "Discard this browser's cached workspace and load the currently signed-in Google account? Unsynced cache-only changes will be permanently lost.",
+    )) return;
+    await db.clearWorkspace();
+    removeStoredItem("emberlist.browserBackup");
+    removeStoredItem("emberlist.activityEntries");
+    removeStoredItem(ONBOARDING_STORAGE_KEY);
+    removeStoredItemsByPrefix("emberlist.projectView.");
+    setActivityEntries([]);
+    setOnboardingState(null);
+    setWorkspaceBinding(null);
+    setAccountMismatch(null);
+    await loadData();
+    await runCloudSync({ interactiveAuth: false, automatic: false });
+  }
+
+  async function handleReconnectCachedAccount() {
+    if (!syncService || !isOnlineRef.current) {
+      setLastSyncError("Connect to the internet before switching Google accounts.");
+      return;
+    }
+    try {
+      await syncService.disconnect();
+      cloudSessionRef.current = null;
+      setCloudSession(null);
+      setAccountMismatch(null);
+      setLastSyncError(null);
+      await syncService.login(true);
+    } catch (error) {
+      setLastSyncError(
+        error instanceof Error
+          ? error.message
+          : "Could not restart Google authorization.",
+      );
+    }
+  }
+
+  async function handleReplaceCorruptCloudWorkspace() {
+    if (!syncService || !window.confirm(
+      "Replace the unreadable Google Drive workspace with this browser's cached workspace? This cannot recover data that exists only in the unreadable cloud file.",
+    )) return;
+    try {
+      const localPayload = await syncService.replaceCorruptRemoteWithLocal();
+      const session = syncService.getSession();
+      const metadata = await db.getWorkspaceMetadata();
+      if (session && !metadata.binding) {
+        const binding: AccountBinding = {
+          accountId: session.accountId,
+          email: session.email,
+          name: session.name,
+          boundAt: Date.now(),
+          initialSyncCompleted: true,
+        };
+        await db.bindWorkspace(binding);
+        setWorkspaceBinding(binding);
+      }
+      setLastCloudSyncAt(Date.now());
+      setLastSyncError(null);
+      const updatedMetadata = await db.getWorkspaceMetadata();
+      setHasPendingLocalChanges(
+        updatedMetadata.mutationGeneration !== updatedMetadata.uploadedGeneration,
+      );
+      payloadRef.current = localPayload;
+      setPayload(localPayload);
+      showBanner(
+        "success",
+        "The unreadable cloud workspace was replaced with this browser's cached workspace.",
+      );
+    } catch (replacementError) {
+      const message = replacementError instanceof Error
+        ? replacementError.message
+        : "The cloud workspace could not be replaced.";
+      setLastSyncError(message);
+      showBanner("error", message);
     }
   }
 
@@ -1823,8 +1919,10 @@ function App() {
 
   useEffect(() => {
     const handleOnline = () => {
+      const wasOnline = isOnlineRef.current;
+      isOnlineRef.current = true;
       const shouldSync = shouldRunConnectivityRegainSync(
-        isOnlineRef.current,
+        wasOnline,
         true,
         {
           autoSyncEnabled: autoSyncEnabledRef.current,
@@ -1838,7 +1936,10 @@ function App() {
         void runCloudSync({ interactiveAuth: false, automatic: true });
       }
     };
-    const handleOffline = () => setIsOnline(false);
+    const handleOffline = () => {
+      isOnlineRef.current = false;
+      setIsOnline(false);
+    };
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
@@ -1940,6 +2041,30 @@ function App() {
     );
   }
 
+  const hashPath = (window.location.hash.split("?")[0].slice(1) || "/");
+  const publicEntry = isPublicMarketingPath(hashPath);
+  if (!publicEntry && (accountMismatch || !workspaceBinding)) {
+    return (
+      <DriveAccountGate
+        isOnline={isOnline}
+        isWorking={isSyncing}
+        error={lastSyncError}
+        mismatch={accountMismatch}
+        cachedEmail={workspaceBinding?.email ?? null}
+        canReplaceCorrupt={Boolean(
+          lastSyncError?.toLowerCase().includes("invalid or corrupted"),
+        )}
+        onConnect={() => void (
+          accountMismatch
+            ? handleReconnectCachedAccount()
+            : handleConnectCloudSync()
+        )}
+        onDiscardAndSwitch={() => void handleDiscardCacheForAccount()}
+        onReplaceCorrupt={() => void handleReplaceCorruptCloudWorkspace()}
+      />
+    );
+  }
+
   if (!payload) {
     return (
       <RecoveryScreen
@@ -1959,7 +2084,6 @@ function App() {
         onDismissBanner={() => setBanner(null)}
         onShowBanner={showBanner}
         onCloudSync={() => void handleCloudSync()}
-        onResetCloudSync={() => void handleResetCloudSync()}
         onResetLocalCache={() => void handleResetLocalCache()}
         onImport={handleImport}
         onCreateTask={handleCreateTask}
@@ -2013,7 +2137,6 @@ function App() {
         use24HourTime={use24HourTime}
         onToggleUse24HourTime={() => setUse24HourTime((value) => !value)}
         autoSyncEnabled={autoSyncEnabled}
-        onToggleAutoSyncEnabled={() => setAutoSyncEnabled((value) => !value)}
         autoBackupEnabled={autoBackupEnabled}
         onToggleAutoBackupEnabled={() =>
           setAutoBackupEnabled((value) => !value)
@@ -2026,7 +2149,6 @@ function App() {
         hasPendingLocalChanges={hasPendingLocalChanges}
         isOnline={isOnline}
         isSyncing={isSyncing}
-        isResettingCloud={isResettingCloud}
         isResettingCache={isResettingCache}
         lastCloudSyncAt={lastCloudSyncAt}
         lastLocalBackupAt={lastLocalBackupAt}
@@ -2147,7 +2269,6 @@ type WorkspaceShellProps = {
     >,
   ) => void;
   onCloudSync: () => void;
-  onResetCloudSync: () => void;
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   onCreateTask: (
@@ -2198,7 +2319,6 @@ type WorkspaceShellProps = {
   use24HourTime: boolean;
   onToggleUse24HourTime: () => void;
   autoSyncEnabled: boolean;
-  onToggleAutoSyncEnabled: () => void;
   autoBackupEnabled: boolean;
   onToggleAutoBackupEnabled: () => void;
   cloudConfigured: boolean;
@@ -2207,7 +2327,6 @@ type WorkspaceShellProps = {
   hasPendingLocalChanges: boolean;
   isOnline: boolean;
   isSyncing: boolean;
-  isResettingCloud: boolean;
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
   lastLocalBackupAt: number | null;
@@ -2243,7 +2362,6 @@ function WorkspaceShell({
   onDismissBanner,
   onShowBanner,
   onCloudSync,
-  onResetCloudSync,
   onResetLocalCache,
   onImport,
   onCreateTask,
@@ -2277,7 +2395,6 @@ function WorkspaceShell({
   use24HourTime,
   onToggleUse24HourTime,
   autoSyncEnabled,
-  onToggleAutoSyncEnabled,
   autoBackupEnabled,
   onToggleAutoBackupEnabled,
   cloudConfigured,
@@ -2286,7 +2403,6 @@ function WorkspaceShell({
   hasPendingLocalChanges,
   isOnline,
   isSyncing,
-  isResettingCloud,
   isResettingCache,
   lastCloudSyncAt,
   lastLocalBackupAt,
@@ -2333,7 +2449,6 @@ function WorkspaceShell({
   const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] =
     useState(false);
   const [createProjectValue, setCreateProjectValue] = useState("");
-  const [isResetCloudDialogOpen, setIsResetCloudDialogOpen] = useState(false);
   const [
     isRestoreBrowserBackupDialogOpen,
     setIsRestoreBrowserBackupDialogOpen,
@@ -2472,10 +2587,6 @@ function WorkspaceShell({
     if (!focusedTaskActionTaskIds.length) return;
     onDeleteTasks(focusedTaskActionTaskIds);
     closeFocusedTaskActionDialog(null);
-  }
-
-  function requestResetCloudSync() {
-    setIsResetCloudDialogOpen(true);
   }
 
   function requestRestoreBrowserBackup() {
@@ -2839,7 +2950,7 @@ function WorkspaceShell({
                 onClick={onDisconnectCloud}
                 className="mt-2 w-full rounded-lg border border-[var(--app-shell-border)] bg-[var(--app-shell-bg-card)] px-4 py-2.5 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface)]"
               >
-                Disconnect
+                Sign out
               </button>
             ) : null}
           </div>
@@ -3158,18 +3269,15 @@ function WorkspaceShell({
                       use24HourTime={use24HourTime}
                       onToggleUse24HourTime={onToggleUse24HourTime}
                       autoSyncEnabled={autoSyncEnabled}
-                      onToggleAutoSyncEnabled={onToggleAutoSyncEnabled}
                       autoBackupEnabled={autoBackupEnabled}
                       onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
                       onDisconnectCloud={onDisconnectCloud}
-                      onResetCloudSync={requestResetCloudSync}
                       onResetLocalCache={onResetLocalCache}
                       onImport={onImport}
                       onExportJson={onExportJson}
                       onSaveBrowserBackupNow={onSaveBrowserBackupNow}
                       onRestoreBrowserBackup={requestRestoreBrowserBackup}
                       isSyncing={isSyncing}
-                      isResettingCloud={isResettingCloud}
                       isResettingCache={isResettingCache}
                       lastCloudSyncAt={lastCloudSyncAt}
                       lastLocalBackupAt={lastLocalBackupAt}
@@ -3263,21 +3371,6 @@ function WorkspaceShell({
           }}
           onSubmit={(value) => void submitCreateProject(value)}
           submitLabel="Create project"
-        />
-      ) : null}
-
-      {isResetCloudDialogOpen ? (
-        <ConfirmDialog
-          title="Reset cloud sync"
-          description="Delete all Emberlist cloud sync files in Google Drive app data? Your local web data will stay intact."
-          confirmLabel={isResettingCloud ? "Resetting..." : "Reset cloud sync"}
-          tone="destructive"
-          disabled={isResettingCloud}
-          onClose={() => setIsResetCloudDialogOpen(false)}
-          onConfirm={() => {
-            setIsResetCloudDialogOpen(false);
-            void onResetCloudSync();
-          }}
         />
       ) : null}
 
@@ -3418,7 +3511,7 @@ function PublicSiteLayout({
                 Emberlist
               </p>
               <p className="text-xs text-[#7a746d]">
-                Offline-first tasks with Google Drive sync
+                Tasks synchronized through Google Drive
               </p>
             </div>
           </NavLink>
@@ -3493,9 +3586,9 @@ function PublicSection({
 function MarketingHomePage() {
   return (
     <PublicSiteLayout
-      eyebrow="Local-first task management"
+      eyebrow="Google Drive task management"
       title="A fast task app that speaks in natural language and syncs through your own Google Drive."
-      description="Capture work the way you think: dates, projects, priorities, repeats, reminders, and subtasks in one quick line. Emberlist stays usable offline first, then syncs privately when you connect Drive."
+      description="Capture work the way you think: dates, projects, priorities, repeats, reminders, and subtasks in one quick line. Sign in with Google once and Emberlist keeps the workspace synchronized across Android and the web."
     >
       <div className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
         <section className="rounded-[32px] border border-[var(--app-shell-border)] bg-[var(--app-surface)] p-6 shadow-sm md:p-8">
@@ -3557,9 +3650,9 @@ function MarketingHomePage() {
 
           <PublicSection title="Private by default">
             <p>
-              Your workspace is written locally first. If you enable Google
-              Drive, Emberlist syncs only its own app-specific file in your
-              Drive appData folder.
+              Emberlist synchronizes only its own app-specific file in your
+              Google Drive appData folder and never browses your regular Drive
+              documents.
             </p>
           </PublicSection>
         </div>
@@ -3572,10 +3665,10 @@ function MarketingHomePage() {
             </p>
           </PublicSection>
 
-          <PublicSection title="Offline-first workspace">
+          <PublicSection title="Reliable workspace cache">
             <p>
-              Keep planning even when the network is unreliable. Sync is a
-              layer on top of local data, not the thing holding the app up.
+              An account-bound device cache keeps the interface responsive and
+              queues temporary connection interruptions for automatic sync.
             </p>
           </PublicSection>
 
@@ -3614,7 +3707,7 @@ function PrivacyPolicyPage() {
     <PublicSiteLayout
       eyebrow="Privacy policy"
       title="How Emberlist stores and uses your data."
-      description={`Last updated ${LEGAL_LAST_UPDATED}. This page explains what data Emberlist uses, where it is stored, and what happens when you connect Google Drive sync.`}
+      description={`Last updated ${LEGAL_LAST_UPDATED}. This page explains what data Emberlist uses and how its required Google Drive workspace is stored.`}
     >
       <div className="grid gap-5">
         <PublicSection title="What Emberlist collects">
@@ -3624,7 +3717,7 @@ function PrivacyPolicyPage() {
             related task metadata.
           </p>
           <p>
-            If you connect Google Drive sync, Emberlist also reads your Google
+            Emberlist also reads your Google
             account email address and basic profile name so the app can show
             which Google account is currently connected.
           </p>
@@ -3644,7 +3737,7 @@ function PrivacyPolicyPage() {
             your device.
           </p>
           <p>
-            If you enable Google Drive sync, Emberlist stores a sync file in
+            Emberlist stores its sync file in
             your Google Drive appData folder. That folder is reserved for
             app-specific data and is not used to access your ordinary Drive
             files.
@@ -3657,7 +3750,7 @@ function PrivacyPolicyPage() {
             <li>create the Emberlist sync file in your appData folder</li>
             <li>read the current sync file</li>
             <li>
-              update or delete the Emberlist sync file when sync settings change
+              update the Emberlist sync file as your workspace changes
             </li>
           </ul>
           <p>
@@ -3669,10 +3762,9 @@ function PrivacyPolicyPage() {
         <PublicSection title="How Emberlist uses your data">
           <ul className="list-disc space-y-2 pl-5">
             <li>to show your tasks and projects inside the app</li>
-            <li>to keep your local workspace usable offline</li>
+            <li>to keep an account-bound device cache responsive</li>
             <li>
-              to sync your workspace between devices when you enable Google
-              Drive sync
+              to synchronize your workspace between authorized devices
             </li>
             <li>to show which account is connected for sync</li>
             <li>to understand onboarding, feature adoption, and reliability</li>
@@ -3709,13 +3801,12 @@ function PrivacyPolicyPage() {
         <PublicSection title="Sharing and retention">
           <p>
             Emberlist does not sell your personal data. Your data is stored
-            locally and, if enabled, inside your own Google Drive appData
-            storage.
+            in your own Google Drive appData storage and in account-bound
+            device caches.
           </p>
           <p>
-            You can disconnect Google Drive sync, reset cloud sync, clear local
-            browser data, or export your workspace from the app. Data retention
-            therefore depends largely on the storage you choose to keep.
+            You can sign out, clear account-bound browser data, or export your
+            workspace. Signing out preserves the sync file in your Google Drive.
           </p>
         </PublicSection>
 
@@ -3751,13 +3842,14 @@ function TermsOfServicePage() {
 
         <PublicSection title="Accounts and sync">
           <p>
-            Google Drive sync is optional. If you choose to connect Google
-            Drive, you are responsible for the Google account you authorize and
-            for the data stored there.
+            Google Drive access is required to use an Emberlist workspace. You
+            are responsible for the Google account you authorize and the data
+            stored there.
           </p>
           <p>
-            You can disconnect sync at any time. Emberlist may continue to store
-            your workspace locally on the device or browser you are using.
+            You can sign out at any time while connected. Emberlist synchronizes
+            pending changes, revokes access, and clears its account-bound device
+            cache while preserving the Drive workspace.
           </p>
         </PublicSection>
 
@@ -7015,18 +7107,15 @@ function SettingsPage({
   use24HourTime,
   onToggleUse24HourTime,
   autoSyncEnabled,
-  onToggleAutoSyncEnabled,
   autoBackupEnabled,
   onToggleAutoBackupEnabled,
   onDisconnectCloud,
-  onResetCloudSync,
   onResetLocalCache,
   onImport,
   onExportJson,
   onSaveBrowserBackupNow,
   onRestoreBrowserBackup,
   isSyncing,
-  isResettingCloud,
   isResettingCache,
   lastCloudSyncAt,
   lastLocalBackupAt,
@@ -7051,18 +7140,15 @@ function SettingsPage({
   use24HourTime: boolean;
   onToggleUse24HourTime: () => void;
   autoSyncEnabled: boolean;
-  onToggleAutoSyncEnabled: () => void;
   autoBackupEnabled: boolean;
   onToggleAutoBackupEnabled: () => void;
   onDisconnectCloud: () => void;
-  onResetCloudSync: () => void;
   onResetLocalCache: () => void;
   onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   onExportJson: () => void;
   onSaveBrowserBackupNow: () => void;
   onRestoreBrowserBackup: () => void;
   isSyncing: boolean;
-  isResettingCloud: boolean;
   isResettingCache: boolean;
   lastCloudSyncAt: number | null;
   lastLocalBackupAt: number | null;
@@ -7110,39 +7196,22 @@ function SettingsPage({
         </SettingsDisclosure>
 
         <SettingsDisclosure
-          title="Sync mode"
-          description="Choose whether this browser uses Google Drive sync or stays local-only."
+          title="Workspace storage"
+          description="Every Emberlist workspace is synchronized through Google Drive."
           defaultOpen
         >
           <div className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => onSyncModeChange("google_drive")}
-                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
-                  syncMode === "google_drive"
-                    ? "bg-[#EE6A3C] text-white"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[#FFFDFC]"
-                }`}
-              >
-                Google Drive
-              </button>
-              <button
-                type="button"
-                onClick={() => onSyncModeChange("local")}
-                className={`rounded-full px-4 py-3 text-sm font-semibold transition ${
-                  syncMode === "local"
-                    ? "bg-[#EE6A3C] text-white"
-                    : "border border-[#E1D5CA] bg-[var(--app-surface)] text-[#1E2D2F] hover:bg-[#FFFDFC]"
-                }`}
-              >
-                Local
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => onSyncModeChange("google_drive")}
+              className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white"
+            >
+              Google Drive required
+            </button>
             <p className="mt-3 text-sm leading-6 text-[#6D5C50]">
-              {syncMode === "google_drive"
-                ? "Google Drive keeps this workspace available across browsers and devices."
-                : "Local keeps everything on this browser only and hides Google Drive sync controls."}
+              Google Drive is the durable home for this workspace. This browser
+              keeps an account-bound cache for responsive editing and temporary
+              connection interruptions.
             </p>
           </div>
         </SettingsDisclosure>
@@ -7150,7 +7219,7 @@ function SettingsPage({
         {syncMode === "google_drive" ? (
         <SettingsDisclosure
           title="Cloud sync"
-          description="Connection status, sync account, and whether this browser should sync automatically."
+          description="Connection status for the required Google Drive workspace."
         >
           <div className="space-y-3">
             <InfoRow label="Status" value={cloudStatus.label} />
@@ -7170,7 +7239,7 @@ function SettingsPage({
             />
             <InfoRow
               label="Auto sync"
-              value={autoSyncEnabled ? "Enabled" : "Manual only"}
+              value={autoSyncEnabled ? "Always on" : "Always on"}
             />
             <p className="rounded-[18px] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
               {cloudStatus.detail}
@@ -7186,41 +7255,15 @@ function SettingsPage({
                   onClick={onDisconnectCloud}
                   className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
                 >
-                  Disconnect
+                  Sign out
                 </button>
               ) : null}
-              <button
-                onClick={onResetCloudSync}
-                disabled={isResettingCloud || !cloudConfigured}
-                className="rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-3 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isResettingCloud
-                  ? "Resetting cloud sync..."
-                  : "Reset cloud sync"}
-              </button>
             </div>
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Run cloud sync automatically
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  When enabled, the web app syncs on changes, reconnect, focus,
-                  and load.
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={autoSyncEnabled}
-                onChange={onToggleAutoSyncEnabled}
-                className="h-5 w-5 accent-[#EE6A3C]"
-              />
-            </label>
           </div>
         </SettingsDisclosure>
         ) : null}
 
-        {syncMode === "local" ? (
+        {syncMode === "google_drive" ? (
         <SettingsDisclosure
           title="Backups and recovery"
           description="Save a browser snapshot, export JSON, or recover this browser's local workspace."
@@ -7302,7 +7345,7 @@ function SettingsPage({
 
         <SettingsDisclosure
           title="Display and behavior"
-          description="Local-only web preferences that do not affect Android."
+          description="Device-specific web preferences that do not affect Android."
           defaultOpen
         >
           <div className="space-y-4">
@@ -11216,6 +11259,91 @@ function EmptyState({
   );
 }
 
+function DriveAccountGate({
+  isOnline,
+  isWorking,
+  error,
+  mismatch,
+  cachedEmail,
+  canReplaceCorrupt,
+  onConnect,
+  onDiscardAndSwitch,
+  onReplaceCorrupt,
+}: {
+  isOnline: boolean;
+  isWorking: boolean;
+  error: string | null;
+  mismatch: CloudSession | null;
+  cachedEmail: string | null;
+  canReplaceCorrupt: boolean;
+  onConnect: () => void;
+  onDiscardAndSwitch: () => void;
+  onReplaceCorrupt: () => void;
+}) {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-[#FAF6F2] px-5 py-10">
+      <section className="w-full max-w-lg rounded-[30px] border border-[#E7D4C6] bg-white p-7 shadow-[0_24px_70px_rgba(84,55,39,0.16)] sm:p-9">
+        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#B75B38]">
+          Google Drive workspace
+        </p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1E2D2F]">
+          {mismatch ? "Choose the correct Google account" : "Connect to continue"}
+        </h1>
+        <p className="mt-4 text-sm leading-6 text-[#6D5C50]">
+          {mismatch
+            ? `This browser cache belongs to ${cachedEmail ?? "another Google account"}, but Google returned ${mismatch.email ?? "a different account"}. Emberlist will never merge their workspaces.`
+            : "Emberlist keeps its synchronized workspace in your private Google Drive app data. Google access is required; your regular Drive files are never visible to Emberlist."}
+        </p>
+        {!isOnline ? (
+          <p className="mt-4 rounded-[18px] bg-[#FFF1EB] px-4 py-3 text-sm text-[#A24628]">
+            Connect to the internet to authorize Google Drive.
+          </p>
+        ) : null}
+        {error ? (
+          <p className="mt-4 rounded-[18px] bg-[#FFF1EB] px-4 py-3 text-sm text-[#A24628]">
+            {error}
+          </p>
+        ) : null}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={onConnect}
+            disabled={!isOnline || isWorking}
+            className="min-h-11 rounded-full bg-[#dc4c3e] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-55"
+          >
+            {isWorking ? "Connecting..." : mismatch ? "Use cached account" : "Continue with Google"}
+          </button>
+          {mismatch ? (
+            <button
+              type="button"
+              onClick={onDiscardAndSwitch}
+              disabled={!isOnline || isWorking}
+              className="min-h-11 rounded-full border border-[#F3B7A4] px-5 py-2.5 text-sm font-semibold text-[#A24628] disabled:opacity-55"
+            >
+              Discard cache and switch
+            </button>
+          ) : null}
+          {canReplaceCorrupt ? (
+            <button
+              type="button"
+              onClick={onReplaceCorrupt}
+              disabled={!isOnline || isWorking}
+              className="min-h-11 rounded-full border border-[#F3B7A4] px-5 py-2.5 text-sm font-semibold text-[#A24628] disabled:opacity-55"
+            >
+              Replace unreadable cloud copy
+            </button>
+          ) : null}
+        </div>
+        <p className="mt-5 text-xs leading-5 text-[#7A675B]">
+          <a className="underline" href="/#/privacy">Privacy</a>
+          {" · "}
+          <a className="underline" href="/#/terms">Terms</a>
+        </p>
+      </section>
+    </main>
+  );
+}
+
 function LoadingScreen({ label }: { label: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[var(--app-shell-bg)] px-6">
@@ -11376,7 +11504,7 @@ function getCloudStatus({
     return {
       label: "Unavailable",
       detail:
-        "This deployment is missing its Google client ID, so cloud sync is disabled until the site is redeployed with VITE_GOOGLE_CLIENT_ID.",
+        "Google Drive sync is temporarily unavailable.",
       tone: "warning",
     };
   }
@@ -11913,13 +12041,13 @@ function getRouteTitle(pathname: string, payload: SyncPayload): string {
 
 function getRouteDescription(pathname: string): string {
   if (pathname === "/") {
-    return "Emberlist is a local-first task manager with natural-language quick add, recurring tasks, reminders, subtasks, and optional Google Drive sync.";
+    return "Emberlist is a Google Drive-backed task manager with natural-language quick add, recurring tasks, reminders, and subtasks.";
   }
   if (pathname === "/privacy") {
-    return "Read how Emberlist stores local task data and uses Google Drive appData only when you enable sync.";
+    return "Read how Emberlist uses Google Drive appData and account-bound device caches.";
   }
   if (pathname === "/terms") {
-    return "Terms of service for using Emberlist, a local-first task management app with optional Google Drive sync.";
+    return "Terms of service for using Emberlist with its required Google Drive workspace.";
   }
   if (pathname.startsWith("/today")) {
     return "Open Emberlist Today to review overdue work, due tasks, recurring tasks, and completed items.";
@@ -11927,7 +12055,7 @@ function getRouteDescription(pathname: string): string {
   if (pathname.startsWith("/upcoming")) {
     return "Review upcoming Emberlist tasks, future dates, recurring work, and deadlines.";
   }
-  return "Open Emberlist to manage projects, tasks, subtasks, reminders, recurrence, and local-first Google Drive sync.";
+  return "Open Emberlist to manage projects, tasks, subtasks, reminders, recurrence, and Google Drive synchronization.";
 }
 
 function updateRouteMetadata(pathname: string, title: string) {
@@ -11942,7 +12070,7 @@ function updateRouteMetadata(pathname: string, title: string) {
 
   document.title =
     pathname === "/"
-      ? "Emberlist · Local-first task management"
+      ? "Emberlist · Google Drive task management"
       : `${title} · Emberlist`;
 
   let descriptionTag = document.querySelector<HTMLMetaElement>(
@@ -12040,15 +12168,6 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
   return raw === "true" || raw === "1" || raw === JSON.stringify(true);
 }
 
-function readStoredSyncMode(key: string, fallback: SyncMode): SyncMode {
-  if (typeof window === "undefined") return fallback;
-  const raw = getStoredItem(key);
-  if (raw === "google_drive" || raw === "local") {
-    return raw;
-  }
-  return fallback;
-}
-
 function readStoredWeekStartsOn(
   key: string,
   fallback: WeekStartsOn,
@@ -12097,10 +12216,13 @@ function readStoredCloudSession(): CloudSession | null {
     const raw = getStoredItem("emberlist.cloudSession");
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
+      accountId?: string;
       email?: string | null;
       name?: string | null;
     };
+    if (typeof parsed.accountId !== "string" || !parsed.accountId) return null;
     return {
+      accountId: parsed.accountId,
       email: typeof parsed.email === "string" ? parsed.email : null,
       name: typeof parsed.name === "string" ? parsed.name : null,
     };

@@ -75,6 +75,11 @@ class ReminderScheduler(
         }
     }
 
+    suspend fun cancelAll() {
+        repository.getEnabledReminders().forEach { cancelReminder(it.id) }
+        NotificationManagerCompat.from(context).cancelAll()
+    }
+
     fun dismissNotification(reminderId: String) {
         NotificationManagerCompat.from(context).cancel(reminderId.hashCode())
     }

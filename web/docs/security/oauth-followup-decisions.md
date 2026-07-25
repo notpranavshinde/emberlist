@@ -7,7 +7,7 @@ Findings:
 - Production web sync no longer uses the implicit/token redirect flow by default.
 - Google access and refresh tokens are not exposed to browser JavaScript in the default flow.
 - The browser receives an HttpOnly encrypted session cookie and uses same-origin BFF endpoints for Drive appData operations.
-- The legacy Google Identity Services token flow remains available only behind `VITE_GOOGLE_AUTH_MODE=legacy_spa` for troubleshooting.
+- The legacy Google Identity Services token flow has been removed.
 
 Residual risks:
 - Refresh tokens are encrypted client-side in cookies rather than stored in a server database. This is acceptable for friend testing, but a persistent backend store would give better revocation, audit, and token-rotation options.
@@ -19,18 +19,17 @@ Decision:
 - Revisit database-backed token storage before broader public launch.
 
 ## Android Google Drive Auth Audit
-Current Android sync uses `GoogleSignIn` with `DriveScopes.DRIVE_APPDATA`, then constructs a Drive client through `GoogleAccountCredential.usingOAuth2`.
+Current Android sync uses Google Play services `AuthorizationClient` with `DriveScopes.DRIVE_APPDATA`, then constructs a Drive client with the returned short-lived access token.
 
 Findings:
 - Scope is appropriately narrow: only Drive appData.
 - Android does not handle Google refresh tokens directly in app code.
 - Sync behavior matches the web contract: one hidden `emberlist_sync.json` file in appData, newest duplicate file wins, malformed remote data fails safely.
-- The Android implementation still depends on legacy `GoogleSignIn` APIs.
+- The local Room workspace is bound to the stable Google account identifier returned by authorization.
 
 Decision:
-- Do not block friend testing on Android auth migration.
-- Keep Android's current implementation until after web friend testing.
-- Later migration target: modern Google Identity Services / Credential Manager guidance for Android, preserving `drive.appdata` as the only Drive scope.
+- Ship the modern authorization flow with mandatory Drive onboarding.
+- Preserve `drive.appdata` as the only Drive data scope.
 
 ## Cross-Account Protection
 Decision:
@@ -50,8 +49,8 @@ Decision:
 - Stay single-consent for now.
 
 Reasoning:
-- Google Drive sync is a core opt-in feature, and it requires one non-basic scope: `https://www.googleapis.com/auth/drive.appdata`.
-- Requesting that scope only when the user chooses Google Drive already provides contextual consent.
+- Google Drive sync is a core required feature, and it requires one non-basic scope: `https://www.googleapis.com/auth/drive.appdata`.
+- Request that scope during mandatory workspace onboarding with clear contextual consent.
 - There are no optional Google features that would benefit from staged scopes yet.
 
 Revisit when:

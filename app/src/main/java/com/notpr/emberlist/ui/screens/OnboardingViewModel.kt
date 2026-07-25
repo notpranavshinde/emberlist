@@ -2,6 +2,7 @@ package com.notpr.emberlist.ui.screens
 
 import android.content.Context
 import android.content.Intent
+import android.app.PendingIntent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.lifecycle.ViewModel
@@ -101,7 +102,7 @@ class OnboardingViewModel(
         }
     }
 
-    fun beginRestore(onAuthorizationRequired: (Intent) -> Unit) {
+    fun beginRestore(onAuthorizationRequired: (PendingIntent) -> Unit) {
         if (_restoreState.value == OnboardingRestoreState.Authorizing ||
             _restoreState.value == OnboardingRestoreState.Syncing) return
         viewModelScope.launch {
@@ -117,7 +118,7 @@ class OnboardingViewModel(
             when (val result = driveConnectAndSync.start()) {
                 is DriveConnectAndSyncResult.AuthorizationRequired -> {
                     _restoreState.value = OnboardingRestoreState.Authorizing
-                    onAuthorizationRequired(result.intent)
+                    onAuthorizationRequired(result.pendingIntent)
                 }
                 else -> consumeRestoreResult(result)
             }
@@ -134,14 +135,6 @@ class OnboardingViewModel(
             }
             _restoreState.value = OnboardingRestoreState.Syncing
             consumeRestoreResult(driveConnectAndSync.connectResult(data))
-        }
-    }
-
-    fun useAnotherAccount(onAuthorizationRequired: (Intent) -> Unit) {
-        viewModelScope.launch {
-            driveConnectAndSync.disconnect()
-            _restoreState.value = OnboardingRestoreState.Idle
-            beginRestore(onAuthorizationRequired)
         }
     }
 

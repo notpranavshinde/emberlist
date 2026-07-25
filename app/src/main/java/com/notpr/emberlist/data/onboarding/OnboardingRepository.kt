@@ -85,6 +85,18 @@ class OnboardingRepository(private val dataStore: DataStore<Preferences>) {
         return changed
     }
 
+    suspend fun resetForSignedOutWorkspace() {
+        dataStore.edit { prefs ->
+            prefs.remove(KEY_VERSION)
+            prefs.remove(KEY_STATUS)
+            prefs.remove(KEY_STARTED_AT)
+            prefs.remove(KEY_COMPLETED_AT)
+            prefs.remove(KEY_COMPLETION_METHOD)
+            prefs.remove(KEY_RESTORE_PENDING)
+            prefs.remove(KEY_VIEW_RECORDED)
+        }
+    }
+
     private suspend fun update(transform: (OnboardingState) -> OnboardingState) {
         dataStore.edit { prefs ->
             val current = readState(prefs) ?: return@edit

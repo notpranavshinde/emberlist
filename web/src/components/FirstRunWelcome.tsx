@@ -1,4 +1,4 @@
-import { Cloud, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import {
   ONBOARDING_EXAMPLES,
   type OnboardingExampleId,
@@ -11,13 +11,8 @@ export type OnboardingRestoreStatus =
   | { kind: "error"; message: string };
 
 export function FirstRunWelcome({
-  cloudConfigured,
-  isOnline,
-  restoreStatus,
   onAddTask,
   onChooseExample,
-  onRestore,
-  onUseAnotherAccount,
   onSkip,
 }: {
   cloudConfigured: boolean;
@@ -29,8 +24,6 @@ export function FirstRunWelcome({
   onUseAnotherAccount: () => void;
   onSkip: () => void;
 }) {
-  const restoring = restoreStatus.kind === "working";
-
   return (
     <>
       <div
@@ -71,57 +64,14 @@ export function FirstRunWelcome({
         </button>
         <button
           type="button"
-          data-testid="onboarding-restore-drive"
-          onClick={onRestore}
-          disabled={!cloudConfigured || restoring}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[#D8C9BD] bg-[var(--app-surface)] px-5 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-soft)] disabled:cursor-not-allowed disabled:opacity-55"
-        >
-          <Cloud size={17} />
-          {restoring ? "Restoring..." : "Restore from Google Drive"}
-        </button>
-        <button
-          type="button"
           data-testid="onboarding-skip"
           onClick={onSkip}
-          disabled={restoring}
           className="min-h-11 rounded-full px-4 py-2.5 text-sm font-semibold text-[#7A675B] transition hover:bg-black/5 disabled:opacity-55"
         >
           Skip for now
         </button>
         </div>
 
-        {!cloudConfigured ? (
-        <p className="mt-3 text-sm text-[#8A5A44]">
-          Google Drive restore is unavailable in this deployment.
-        </p>
-      ) : !isOnline ? (
-        <p className="mt-3 text-sm text-[#8A5A44]">
-          Connect to the internet to restore your workspace.
-        </p>
-        ) : null}
-
-        {restoreStatus.kind !== "idle" ? (
-        <div
-          aria-live="polite"
-          data-testid="onboarding-restore-status"
-          className={`mt-4 rounded-[18px] px-4 py-3 text-sm leading-6 ${
-            restoreStatus.kind === "error"
-              ? "bg-[#FFF1EB] text-[#A24628]"
-              : "bg-[var(--app-surface-soft)] text-[#6D5C50]"
-          }`}
-        >
-          <p>{restoreStatus.message}</p>
-          {restoreStatus.kind === "empty" ? (
-            <button
-              type="button"
-              onClick={onUseAnotherAccount}
-              className="mt-2 font-semibold text-[#B64B28] underline decoration-[#E8A78E] underline-offset-4"
-            >
-              Use another Google account
-            </button>
-          ) : null}
-        </div>
-        ) : null}
       </section>
     </>
   );

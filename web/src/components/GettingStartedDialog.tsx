@@ -40,7 +40,7 @@ export function GettingStartedDialog({
             ["Capture quickly", "Use + from anywhere, or press Q on the web, to open Quick Add."],
             ["Write naturally", "Add dates, times, priorities, and repeat schedules in the same sentence."],
             ["Organize only when useful", "Projects group related work, but every task can stand on its own."],
-            ["Sync is optional", "Connect Google Drive when you want the same workspace on another device."],
+            ["Sync is automatic", "Your workspace is kept in Google Drive and changes sync across your devices."],
           ].map(([title, description]) => (
             <div key={title} className="rounded-[18px] bg-[var(--app-surface-soft)] px-4 py-3">
               <p className="text-sm font-semibold text-[#1E2D2F]">{title}</p>

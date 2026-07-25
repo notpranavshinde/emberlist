@@ -53,14 +53,15 @@ describe('safeReturnTo', () => {
 describe('encrypted cookie lifetimes', () => {
   it('accepts a current session and rejects missing, expired, and future creation times', () => {
     const now = 2_000_000_000_000;
-    expect(readSession(cookieRequest(setSession({ refreshToken: 'token', createdAt: now })), secret, now))
-      .toMatchObject({ refreshToken: 'token', createdAt: now });
-    expect(readSession(cookieRequest(setSession({ refreshToken: 'token' })), secret, now)).toBeNull();
+    expect(readSession(cookieRequest(setSession({ refreshToken: 'token', accountId: 'account-1', createdAt: now })), secret, now))
+      .toMatchObject({ refreshToken: 'token', accountId: 'account-1', createdAt: now });
+    expect(readSession(cookieRequest(setSession({ refreshToken: 'token', accountId: 'account-1' })), secret, now)).toBeNull();
     expect(readSession(cookieRequest(setSession({
       refreshToken: 'token',
+      accountId: 'account-1',
       createdAt: now - SESSION_MAX_AGE_SECONDS * 1000 - 1,
     })), secret, now)).toBeNull();
-    expect(readSession(cookieRequest(setSession({ refreshToken: 'token', createdAt: now + 1 })), secret, now))
+    expect(readSession(cookieRequest(setSession({ refreshToken: 'token', accountId: 'account-1', createdAt: now + 1 })), secret, now))
       .toBeNull();
   });
 
@@ -141,7 +142,9 @@ describe('OAuth endpoints', () => {
         refresh_token: 'refresh',
       }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
+        sub: 'account-1',
         email: 'friend@example.test',
+        email_verified: true,
         name: 'Friend',
       }), { status: 200 })));
     const res = response();
@@ -151,7 +154,7 @@ describe('OAuth endpoints', () => {
     expect(res.getHeader('Location')).toBe('/#/settings?googleAuth=connected');
     expect(cookiePair(res, SESSION_COOKIE)).toMatch(new RegExp(`^${SESSION_COOKIE}=`));
     expect(readSession(cookieRequest(cookiePair(res, SESSION_COOKIE)), secret))
-      .toMatchObject({ refreshToken: 'refresh', email: 'friend@example.test' });
+      .toMatchObject({ refreshToken: 'refresh', accountId: 'account-1', email: 'friend@example.test' });
   });
 });
 

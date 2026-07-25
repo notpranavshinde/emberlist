@@ -1,6 +1,6 @@
 # Emberlist
 
-Emberlist is a task manager for Android and the web with fast task entry, projects, reminders, recurring work, backups, and optional Google Drive sync.
+Emberlist is a Google Drive-backed task manager for Android and the web with fast task entry, projects, reminders, recurring work, and backups.
 
 - Use the web app: [emberlist.dev](https://emberlist.dev)
 - Download Android: [emberlist-release.apk](https://github.com/notpranavshinde/emberlist/releases/download/android-latest/emberlist-release.apk)
@@ -10,9 +10,9 @@ Emberlist is a task manager for Android and the web with fast task entry, projec
 
 The Android and web clients are functional and share the same task and sync format.
 
-Android includes the complete device experience: task and project management, natural-language entry, recurring tasks, notifications, background scheduling, local backups, and Google Drive sync.
+Android includes the complete device experience: task and project management, natural-language entry, recurring tasks, notifications, background scheduling, private backups, and automatic Google Drive sync.
 
-The web client includes the main workspace, task and project editing, search, bulk actions, JSON backup tools, local browser storage, and Google Drive sync. Its OAuth and Drive operations use the serverless endpoints in `web/api/`.
+The web client includes the main workspace, task and project editing, search, bulk actions, JSON backup tools, an account-bound browser cache, and automatic Google Drive sync. Its OAuth and Drive operations use the serverless endpoints in `web/api/`.
 
 Open release work is tracked in [`TODO.md`](TODO.md).
 
@@ -25,13 +25,13 @@ Open release work is tracked in [`TODO.md`](TODO.md).
 - Android reminder notifications with complete, snooze, and open actions
 - JSON export and import
 - Seven-file retention for private Android backups
-- Optional Android and web sync through Google Drive `appDataFolder`
+- Mandatory account onboarding and automatic sync through Google Drive `appDataFolder`
 
 ## Storage and sync
 
-Android stores its workspace in Room. The web client stores its workspace in IndexedDB.
+Android keeps an account-bound workspace cache in Room. The web client keeps an account-bound workspace cache in IndexedDB. A Google account with Drive app-data access is required before either workspace can be used; returning users can keep editing cached data during a temporary outage.
 
-When Google Drive sync is enabled, both clients exchange a versioned `SyncPayload` through one hidden `emberlist_sync.json` file in the user's Drive app-data folder. Merge behavior is deterministic, uses deletion tombstones, and repairs invalid references after conflicts.
+Both clients automatically exchange a versioned `SyncPayload` through one hidden `emberlist_sync.json` file in the user's Drive app-data folder. Merge behavior is deterministic, uses deletion tombstones, and repairs invalid references after conflicts.
 
 The web serverless API handles OAuth and Drive requests but does not maintain a separate task database. Android system backup and device transfer exclude task content, locations, sync identity, and private JSON snapshots; only non-content settings are eligible.
 
@@ -81,7 +81,6 @@ The Vite server runs the client UI. Google sign-in and Drive sync also require a
 Web configuration:
 
 ```dotenv
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 EMBERLIST_AUTH_SECRET=at-least-32-random-bytes

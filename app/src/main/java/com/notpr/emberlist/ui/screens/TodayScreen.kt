@@ -86,11 +86,8 @@ fun TodayScreen(
     padding: PaddingValues,
     navController: NavHostController,
     onboardingState: OnboardingState? = null,
-    restoreState: OnboardingRestoreState = OnboardingRestoreState.Idle,
     onAddFirstTask: () -> Unit = {},
     onExample: (String, String) -> Unit = { _, _ -> },
-    onRestore: () -> Unit = {},
-    onUseAnotherAccount: () -> Unit = {},
     onSkip: () -> Unit = {}
 ) {
     val container = LocalAppContainer.current
@@ -256,7 +253,7 @@ fun TodayScreen(
                     }
                     IconButton(
                         onClick = { settingsViewModel.syncNow() },
-                        enabled = settings.syncEnabled && driveAuthState.hasDriveScope && !syncUiState.isSyncing
+                        enabled = driveAuthState.hasDriveScope && !syncUiState.isSyncing
                     ) {
                         if (syncUiState.isSyncing) {
                             androidx.compose.material3.CircularProgressIndicator(
@@ -268,18 +265,6 @@ fun TodayScreen(
                         }
                     }
                 }
-            }
-        }
-        if (workspaceTaskCount == 0 && !onboardingActive) {
-            item(key = "empty_workspace_restore") {
-                EmptyWorkspaceRestoreCard(
-                    driveConnected = driveAuthState.hasDriveScope,
-                    syncEnabled = settings.syncEnabled,
-                    isSyncing = syncUiState.isSyncing,
-                    syncMessage = syncUiState.status ?: syncUiState.error,
-                    onOpenSettings = { navController.navigate("settings") },
-                    onSync = { settingsViewModel.enableSyncAndSyncNow() }
-                )
             }
         }
         if (selectionMode) {
@@ -477,11 +462,8 @@ fun TodayScreen(
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.32f))
             )
             FirstRunWelcomeCard(
-                restoreState = restoreState,
                 onAddFirstTask = onAddFirstTask,
                 onExample = onExample,
-                onRestore = onRestore,
-                onUseAnotherAccount = onUseAnotherAccount,
                 onSkip = onSkip,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -617,16 +599,11 @@ fun TodayScreen(
 
 @Composable
 private fun FirstRunWelcomeCard(
-    restoreState: OnboardingRestoreState,
     onAddFirstTask: () -> Unit,
     onExample: (String, String) -> Unit,
-    onRestore: () -> Unit,
-    onUseAnotherAccount: () -> Unit,
     onSkip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val restoring = restoreState == OnboardingRestoreState.Authorizing ||
-        restoreState == OnboardingRestoreState.Syncing
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -654,118 +631,12 @@ private fun FirstRunWelcomeCard(
             }
             Button(
                 onClick = onAddFirstTask,
-                enabled = !restoring,
                 modifier = Modifier.fillMaxWidth().testTag("onboarding-primary")
             ) { Text(stringResource(R.string.onboarding_add_first_task)) }
-            OutlinedButton(
-                onClick = onRestore,
-                enabled = !restoring,
-                modifier = Modifier.fillMaxWidth().testTag("onboarding-restore")
-            ) {
-                if (restoring) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp).testTag("onboarding-restore-progress"),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text(stringResource(R.string.onboarding_restore_drive))
-                }
-            }
             TextButton(
                 onClick = onSkip,
-                enabled = !restoring,
                 modifier = Modifier.fillMaxWidth().testTag("onboarding-skip")
             ) { Text(stringResource(R.string.onboarding_skip)) }
-            when (restoreState) {
-                OnboardingRestoreState.Empty -> {
-                    Text(
-                        stringResource(R.string.onboarding_restore_empty),
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag("onboarding-restore-empty")
-                    )
-                    TextButton(onClick = onUseAnotherAccount) {
-                        Text(stringResource(R.string.onboarding_use_another_account))
-                    }
-                }
-                OnboardingRestoreState.Offline -> Text(
-                    stringResource(R.string.onboarding_restore_offline),
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("onboarding-restore-offline")
-                )
-                is OnboardingRestoreState.Failure -> {
-                    Text(
-                        restoreState.message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.testTag("onboarding-restore-failure")
-                    )
-                    TextButton(onClick = onUseAnotherAccount) {
-                        Text(stringResource(R.string.onboarding_use_another_account))
-                    }
-                }
-                else -> Unit
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyWorkspaceRestoreCard(
-    driveConnected: Boolean,
-    syncEnabled: Boolean,
-    isSyncing: Boolean,
-    syncMessage: String?,
-    onOpenSettings: () -> Unit,
-    onSync: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ListHorizontalPadding, vertical = ListControlsVerticalPadding)
-    ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(text = "No local tasks yet", style = MaterialTheme.typography.titleMedium)
-            Text(
-                text = "If you already use Emberlist on another device, connect Google Drive to restore your workspace. You can also start local-only and sync later.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            syncMessage?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (it.contains("failed", ignoreCase = true)) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    }
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (driveConnected) {
-                    Button(
-                        onClick = onSync,
-                        enabled = !isSyncing,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(if (syncEnabled) "Restore from Drive" else "Enable sync")
-                    }
-                } else {
-                    Button(
-                        onClick = onOpenSettings,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Connect Google Drive")
-                    }
-                }
-                OutlinedButton(
-                    onClick = onOpenSettings,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Settings")
-                }
-            }
         }
     }
 }

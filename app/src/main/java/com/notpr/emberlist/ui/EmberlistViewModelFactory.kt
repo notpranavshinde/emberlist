@@ -40,13 +40,16 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
                 QuickAddViewModel(container.repository, container.reminderScheduler)
             modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
                 SettingsViewModel(
+                    container.appContext,
+                    container.database,
                     container.settingsRepository,
                     container.repository,
                     container.driveAuthManager,
-                    container.driveSyncService,
                     container.syncStatusTracker,
                     container.onboardingAnalytics,
-                    container.driveConnectAndSync
+                    container.driveConnectAndSync,
+                    container.reminderScheduler,
+                    container.onboardingRepository
                 )
             modelClass.isAssignableFrom(OnboardingViewModel::class.java) ->
                 OnboardingViewModel(

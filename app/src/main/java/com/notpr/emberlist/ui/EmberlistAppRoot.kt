@@ -26,6 +26,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.IntentSenderRequest
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -87,6 +94,9 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     )
     val onboardingState by onboardingViewModel.state.collectAsState()
     val restoreState by onboardingViewModel.restoreState.collectAsState()
+    val driveWorkspace by container.settingsRepository.driveWorkspace.collectAsState(
+        initial = com.notpr.emberlist.data.settings.DriveWorkspaceState(null, null, null, false, false)
+    )
     var quickAddRequest by remember { mutableStateOf(QuickAddRequest()) }
     val onboardingFocused = currentRoute == NavRoute.Today.route &&
         onboardingState?.status == com.notpr.emberlist.data.onboarding.OnboardingStatus.ACTIVE &&
@@ -100,7 +110,7 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
     val firstTaskSavedMessage = stringResource(R.string.onboarding_saved)
     val workspaceRestoredMessage = stringResource(R.string.onboarding_restored)
     val viewUpcomingLabel = stringResource(R.string.onboarding_view_upcoming)
-    val driveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+    val driveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         onboardingViewModel.handleAuthorizationResult(result.data)
     }
 
@@ -148,6 +158,18 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                 event.undo()
             }
         }
+    }
+
+    if (!driveWorkspace.isBound) {
+        GoogleDriveGate(
+            restoreState = restoreState,
+            onConnect = {
+                onboardingViewModel.beginRestore { pendingIntent ->
+                    driveLauncher.launch(IntentSenderRequest.Builder(pendingIntent).build())
+                }
+            }
+        )
+        return
     }
 
     Scaffold(
@@ -229,7 +251,6 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                     padding = padding,
                     navController = navController,
                     onboardingState = onboardingState,
-                    restoreState = restoreState,
                     onAddFirstTask = {
                         onboardingViewModel.primaryClicked()
                         openQuickAdd(QuickAddOrigin.ONBOARDING)
@@ -237,12 +258,6 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                     onExample = { kind, value ->
                         onboardingViewModel.exampleClicked(kind)
                         openQuickAdd(QuickAddOrigin.ONBOARDING, value)
-                    },
-                    onRestore = {
-                        onboardingViewModel.beginRestore { driveLauncher.launch(it) }
-                    },
-                    onUseAnotherAccount = {
-                        onboardingViewModel.useAnotherAccount { driveLauncher.launch(it) }
                     },
                     onSkip = onboardingViewModel::dismiss
                 )
@@ -272,6 +287,42 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun GoogleDriveGate(
+    restoreState: com.notpr.emberlist.ui.screens.OnboardingRestoreState,
+    onConnect: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Connect Google Drive", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "Emberlist uses your Google Drive app data to keep one workspace available across your devices. Google access is required to continue.",
+            modifier = Modifier.padding(top = 12.dp, bottom = 20.dp)
+        )
+        when (restoreState) {
+            com.notpr.emberlist.ui.screens.OnboardingRestoreState.Authorizing ->
+                Text("Waiting for Google authorization…")
+            com.notpr.emberlist.ui.screens.OnboardingRestoreState.Syncing ->
+                Text("Preparing your workspace…")
+            com.notpr.emberlist.ui.screens.OnboardingRestoreState.Offline ->
+                Text("Connect to the internet to finish setup.", color = MaterialTheme.colorScheme.error)
+            is com.notpr.emberlist.ui.screens.OnboardingRestoreState.Failure ->
+                Text(restoreState.message, color = MaterialTheme.colorScheme.error)
+            else -> Unit
+        }
+        Button(
+            onClick = onConnect,
+            enabled = restoreState !is com.notpr.emberlist.ui.screens.OnboardingRestoreState.Authorizing &&
+                restoreState !is com.notpr.emberlist.ui.screens.OnboardingRestoreState.Syncing,
+            modifier = Modifier.fillMaxWidth().padding(top = 16.dp)
+        ) {
+            Text("Continue with Google")
         }
     }
 }

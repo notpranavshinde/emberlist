@@ -28,6 +28,7 @@ export default async function handler(req, res) {
       authenticated: Boolean(session),
       session: session
         ? {
+            accountId: session.accountId,
             email: session.email,
             name: session.name,
           }

@@ -34,11 +34,15 @@ export function shouldRunConnectivityRegainSync(wasOnline: boolean, isOnline: bo
 }
 
 export function shouldScheduleDebouncedSync(request: DebouncedSyncRequest): boolean {
+  return resolveDebouncedSyncDelay(request) !== null;
+}
+
+export function resolveDebouncedSyncDelay(request: DebouncedSyncRequest): number | null {
   const quietPeriodMs = request.syncQuietPeriodMs ?? AUTO_SYNC_QUIET_PERIOD_MS;
-  if (!isAutoSyncActive(request)) return false;
-  if (!request.isOnline || request.isSyncing || request.applyingRemoteChanges) return false;
-  if (request.lastSyncedAt !== null && request.now - request.lastSyncedAt < quietPeriodMs) {
-    return false;
-  }
-  return true;
+  if (!isAutoSyncActive(request)) return null;
+  if (!request.isOnline || request.isSyncing || request.applyingRemoteChanges) return null;
+  const quietPeriodRemaining = request.lastSyncedAt === null
+    ? 0
+    : Math.max(0, request.lastSyncedAt + quietPeriodMs - request.now);
+  return Math.max(AUTO_SYNC_DEBOUNCE_MS, quietPeriodRemaining);
 }

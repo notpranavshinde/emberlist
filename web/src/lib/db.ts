@@ -4,6 +4,23 @@ import { createEmptySyncPayload, ensureSyncPayload } from './syncPayload';
 
 const DB_NAME = 'emberlist_db';
 const DB_VERSION = 1;
+const ACCOUNT_BINDING_KEY = 'accountBinding';
+const MUTATION_GENERATION_KEY = 'mutationGeneration';
+const UPLOADED_GENERATION_KEY = 'uploadedGeneration';
+
+export type AccountBinding = {
+    accountId: string;
+    email: string | null;
+    name: string | null;
+    boundAt: number;
+    initialSyncCompleted: boolean;
+};
+
+export type WorkspaceMetadata = {
+    binding: AccountBinding | null;
+    mutationGeneration: number;
+    uploadedGeneration: number;
+};
 
 export class EmberlistDB {
     private db: IDBPDatabase | null = null;
@@ -34,7 +51,6 @@ export class EmberlistDB {
             tx.objectStore('tasks').clear(),
             tx.objectStore('reminders').clear(),
             tx.objectStore('locations').clear(),
-            tx.objectStore('metadata').clear(),
         ]);
 
         await Promise.all([
@@ -78,6 +94,65 @@ export class EmberlistDB {
         }, 'Local workspace payload');
     }
 
+    async getWorkspaceMetadata(): Promise<WorkspaceMetadata> {
+        if (!this.db) await this.init();
+        const store = this.db!.transaction('metadata', 'readonly').objectStore('metadata');
+        const [binding, mutationGeneration, uploadedGeneration] = await Promise.all([
+            store.get(ACCOUNT_BINDING_KEY),
+            store.get(MUTATION_GENERATION_KEY),
+            store.get(UPLOADED_GENERATION_KEY),
+        ]);
+        return {
+            binding: isAccountBinding(binding) ? binding : null,
+            mutationGeneration: typeof mutationGeneration === 'number' ? mutationGeneration : 0,
+            uploadedGeneration: typeof uploadedGeneration === 'number' ? uploadedGeneration : 0,
+        };
+    }
+
+    async bindWorkspace(binding: AccountBinding) {
+        if (!this.db) await this.init();
+        await this.db!.put('metadata', binding, ACCOUNT_BINDING_KEY);
+    }
+
+    async markLocalMutation(): Promise<number> {
+        if (!this.db) await this.init();
+        const tx = this.db!.transaction('metadata', 'readwrite');
+        const store = tx.objectStore('metadata');
+        const current = await store.get(MUTATION_GENERATION_KEY);
+        const next = (typeof current === 'number' ? current : 0) + 1;
+        await store.put(next, MUTATION_GENERATION_KEY);
+        await tx.done;
+        return next;
+    }
+
+    async markUploaded(generation: number) {
+        if (!this.db) await this.init();
+        const tx = this.db!.transaction('metadata', 'readwrite');
+        const store = tx.objectStore('metadata');
+        const current = await store.get(MUTATION_GENERATION_KEY);
+        if ((typeof current === 'number' ? current : 0) === generation) {
+            await store.put(generation, UPLOADED_GENERATION_KEY);
+        }
+        await tx.done;
+    }
+
+    async clearWorkspace() {
+        if (!this.db) await this.init();
+        const tx = this.db!.transaction(
+            ['projects', 'sections', 'tasks', 'reminders', 'locations', 'metadata'],
+            'readwrite',
+        );
+        await Promise.all([
+            tx.objectStore('projects').clear(),
+            tx.objectStore('sections').clear(),
+            tx.objectStore('tasks').clear(),
+            tx.objectStore('reminders').clear(),
+            tx.objectStore('locations').clear(),
+            tx.objectStore('metadata').clear(),
+        ]);
+        await tx.done;
+    }
+
     /**
      * Helper to get data for the UI, filtering out deleted items.
      */
@@ -106,3 +181,14 @@ export class EmberlistDB {
 }
 
 export const db = new EmberlistDB();
+
+function isAccountBinding(value: unknown): value is AccountBinding {
+    if (!value || typeof value !== 'object') return false;
+    const binding = value as Partial<AccountBinding>;
+    return typeof binding.accountId === 'string'
+        && binding.accountId.length > 0
+        && (binding.email === null || typeof binding.email === 'string')
+        && (binding.name === null || typeof binding.name === 'string')
+        && typeof binding.boundAt === 'number'
+        && binding.initialSyncCompleted === true;
+}

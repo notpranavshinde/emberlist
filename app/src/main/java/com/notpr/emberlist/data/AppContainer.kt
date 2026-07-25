@@ -12,6 +12,7 @@ import com.notpr.emberlist.data.onboarding.OnboardingRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveSyncService
 import com.notpr.emberlist.data.sync.DriveConnectAndSyncUseCase
+import com.notpr.emberlist.data.sync.DriveAuthorizationResult
 import com.notpr.emberlist.data.sync.GoogleDriveAppDataClient
 import com.notpr.emberlist.data.sync.observeAppForeground
 import com.notpr.emberlist.data.sync.observeNetworkConnectivity
@@ -20,6 +21,7 @@ import com.notpr.emberlist.data.sync.SyncCoordinator
 import com.notpr.emberlist.data.sync.SyncManager
 import com.notpr.emberlist.data.sync.SyncStatusTracker
 import com.notpr.emberlist.ui.UndoController
+import kotlinx.coroutines.flow.onEach
 
 class AppContainer(context: Context) {
     val appContext: Context = context.applicationContext
@@ -53,8 +55,10 @@ class AppContainer(context: Context) {
         payloadStore = backupManager,
         syncManager = syncManager,
         driveClientProvider = {
-            driveAuthManager.getAuthorizedAccount()?.let { account ->
-                GoogleDriveAppDataClient(appContext, account)
+            when (val authorization = driveAuthManager.authorize()) {
+                is DriveAuthorizationResult.Authorized ->
+                    GoogleDriveAppDataClient(authorization.access.accessToken)
+                else -> null
             }
         },
         statusTracker = syncStatusTracker
@@ -69,7 +73,9 @@ class AppContainer(context: Context) {
         context = appContext,
         settingsFlow = settingsRepository.settings,
         authFlow = driveAuthManager.state,
-        invalidationFlow = database.observeSyncInvalidations(),
+        invalidationFlow = database.observeSyncInvalidations().onEach {
+            settingsRepository.updateDrivePendingChanges(true)
+        },
         foregroundFlow = observeAppForeground(),
         onlineFlow = observeNetworkConnectivity(appContext),
         statusTracker = syncStatusTracker

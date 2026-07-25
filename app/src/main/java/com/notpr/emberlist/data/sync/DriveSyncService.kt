@@ -76,22 +76,21 @@ class DriveSyncService(
         }
     }
 
-    suspend fun resetRemoteSyncFile(): SyncResult = mutex.withLock {
+    suspend fun replaceCorruptRemoteWithLocal(): SyncResult = mutex.withLock {
         val driveClient = driveClientProvider() ?: return SyncResult.Failure("Google Drive is not connected.")
         return runCatching {
-            val existingFiles = driveClient.listSyncFiles(SYNC_FILE_NAME)
-            existingFiles.forEach { driveClient.deleteFile(it.id) }
+            val existingFile = driveClient.listSyncFiles(SYNC_FILE_NAME)
+                .maxWithOrNull(compareBy<DriveFileRef> { it.modifiedTimeMs ?: Long.MIN_VALUE }.thenBy { it.id })
+            val localPayload = payloadStore.exportSyncPayload(context)
+            driveClient.uploadPayload(SYNC_FILE_NAME, localPayload, existingFile?.id)
             SyncResult.Success(
-                payload = SyncPayload(
-                    exportedAt = nowProvider(),
-                    source = "android-reset"
-                ),
+                payload = localPayload,
                 syncedAt = nowProvider(),
-                remoteCreated = false
+                remoteCreated = existingFile == null
             )
         }.getOrElse { error ->
             SyncResult.Failure(
-                message = error.message ?: "Failed to reset cloud sync file.",
+                message = error.message ?: "Failed to replace the unreadable cloud workspace.",
                 cause = error
             )
         }
@@ -104,6 +103,6 @@ class DriveSyncService(
 
 private fun Throwable.toUserFacingSyncMessage(): String =
     when (this) {
-        is SerializationException -> "Cloud sync file is invalid or corrupted. Local data was not changed. Use Reset cloud sync to recreate it."
+        is SerializationException -> "Cloud sync file is invalid or corrupted. Local data was not changed."
         else -> message ?: "Sync failed."
     }

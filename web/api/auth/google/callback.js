@@ -50,10 +50,16 @@ export default async function handler(req, res) {
 
     const tokens = await exchangeCodeForTokens({ code, origin });
     const profile = await fetchGoogleProfile(tokens.access_token);
+    if (!profile.accountId || !profile.email || !profile.emailVerified) {
+      const profileError = new Error('Google did not return a verified account identity.');
+      profileError.statusCode = 400;
+      throw profileError;
+    }
     setSessionCookie(
       res,
       {
         refreshToken: tokens.refresh_token,
+        accountId: profile.accountId,
         email: profile.email,
         name: profile.name,
         createdAt: Date.now(),

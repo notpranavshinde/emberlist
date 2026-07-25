@@ -14,9 +14,10 @@
    - authorization callback state mismatch
    - insufficient permissions handling
    - network and timeout behavior
-   - legacy SPA auth fallback remains opt-in only
+   - session identity includes a stable Google subject identifier
+   - account-bound caches reject a different Google subject before merge
 3. **Storage safety**
-   - local cache reset behavior
+   - sign-out uploads pending changes before clearing the account-bound cache
    - stale/local backup corruption handling
 4. **Browser hardening checks**
    - CSP presence and allowed origins

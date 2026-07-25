@@ -1,6 +1,6 @@
 # Emberlist Web
 
-React and TypeScript client for Emberlist. Workspace data is stored in IndexedDB and can optionally sync with the Android client through Google Drive `appDataFolder`.
+React and TypeScript client for Emberlist. Google access is mandatory for workspace routes. IndexedDB is an account-bound cache, and changes automatically sync with Android through Google Drive `appDataFolder`.
 
 Product information and Android setup are in the [root README](../README.md).
 
@@ -14,7 +14,6 @@ npm run dev
 Google sign-in and Drive sync require a local runtime that serves the functions in `api/`.
 
 ```dotenv
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 EMBERLIST_AUTH_SECRET=at-least-32-random-bytes

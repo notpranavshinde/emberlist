@@ -10,7 +10,7 @@ export const ADMIN_SESSION_SECONDS = 12 * 60 * 60;
 const ADMIN_STATE_SECONDS = 10 * 60;
 
 export function getAdminConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
   const secret = process.env.EMBERLIST_ADMIN_AUTH_SECRET || '';
   const emails = new Set((process.env.EMBERLIST_ANALYTICS_ADMIN_EMAILS || '').split(',').map(value => value.trim().toLowerCase()).filter(Boolean));

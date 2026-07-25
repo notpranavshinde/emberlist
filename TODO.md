@@ -10,5 +10,9 @@
 ## Android Release
 
 - [ ] Repair ambiguous Compose selectors and activity startup handling so `connectedAndroidTest` passes reliably on physical devices.
-- [ ] Migrate Android Drive authorization from legacy `GoogleSignIn` APIs to Google's newer authorization stack before Play Store submission.
+- [x] Migrate Android Drive authorization from legacy `GoogleSignIn` APIs to Google's `AuthorizationClient`.
 - [ ] Update the Play Store Data Safety declaration for resettable anonymous product analytics before the next Android release.
+
+## Security Follow-up
+
+- [ ] Upgrade React Router when a release fixes `GHSA-qwww-vcr4-c8h2`; Emberlist uses client-only `HashRouter` and does not enable the affected RSC/Server Action mode.

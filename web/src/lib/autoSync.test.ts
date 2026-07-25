@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUTO_SYNC_QUIET_PERIOD_MS,
   isAutoSyncActive,
+  resolveDebouncedSyncDelay,
   shouldRunActivationSync,
   shouldRunConnectivityRegainSync,
   shouldRunForegroundSync,
@@ -38,9 +39,9 @@ describe('autoSync policy', () => {
     ).toBe(true);
   });
 
-  it('suppresses debounced syncs shortly after a successful sync', () => {
+  it('defers local changes until the post-sync quiet period ends', () => {
     expect(
-      shouldScheduleDebouncedSync({
+      resolveDebouncedSyncDelay({
         autoSyncEnabled: true,
         hasCloudSession: true,
         isOnline: true,
@@ -50,7 +51,7 @@ describe('autoSync policy', () => {
         now: 1_000,
         syncQuietPeriodMs: AUTO_SYNC_QUIET_PERIOD_MS,
       }),
-    ).toBe(false);
+    ).toBe(9_995);
   });
 
   it('does not schedule debounced syncs for remote-import changes', () => {

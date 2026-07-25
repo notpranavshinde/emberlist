@@ -99,21 +99,6 @@ export async function uploadSyncPayload(accessToken, payload) {
   return response.json();
 }
 
-export async function deleteSyncPayloads(accessToken) {
-  const fileIds = await findSyncFileIds(accessToken);
-  for (const fileId of fileIds) {
-    const response = await driveFetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}`,
-      accessToken,
-      { method: 'DELETE' },
-    );
-    if (!response.ok && response.status !== 404) {
-      await throwDriveError('delete sync payload', response);
-    }
-  }
-  return fileIds.length;
-}
-
 async function findSyncFileId(accessToken) {
   const ids = await findSyncFileIds(accessToken);
   return ids[0] ?? null;

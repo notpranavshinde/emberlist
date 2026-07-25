@@ -69,7 +69,7 @@ fun SettingsScreen(
 
     var importModeReplace by remember { mutableStateOf(true) }
     var showClearCompleted by remember { mutableStateOf(false) }
-    var showResetCloudSync by remember { mutableStateOf(false) }
+    var showReplaceCorruptCloud by remember { mutableStateOf(false) }
     var showRestoreDialog by remember { mutableStateOf(false) }
     var showConfirmRestore by remember { mutableStateOf(false) }
     var selectedBackup by remember { mutableStateOf<File?>(null) }
@@ -121,10 +121,6 @@ fun SettingsScreen(
             }
         }
     }
-    val driveSignInLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        viewModel.handleDriveSignInResult(result.data)
-    }
-
     Column(
         modifier = Modifier
             .padding(padding)
@@ -204,12 +200,13 @@ fun SettingsScreen(
 
         SectionHeader(text = "Cloud Sync")
         Text(
-            text = when {
-                driveAuthState.hasDriveScope -> "Connected: ${driveAuthState.email ?: driveAuthState.displayName ?: "Google account"}"
-                driveAuthState.isSignedIn -> "Google account connected, but Drive access is missing."
-                else -> "Not connected"
-            },
+            text = "Required Google Drive account: ${driveAuthState.email ?: driveAuthState.displayName ?: "connected account"}",
             style = MaterialTheme.typography.bodyMedium
+        )
+        Text(
+            text = "Sync is always on. Edits made during a temporary outage are uploaded when the connection returns.",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
         )
         settings.lastSyncedAt?.let { lastSyncedAt ->
             Text(
@@ -242,6 +239,11 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(top = 4.dp)
             )
+            if (error.contains("invalid or corrupted", ignoreCase = true)) {
+                TextButton(onClick = { showReplaceCorruptCloud = true }) {
+                    Text("Replace unreadable cloud workspace")
+                }
+            }
         }
         if (syncUiState.error == null) {
             syncRuntimeStatus.lastError?.let { error ->
@@ -254,20 +256,14 @@ fun SettingsScreen(
             }
         }
         ActionRow {
-            if (driveAuthState.hasDriveScope) {
-                OutlinedButton(
-                    onClick = { viewModel.disconnectDrive() },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Disconnect") }
-            } else {
-                Button(
-                    onClick = { driveSignInLauncher.launch(container.driveAuthManager.signInIntent()) },
-                    modifier = Modifier.weight(1f)
-                ) { Text("Connect Google") }
-            }
+            OutlinedButton(
+                onClick = { viewModel.signOut() },
+                enabled = !syncUiState.isSyncing,
+                modifier = Modifier.weight(1f)
+            ) { Text("Sign out") }
             Button(
                 onClick = { viewModel.syncNow() },
-                enabled = settings.syncEnabled && driveAuthState.hasDriveScope && !syncUiState.isSyncing,
+                enabled = driveAuthState.hasDriveScope && !syncUiState.isSyncing,
                 modifier = Modifier.weight(1f)
             ) {
                 if (syncUiState.isSyncing) {
@@ -280,17 +276,6 @@ fun SettingsScreen(
                 }
             }
         }
-        if (driveAuthState.hasDriveScope) {
-            TextButton(onClick = { showResetCloudSync = true }) {
-                Text("Reset cloud sync", color = MaterialTheme.colorScheme.error)
-            }
-        }
-        RowSwitch(
-            label = "Enable sync",
-            checked = settings.syncEnabled,
-            onCheckedChange = viewModel::updateSyncEnabled,
-            enabled = driveAuthState.hasDriveScope
-        )
 
         SectionHeader(text = "Data")
         RowSwitch(
@@ -352,19 +337,21 @@ fun SettingsScreen(
         )
     }
 
-    if (showResetCloudSync) {
+    if (showReplaceCorruptCloud) {
         AlertDialog(
-            onDismissRequest = { showResetCloudSync = false },
-            title = { Text("Reset cloud sync") },
-            text = { Text("This deletes Emberlist's sync file from Google Drive. Your local data stays untouched. Sync again afterward to recreate the cloud file.") },
+            onDismissRequest = { showReplaceCorruptCloud = false },
+            title = { Text("Replace unreadable cloud workspace?") },
+            text = {
+                Text("This uploads this device's cached workspace over the unreadable Google Drive copy. It cannot recover data that exists only in the unreadable file.")
+            },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.resetCloudSync()
-                    showResetCloudSync = false
-                }) { Text("Delete cloud file") }
+                    viewModel.replaceCorruptCloudWorkspace()
+                    showReplaceCorruptCloud = false
+                }) { Text("Replace cloud copy") }
             },
             dismissButton = {
-                TextButton(onClick = { showResetCloudSync = false }) { Text("Cancel") }
+                TextButton(onClick = { showReplaceCorruptCloud = false }) { Text("Cancel") }
             }
         )
     }

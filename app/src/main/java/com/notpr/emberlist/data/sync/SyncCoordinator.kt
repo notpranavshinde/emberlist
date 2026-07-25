@@ -8,7 +8,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
@@ -76,10 +75,7 @@ class SyncCoordinator(
         }
 
         scope.launch {
-            combine(
-                settingsFlow.mapDistinctSyncEnabled(),
-                authFlow.mapDistinctHasDriveScope()
-            ) { syncEnabled, hasDriveScope -> syncEnabled && hasDriveScope }
+            settingsFlow.mapDistinctSyncEnabled()
                 .distinctUntilChanged()
                 .collect { active ->
                     currentActive = active
@@ -128,7 +124,4 @@ class SyncCoordinator(
 
     private fun Flow<SettingsState>.mapDistinctSyncEnabled(): Flow<Boolean> =
         map { it.syncEnabled }.distinctUntilChanged()
-
-    private fun Flow<DriveAuthState>.mapDistinctHasDriveScope(): Flow<Boolean> =
-        map { it.hasDriveScope }.distinctUntilChanged()
 }

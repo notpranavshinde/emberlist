@@ -13,9 +13,10 @@ Use Vercel serverless functions as a small backend-for-frontend for Google Drive
 
 - `/api/auth/google/start` creates an OAuth `state`, stores it in an encrypted HttpOnly cookie, and redirects to Google with `response_type=code`, `access_type=offline`, and the Drive appData scope.
 - `/api/auth/google/callback` validates `state`, exchanges the code server-side, stores the Google refresh token in an encrypted `Secure`, `HttpOnly`, `SameSite=Lax` cookie, and redirects back to the app.
-- `/api/auth/session` exposes only the signed-in profile summary needed by the UI.
-- `/api/drive/sync-file` refreshes Google access server-side and proxies download, upload, and reset operations for the hidden Drive appData sync file.
-- The legacy browser-token implementation remains available only when `VITE_GOOGLE_AUTH_MODE=legacy_spa` is explicitly set.
+- `/api/auth/session` exposes the stable Google subject identifier and signed-in profile summary needed to bind the browser cache.
+- `/api/drive/sync-file` refreshes Google access server-side and proxies download and upload operations for the hidden Drive appData sync file.
+- Workspace routes require this backend session. Public marketing, legal, and aggregate-statistics routes remain independent of the task workspace.
+- The legacy browser-token implementation and destructive remote-reset endpoint are removed.
 
 ## Security Controls
 - Google client secret is read only from server environment variables.
@@ -29,6 +30,7 @@ Use Vercel serverless functions as a small backend-for-frontend for Google Drive
 - Sync uploads and downloads are capped at 2 MiB and validated for schema, types, string lengths, and entity counts.
 - Auth and sync endpoints are rate-limited by IP and, where available, an opaque hash of the encrypted session cookie.
 - Disconnect revokes the refresh token when possible and clears auth cookies.
+- Sign-out completes a final upload before clearing the account-bound browser cache; it never deletes the remote workspace.
 
 ## Required Deployment Configuration
 - Google OAuth web client redirect URI: `https://emberlist.dev/api/auth/google/callback`.
@@ -39,15 +41,14 @@ Use Vercel serverless functions as a small backend-for-frontend for Google Drive
 - Recommended:
   - `EMBERLIST_APP_ORIGIN=https://emberlist.dev` pins redirects and same-origin checks to the production origin.
   - `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` enable distributed rate limits across serverless instances.
-- Optional fallback:
-  - `VITE_GOOGLE_AUTH_MODE=legacy_spa` can temporarily restore the old browser-token path for local troubleshooting.
 
 ## Alternatives Considered
 - **Keep SPA token model**: simplest, but popup/account-chooser restoration remains fragile and browser JS handles Google API tokens.
 - **Full backend database token store**: stronger central revocation and auditability, but requires a real database and account model. The encrypted cookie BFF is the pragmatic intermediate step for friend testing.
 
 ## Consequences
-- Friend testers should no longer need a popup on refresh/reopen once connected.
+- Returning users should no longer need a prompt on refresh/reopen while their backend session remains valid.
+- A browser cache cannot merge into a different Google subject identifier.
 - Vercel is now part of the sync trust boundary.
 - If `EMBERLIST_AUTH_SECRET` rotates, existing web sync sessions are invalidated and users must reconnect Google Drive.
 - Without the optional Upstash settings, rate limits use a bounded in-memory fallback. This protects each warm serverless instance, but counters do not survive cold starts and are not shared across instances. Platform-level WAF/rate limiting remains recommended for broad launch.

@@ -61,9 +61,9 @@ if (!cspHeader) {
 
 const requiredCspTokens = [
   "frame-ancestors 'none'",
-  'frame-src https://accounts.google.com/gsi/',
-  'script-src',
-  'connect-src',
+  "frame-src 'none'",
+  "script-src 'self'",
+  "connect-src 'self'",
 ];
 
 const missingCspTokens = requiredCspTokens.filter((token) => !cspHeader.value.includes(token));

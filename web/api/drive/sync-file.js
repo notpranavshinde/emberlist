@@ -6,7 +6,6 @@ import {
   setNoStore,
 } from '../_lib/auth.js';
 import {
-  deleteSyncPayloads,
   downloadSyncPayload,
   getAccessTokenForRequest,
   uploadSyncPayload,
@@ -16,8 +15,8 @@ import { MAX_SYNC_BODY_BYTES, validateSyncPayload } from '../_lib/sync-payload.j
 
 export default async function handler(req, res) {
   setNoStore(res);
-  if (!['GET', 'PUT', 'DELETE'].includes(req.method)) {
-    methodNotAllowed(res, ['GET', 'PUT', 'DELETE']);
+  if (!['GET', 'PUT'].includes(req.method)) {
+    methodNotAllowed(res, ['GET', 'PUT']);
     return;
   }
 
@@ -52,8 +51,6 @@ export default async function handler(req, res) {
       return;
     }
 
-    const deletedCount = await deleteSyncPayloads(accessToken);
-    json(res, 200, { ok: true, deletedCount });
   } catch (error) {
     handleApiError(res, error);
   }

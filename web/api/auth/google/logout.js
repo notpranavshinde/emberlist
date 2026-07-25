@@ -28,10 +28,10 @@ export default async function handler(req, res) {
     });
     const { cookieSecret } = getConfig();
     const session = readSession(req, cookieSecret);
-    clearAuthCookies(res);
     if (session?.refreshToken) {
       await revokeGoogleToken(session.refreshToken);
     }
+    clearAuthCookies(res);
     json(res, 200, { ok: true });
   } catch (error) {
     handleApiError(res, error);

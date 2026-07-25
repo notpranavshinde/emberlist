@@ -21,23 +21,16 @@ class SyncWorker(
             return Result.success()
         }
 
-        container.driveAuthManager.refreshState()
-        if (!container.driveAuthManager.state.value.hasDriveScope) {
-            container.syncStatusTracker.setSyncing(false)
-            return Result.success()
-        }
-
         return try {
-            when (val result = container.driveSyncService.sync()) {
-                is SyncResult.Success -> {
-                    container.settingsRepository.updateLastSyncedAt(result.syncedAt)
-                    container.syncStatusTracker.onSyncSuccess()
+            when (container.driveConnectAndSync.start()) {
+                is DriveConnectAndSyncResult.Success -> {
                     Result.success()
                 }
-                is SyncResult.Failure -> {
-                    container.syncStatusTracker.onSyncFailure(result.message)
+                is DriveConnectAndSyncResult.Failure -> {
                     Result.retry()
                 }
+                DriveConnectAndSyncResult.Cancelled,
+                is DriveConnectAndSyncResult.AuthorizationRequired -> Result.success()
             }
         } finally {
             container.syncStatusTracker.setSyncing(false)

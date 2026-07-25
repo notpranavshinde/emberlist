@@ -2,13 +2,13 @@ import crypto from 'node:crypto';
 
 export const SESSION_COOKIE = '__Host-emberlist_session';
 export const OAUTH_STATE_COOKIE = '__Host-emberlist_oauth_state';
-export const SCOPES = 'openid email https://www.googleapis.com/auth/drive.appdata';
+export const SCOPES = 'openid email profile https://www.googleapis.com/auth/drive.appdata';
 
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 export const STATE_MAX_AGE_SECONDS = 60 * 10;
 
 export function getConfig() {
-  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
   const cookieSecret = process.env.EMBERLIST_AUTH_SECRET || process.env.AUTH_COOKIE_SECRET || '';
 
@@ -143,10 +143,13 @@ export function readSession(req, secret, now = Date.now()) {
     !session
     || typeof session.refreshToken !== 'string'
     || !session.refreshToken
+    || typeof session.accountId !== 'string'
+    || !session.accountId
     || !hasValidCreatedAt(session, SESSION_MAX_AGE_SECONDS, now)
   ) return null;
   return {
     refreshToken: session.refreshToken,
+    accountId: session.accountId,
     email: typeof session.email === 'string' ? session.email : null,
     name: typeof session.name === 'string' ? session.name : null,
     createdAt: session.createdAt,
@@ -301,9 +304,14 @@ export async function fetchGoogleProfile(accessToken) {
   const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!response.ok) return { email: null, name: null };
+  if (!response.ok) {
+    const error = new Error('Google profile could not be verified.');
+    error.statusCode = 502;
+    throw error;
+  }
   const body = await response.json().catch(() => ({}));
   return {
+    accountId: typeof body.sub === 'string' ? body.sub : null,
     email: typeof body.email === 'string' ? body.email : null,
     name: typeof body.name === 'string' ? body.name : null,
     emailVerified: body.email_verified === true,
@@ -312,9 +320,14 @@ export async function fetchGoogleProfile(accessToken) {
 
 export async function revokeGoogleToken(token) {
   if (!token) return;
-  await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
+  const response = await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`, {
     method: 'POST',
-  }).catch(() => undefined);
+  });
+  if (!response.ok && response.status !== 400) {
+    const error = new Error('Google access could not be revoked. Connect to the internet and try again.');
+    error.statusCode = 502;
+    throw error;
+  }
 }
 
 export function handleApiError(res, error) {
