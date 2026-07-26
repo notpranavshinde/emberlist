@@ -9,7 +9,6 @@ import {
 import { createPortal } from "react-dom";
 import type {
   CSSProperties,
-  ChangeEvent,
   ComponentType,
   DragEvent,
   FormEvent,
@@ -26,13 +25,11 @@ import {
   ChevronRight,
   Cloud,
   CircleSlash,
-  Download,
   Bell,
   Flag,
   Folder,
   GripVertical,
   Home,
-  Import,
   ListTodo,
   MoreHorizontal,
   Plus,
@@ -114,7 +111,6 @@ import {
 } from "./lib/onboarding";
 import {
   isAnalyticsEnabled as readAnalyticsEnabled,
-  resetAnalyticsId,
   setAnalyticsEnabled as persistAnalyticsEnabled,
   startOnboardingAnalyticsDelivery,
   trackOnboardingEvent,
@@ -143,14 +139,12 @@ import {
   type ReminderEditorDraft,
   type RecurrencePreset,
 } from "./lib/taskEditing";
-import { normalizeImportedPayload } from "./lib/syncPayload";
 import {
   createCloudSyncService,
   type CloudSession,
   type CloudSyncService,
   type RedirectAuthCompletion,
 } from "./lib/syncService";
-import { SyncEngine } from "./lib/syncEngine";
 import {
   formatClock,
   formatDateTimeValue,
@@ -219,7 +213,6 @@ import type {
   Task,
 } from "./types/sync";
 
-const syncEngine = new SyncEngine();
 const SEARCH_FILTERS: Array<{ label: string; value: SearchFilter }> = [
   { label: "All", value: "ALL" },
   { label: "Overdue", value: "OVERDUE" },
@@ -310,15 +303,9 @@ function App() {
     ),
   );
   const autoSyncEnabled = true;
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(() =>
-    readStoredBoolean("emberlist.autoBackupEnabled", true),
-  );
-  const [syncMode, setSyncMode] = useState<SyncMode>("google_drive");
+  const syncMode: SyncMode = "google_drive";
   const [lastCloudSyncAt, setLastCloudSyncAt] = useState<number | null>(() =>
     readStoredNumber("emberlist.lastCloudSyncAt"),
-  );
-  const [lastLocalBackupAt, setLastLocalBackupAt] = useState<number | null>(
-    () => readStoredNumber("emberlist.lastLocalBackupAt"),
   );
   const [cloudSession, setCloudSession] = useState<CloudSession | null>(() =>
     readStoredCloudSession(),
@@ -348,7 +335,6 @@ function App() {
   const isOnlineRef = useRef(isOnline);
   const hasPendingLocalChangesRef = useRef(hasPendingLocalChanges);
   const autoSyncEnabledRef = useRef(autoSyncEnabled);
-  const autoBackupEnabledRef = useRef(autoBackupEnabled);
   const syncModeRef = useRef<SyncMode>(syncMode);
   const lastCloudSyncAtRef = useRef(lastCloudSyncAt);
   const followUpSyncRequestedRef = useRef(false);
@@ -466,10 +452,6 @@ function App() {
   }, [autoSyncEnabled]);
 
   useEffect(() => {
-    autoBackupEnabledRef.current = autoBackupEnabled;
-  }, [autoBackupEnabled]);
-
-  useEffect(() => {
     lastCloudSyncAtRef.current = lastCloudSyncAt;
   }, [lastCloudSyncAt]);
 
@@ -504,15 +486,8 @@ function App() {
   }, [autoSyncEnabled]);
 
   useEffect(() => {
-    setStoredItem(
-      "emberlist.autoBackupEnabled",
-      JSON.stringify(autoBackupEnabled),
-    );
-  }, [autoBackupEnabled]);
-
-  useEffect(() => {
     removeStoredItem("emberlist.syncMode");
-  }, [syncMode]);
+  }, []);
 
   useEffect(() => {
     if (lastCloudSyncAt === null) {
@@ -528,21 +503,6 @@ function App() {
   useEffect(() => {
     writeStoredCloudSession(cloudSession);
   }, [cloudSession]);
-
-  useEffect(() => {
-    syncModeRef.current = syncMode;
-  }, [syncMode]);
-
-  useEffect(() => {
-    if (lastLocalBackupAt === null) {
-      removeStoredItem("emberlist.lastLocalBackupAt");
-      return;
-    }
-    setStoredItem(
-      "emberlist.lastLocalBackupAt",
-      String(lastLocalBackupAt),
-    );
-  }, [lastLocalBackupAt]);
 
   useEffect(() => {
     writeStoredActivityEntries(activityEntries);
@@ -657,19 +617,6 @@ function App() {
     return entry.id;
   }
 
-  function saveBrowserBackupSnapshot(
-    nextPayload: SyncPayload,
-    automatic: boolean,
-  ) {
-    if (typeof window === "undefined") return;
-    if (automatic && !autoBackupEnabledRef.current) return;
-    setStoredItem(
-      "emberlist.browserBackup",
-      JSON.stringify(nextPayload),
-    );
-    setLastLocalBackupAt(Date.now());
-  }
-
   function getRecurringMaintenanceChangeCount(result: {
     repairedCount: number;
     removedDuplicateCount: number;
@@ -735,19 +682,6 @@ function App() {
     );
     showBanner("info", undoRecord.undoMessage);
     trackProductEvent("undo_used", { action: "undo" });
-  }
-
-  function downloadPayloadBackup(nextPayload: SyncPayload) {
-    const json = JSON.stringify(nextPayload, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `emberlist-backup-${format(new Date(), "yyyyMMdd-HHmmss")}.json`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
   }
 
   async function runCloudSync({
@@ -895,7 +829,6 @@ function App() {
     if (markDirty) await db.markLocalMutation();
     payloadRef.current = reconciled.payload;
     setPayload(reconciled.payload);
-    saveBrowserBackupSnapshot(reconciled.payload, markDirty);
     if (markDirty) {
       setHasPendingLocalChanges(true);
       if (isSyncingRef.current) {
@@ -997,42 +930,6 @@ function App() {
       setBootState("error");
     } finally {
       setIsResettingCache(false);
-    }
-  }
-
-  async function handleImport(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    try {
-      const remotePayload = normalizeImportedPayload(
-        JSON.parse(await file.text()),
-        "Imported JSON file",
-      );
-      const localPayload = payloadRef.current ?? (await db.getPayload());
-      const mergedPayload = syncEngine.mergePayloads(
-        localPayload,
-        remotePayload,
-      );
-      const repaired = repairRecurringTasks(mergedPayload);
-      await persistPayload(repaired.payload, true);
-      const recurringMaintenance = describeRecurringMaintenance(repaired);
-      setBootState("ready");
-      showBanner(
-        "success",
-        recurringMaintenance
-          ? `Imported JSON was merged. ${recurringMaintenance}.`
-          : "Imported JSON was merged into your local workspace.",
-      );
-      trackProductEvent("backup_action", { action: "import", result: "success", origin: "settings" });
-    } catch (error) {
-      console.error("Failed to import JSON", error);
-      showBanner(
-        "error",
-        error instanceof Error ? error.message : "Failed to import JSON.",
-      );
-      trackProductEvent("backup_action", { action: "import", result: "failure", origin: "settings", errorCategory: analyticsErrorCategory(error instanceof Error ? error.message : "unknown") });
     }
   }
 
@@ -1794,61 +1691,6 @@ function App() {
     return duplicatedTask?.id ?? null;
   }
 
-  function handleExportJson() {
-    const current = payloadRef.current;
-    if (!current) return;
-    downloadPayloadBackup(current);
-    showBanner("success", "Downloaded a JSON backup of this workspace.");
-    trackProductEvent("backup_action", { action: "export", result: "success", origin: "settings" });
-  }
-
-  function handleSaveBrowserBackupNow() {
-    const current = payloadRef.current;
-    if (!current) return;
-    saveBrowserBackupSnapshot(current, false);
-    showBanner("success", "Saved a browser backup snapshot.");
-    trackProductEvent("backup_action", { action: "save", result: "success", origin: "settings" });
-  }
-
-  async function handleRestoreBrowserBackup() {
-    const raw = getStoredItem("emberlist.browserBackup");
-    if (!raw) {
-      showBanner(
-        "error",
-        "No browser backup snapshot is stored on this device yet.",
-      );
-      return;
-    }
-
-    try {
-      const backupPayload = normalizeImportedPayload(
-        JSON.parse(raw),
-        "Browser backup snapshot",
-      );
-      const current = payloadRef.current ?? (await db.getPayload());
-      const mergedPayload = syncEngine.mergePayloads(current, backupPayload);
-      const repaired = repairRecurringTasks(mergedPayload);
-      await persistPayload(repaired.payload, true);
-      const recurringMaintenance = describeRecurringMaintenance(repaired);
-      showBanner(
-        "success",
-        recurringMaintenance
-          ? `Restored the stored browser backup snapshot. ${recurringMaintenance}.`
-          : "Restored the stored browser backup snapshot.",
-      );
-      trackProductEvent("backup_action", { action: "restore", result: "success", origin: "settings" });
-    } catch (error) {
-      console.error("Failed to restore browser backup snapshot", error);
-      showBanner(
-        "error",
-        error instanceof Error
-          ? error.message
-          : "Failed to restore the browser backup snapshot.",
-      );
-      trackProductEvent("backup_action", { action: "restore", result: "failure", origin: "settings", errorCategory: analyticsErrorCategory(error instanceof Error ? error.message : "unknown") });
-    }
-  }
-
   useEffect(() => {
     if (
       bootState !== "ready" ||
@@ -2084,8 +1926,6 @@ function App() {
         onDismissBanner={() => setBanner(null)}
         onShowBanner={showBanner}
         onCloudSync={() => void handleCloudSync()}
-        onResetLocalCache={() => void handleResetLocalCache()}
-        onImport={handleImport}
         onCreateTask={handleCreateTask}
         onCreateTaskRelative={(anchorTaskId, position, draft, options) =>
           handleCreateTaskRelative(anchorTaskId, position, draft, options)
@@ -2136,25 +1976,13 @@ function App() {
         onWeekStartsOnChange={(value) => setWeekStartsOn(value)}
         use24HourTime={use24HourTime}
         onToggleUse24HourTime={() => setUse24HourTime((value) => !value)}
-        autoSyncEnabled={autoSyncEnabled}
-        autoBackupEnabled={autoBackupEnabled}
-        onToggleAutoBackupEnabled={() =>
-          setAutoBackupEnabled((value) => !value)
-        }
-        syncMode={syncMode}
-        onSyncModeChange={(value) => setSyncMode(value)}
         cloudConfigured={cloudConfigured}
         cloudSession={activeCloudSession}
         lastSyncError={lastSyncError}
         hasPendingLocalChanges={hasPendingLocalChanges}
         isOnline={isOnline}
         isSyncing={isSyncing}
-        isResettingCache={isResettingCache}
         lastCloudSyncAt={lastCloudSyncAt}
-        lastLocalBackupAt={lastLocalBackupAt}
-        onExportJson={handleExportJson}
-        onSaveBrowserBackupNow={handleSaveBrowserBackupNow}
-        onRestoreBrowserBackup={() => void handleRestoreBrowserBackup()}
         onDisconnectCloud={() => void handleDisconnectCloud()}
         isQuickAddOpen={isQuickAddOpen}
         quickAddOverride={quickAddOverride}
@@ -2211,10 +2039,6 @@ function App() {
         onToggleAnalyticsEnabled={() =>
           setAnalyticsEnabled((enabled) => !enabled)
         }
-        onResetAnalyticsId={() => {
-          resetAnalyticsId();
-          showBanner("success", "Anonymous analytics ID reset.");
-        }}
         isCloudConnectDialogOpen={isCloudConnectDialogOpen}
         onCloseCloudConnectDialog={() => setIsCloudConnectDialogOpen(false)}
         onConnectCloudDialog={() => {
@@ -2269,8 +2093,6 @@ type WorkspaceShellProps = {
     >,
   ) => void;
   onCloudSync: () => void;
-  onResetLocalCache: () => void;
-  onImport: (event: ChangeEvent<HTMLInputElement>) => void;
   onCreateTask: (
     draft: TaskDraft,
     options?: { silent?: boolean; successMessage?: string },
@@ -2312,27 +2134,17 @@ type WorkspaceShellProps = {
   onToggleShowCompletedToday: () => void;
   showSelectionButtons: boolean;
   onToggleShowSelectionButtons: () => void;
-  syncMode: SyncMode;
-  onSyncModeChange: (value: SyncMode) => void;
   weekStartsOn: WeekStartsOn;
   onWeekStartsOnChange: (value: WeekStartsOn) => void;
   use24HourTime: boolean;
   onToggleUse24HourTime: () => void;
-  autoSyncEnabled: boolean;
-  autoBackupEnabled: boolean;
-  onToggleAutoBackupEnabled: () => void;
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
   hasPendingLocalChanges: boolean;
   isOnline: boolean;
   isSyncing: boolean;
-  isResettingCache: boolean;
   lastCloudSyncAt: number | null;
-  lastLocalBackupAt: number | null;
-  onExportJson: () => void;
-  onSaveBrowserBackupNow: () => void;
-  onRestoreBrowserBackup: () => void;
   onDisconnectCloud: () => void;
   isQuickAddOpen: boolean;
   quickAddOverride: Partial<QuickAddContext> | null;
@@ -2350,7 +2162,6 @@ type WorkspaceShellProps = {
   onShowOnboardingWelcome: () => void;
   analyticsEnabled: boolean;
   onToggleAnalyticsEnabled: () => void;
-  onResetAnalyticsId: () => void;
   activityEntries: ActivityEntry[];
   onUndoActivity: (activityId: string) => void;
   canUndoActivity: (activityId: string) => boolean;
@@ -2362,8 +2173,6 @@ function WorkspaceShell({
   onDismissBanner,
   onShowBanner,
   onCloudSync,
-  onResetLocalCache,
-  onImport,
   onCreateTask,
   onCreateTaskRelative,
   onToggleTask,
@@ -2388,27 +2197,17 @@ function WorkspaceShell({
   onToggleShowCompletedToday,
   showSelectionButtons,
   onToggleShowSelectionButtons,
-  syncMode,
-  onSyncModeChange,
   weekStartsOn,
   onWeekStartsOnChange,
   use24HourTime,
   onToggleUse24HourTime,
-  autoSyncEnabled,
-  autoBackupEnabled,
-  onToggleAutoBackupEnabled,
   cloudConfigured,
   cloudSession,
   lastSyncError,
   hasPendingLocalChanges,
   isOnline,
   isSyncing,
-  isResettingCache,
   lastCloudSyncAt,
-  lastLocalBackupAt,
-  onExportJson,
-  onSaveBrowserBackupNow,
-  onRestoreBrowserBackup,
   onDisconnectCloud,
   isQuickAddOpen,
   quickAddOverride,
@@ -2423,7 +2222,6 @@ function WorkspaceShell({
   onShowOnboardingWelcome,
   analyticsEnabled,
   onToggleAnalyticsEnabled,
-  onResetAnalyticsId,
   activityEntries,
   onUndoActivity,
   canUndoActivity,
@@ -2449,10 +2247,6 @@ function WorkspaceShell({
   const [isCreateProjectDialogOpen, setIsCreateProjectDialogOpen] =
     useState(false);
   const [createProjectValue, setCreateProjectValue] = useState("");
-  const [
-    isRestoreBrowserBackupDialogOpen,
-    setIsRestoreBrowserBackupDialogOpen,
-  ] = useState(false);
   const [focusedTaskActionMode, setFocusedTaskActionMode] =
     useState<FocusedTaskActionMode | null>(null);
   const [focusedTaskActionRect, setFocusedTaskActionRect] =
@@ -2587,10 +2381,6 @@ function WorkspaceShell({
     if (!focusedTaskActionTaskIds.length) return;
     onDeleteTasks(focusedTaskActionTaskIds);
     closeFocusedTaskActionDialog(null);
-  }
-
-  function requestRestoreBrowserBackup() {
-    setIsRestoreBrowserBackupDialogOpen(true);
   }
 
   function requestCreateProject(initialValue = "") {
@@ -3251,8 +3041,6 @@ function WorkspaceShell({
                   path="/settings"
                   element={
                     <SettingsPage
-                      syncMode={syncMode}
-                      onSyncModeChange={onSyncModeChange}
                       cloudConfigured={cloudConfigured}
                       cloudSession={cloudSession}
                       lastSyncError={lastSyncError}
@@ -3268,25 +3056,11 @@ function WorkspaceShell({
                       onWeekStartsOnChange={onWeekStartsOnChange}
                       use24HourTime={use24HourTime}
                       onToggleUse24HourTime={onToggleUse24HourTime}
-                      autoSyncEnabled={autoSyncEnabled}
-                      autoBackupEnabled={autoBackupEnabled}
-                      onToggleAutoBackupEnabled={onToggleAutoBackupEnabled}
                       onDisconnectCloud={onDisconnectCloud}
-                      onResetLocalCache={onResetLocalCache}
-                      onImport={onImport}
-                      onExportJson={onExportJson}
-                      onSaveBrowserBackupNow={onSaveBrowserBackupNow}
-                      onRestoreBrowserBackup={requestRestoreBrowserBackup}
                       isSyncing={isSyncing}
-                      isResettingCache={isResettingCache}
                       lastCloudSyncAt={lastCloudSyncAt}
-                      lastLocalBackupAt={lastLocalBackupAt}
                       analyticsEnabled={analyticsEnabled}
                       onToggleAnalyticsEnabled={onToggleAnalyticsEnabled}
-                      onResetAnalyticsId={onResetAnalyticsId}
-                      onOpenGettingStarted={() =>
-                        setIsGettingStartedOpen(true)
-                      }
                     />
                   }
                 />
@@ -3371,19 +3145,6 @@ function WorkspaceShell({
           }}
           onSubmit={(value) => void submitCreateProject(value)}
           submitLabel="Create project"
-        />
-      ) : null}
-
-      {isRestoreBrowserBackupDialogOpen ? (
-        <ConfirmDialog
-          title="Restore browser backup"
-          description="Restore the last browser backup snapshot into this workspace?"
-          confirmLabel="Restore backup"
-          onClose={() => setIsRestoreBrowserBackupDialogOpen(false)}
-          onConfirm={() => {
-            setIsRestoreBrowserBackupDialogOpen(false);
-            void onRestoreBrowserBackup();
-          }}
         />
       ) : null}
 
@@ -7091,8 +6852,6 @@ function SettingsDisclosure({
 }
 
 function SettingsPage({
-  syncMode,
-  onSyncModeChange,
   cloudConfigured,
   cloudSession,
   lastSyncError,
@@ -7106,26 +6865,12 @@ function SettingsPage({
   onWeekStartsOnChange,
   use24HourTime,
   onToggleUse24HourTime,
-  autoSyncEnabled,
-  autoBackupEnabled,
-  onToggleAutoBackupEnabled,
   onDisconnectCloud,
-  onResetLocalCache,
-  onImport,
-  onExportJson,
-  onSaveBrowserBackupNow,
-  onRestoreBrowserBackup,
   isSyncing,
-  isResettingCache,
   lastCloudSyncAt,
-  lastLocalBackupAt,
   analyticsEnabled,
   onToggleAnalyticsEnabled,
-  onResetAnalyticsId,
-  onOpenGettingStarted,
 }: {
-  syncMode: SyncMode;
-  onSyncModeChange: (value: SyncMode) => void;
   cloudConfigured: boolean;
   cloudSession: CloudSession | null;
   lastSyncError: string | null;
@@ -7139,23 +6884,11 @@ function SettingsPage({
   onWeekStartsOnChange: (value: WeekStartsOn) => void;
   use24HourTime: boolean;
   onToggleUse24HourTime: () => void;
-  autoSyncEnabled: boolean;
-  autoBackupEnabled: boolean;
-  onToggleAutoBackupEnabled: () => void;
   onDisconnectCloud: () => void;
-  onResetLocalCache: () => void;
-  onImport: (event: ChangeEvent<HTMLInputElement>) => void;
-  onExportJson: () => void;
-  onSaveBrowserBackupNow: () => void;
-  onRestoreBrowserBackup: () => void;
   isSyncing: boolean;
-  isResettingCache: boolean;
   lastCloudSyncAt: number | null;
-  lastLocalBackupAt: number | null;
   analyticsEnabled: boolean;
   onToggleAnalyticsEnabled: () => void;
-  onResetAnalyticsId: () => void;
-  onOpenGettingStarted: () => void;
 }) {
   const location = useLocation();
   const cloudStatus = getCloudStatus({
@@ -7182,47 +6915,11 @@ function SettingsPage({
     <div className="space-y-6">
       <TaskGroupGrid>
         <SettingsDisclosure
-          title="Getting started"
-          description="A concise guide to capturing, scheduling, organizing, and syncing tasks."
-          defaultOpen
-        >
-          <button
-            type="button"
-            onClick={onOpenGettingStarted}
-            className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#d75e33]"
-          >
-            Open Getting Started
-          </button>
-        </SettingsDisclosure>
-
-        <SettingsDisclosure
-          title="Workspace storage"
-          description="Every Emberlist workspace is synchronized through Google Drive."
-          defaultOpen
-        >
-          <div className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-            <button
-              type="button"
-              onClick={() => onSyncModeChange("google_drive")}
-              className="rounded-full bg-[#EE6A3C] px-4 py-3 text-sm font-semibold text-white"
-            >
-              Google Drive required
-            </button>
-            <p className="mt-3 text-sm leading-6 text-[#6D5C50]">
-              Google Drive is the durable home for this workspace. This browser
-              keeps an account-bound cache for responsive editing and temporary
-              connection interruptions.
-            </p>
-          </div>
-        </SettingsDisclosure>
-
-        {syncMode === "google_drive" ? (
-        <SettingsDisclosure
           title="Cloud sync"
-          description="Connection status for the required Google Drive workspace."
+          description={cloudStatus.label}
+          defaultOpen
         >
           <div className="space-y-3">
-            <InfoRow label="Status" value={cloudStatus.label} />
             <InfoRow
               label="Account"
               value={
@@ -7237,13 +6934,6 @@ function SettingsPage({
                   : "No recent sync"
               }
             />
-            <InfoRow
-              label="Auto sync"
-              value={autoSyncEnabled ? "Always on" : "Always on"}
-            />
-            <p className="rounded-[18px] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
-              {cloudStatus.detail}
-            </p>
             {lastSyncError ? (
               <p className="rounded-[18px] bg-[#FFF1EB] px-4 py-3 text-sm leading-6 text-[#A24628]">
                 Last error: {lastSyncError}
@@ -7261,105 +6951,17 @@ function SettingsPage({
             </div>
           </div>
         </SettingsDisclosure>
-        ) : null}
-
-        {syncMode === "google_drive" ? (
-        <SettingsDisclosure
-          title="Backups and recovery"
-          description="Save a browser snapshot, export JSON, or recover this browser's local workspace."
-          defaultOpen
-        >
-          <div className="space-y-3">
-            <InfoRow
-              label="Last browser backup"
-              value={
-                lastLocalBackupAt
-                  ? formatDateTime(lastLocalBackupAt)
-                  : "No browser backup saved yet"
-              }
-            />
-            <p className="text-sm leading-6 text-[#6D5C50]">
-              Keep a local browser backup snapshot, restore it, or download a
-              JSON export you can keep outside the browser.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={onSaveBrowserBackupNow}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
-              >
-                Save browser backup
-              </button>
-              <button
-                onClick={onRestoreBrowserBackup}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
-              >
-                Restore browser backup
-              </button>
-              <button
-                onClick={onExportJson}
-                className="inline-flex items-center gap-2 rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]"
-              >
-                <Download size={16} />
-                Export JSON
-              </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)]">
-                <Import size={16} />
-                Import JSON
-                <input
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  onChange={onImport}
-                />
-              </label>
-              <button
-                onClick={onResetLocalCache}
-                disabled={isResettingCache}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface-soft)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface)] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isResettingCache
-                  ? "Resetting web cache..."
-                  : "Reset web cache"}
-              </button>
-            </div>
-            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Maintain browser backups automatically
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  Save a fresh local browser snapshot whenever the workspace
-                  changes.
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={autoBackupEnabled}
-                onChange={onToggleAutoBackupEnabled}
-                className="h-5 w-5 accent-[#EE6A3C]"
-              />
-            </label>
-          </div>
-        </SettingsDisclosure>
-        ) : null}
 
         <SettingsDisclosure
-          title="Display and behavior"
-          description="Device-specific web preferences that do not affect Android."
+          title="Preferences"
+          description="Display options for this browser."
           defaultOpen
         >
           <div className="space-y-4">
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Share anonymous usage analytics
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  Shares product usage, reliability, and onboarding counts with
-                  a resettable anonymous installation ID. Task content, dates,
-                  project names, locations, and Google identity are never sent.
-                </p>
-              </div>
+              <span className="text-sm font-semibold text-[#1E2D2F]">
+                Anonymous analytics
+              </span>
               <input
                 type="checkbox"
                 checked={analyticsEnabled}
@@ -7367,30 +6969,10 @@ function SettingsPage({
                 className="h-5 w-5 accent-[#EE6A3C]"
               />
             </label>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <p className="max-w-xl text-sm leading-6 text-[#6D5C50]">
-                Resetting starts a new anonymous installation history and clears
-                queued analytics from this browser.
-              </p>
-              <button
-                type="button"
-                onClick={onResetAnalyticsId}
-                disabled={!analyticsEnabled}
-                className="rounded-full border border-[#E1D5CA] bg-[var(--app-surface)] px-4 py-3 text-sm font-semibold text-[#1E2D2F] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Reset anonymous analytics ID
-              </button>
-            </div>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Show completed tasks in Today
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  This toggle is local to the web app and does not affect
-                  Android.
-                </p>
-              </div>
+              <span className="text-sm font-semibold text-[#1E2D2F]">
+                Show completed tasks in Today
+              </span>
               <input
                 type="checkbox"
                 checked={showCompletedToday}
@@ -7399,14 +6981,9 @@ function SettingsPage({
               />
             </label>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Show Select tasks buttons on list pages
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  Keyboard selection with X still works even when this is off.
-                </p>
-              </div>
+              <span className="text-sm font-semibold text-[#1E2D2F]">
+                Show selection buttons
+              </span>
               <input
                 type="checkbox"
                 checked={showSelectionButtons}
@@ -7415,15 +6992,9 @@ function SettingsPage({
               />
             </label>
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
-              <div>
-                <p className="text-sm font-semibold text-[#1E2D2F]">
-                  Use 24-hour time
-                </p>
-                <p className="mt-1 text-sm text-[#6D5C50]">
-                  Applies to task times, reminders, and sync timestamps in the
-                  web app.
-                </p>
-              </div>
+              <span className="text-sm font-semibold text-[#1E2D2F]">
+                Use 24-hour time
+              </span>
               <input
                 type="checkbox"
                 checked={use24HourTime}
@@ -7433,14 +7004,9 @@ function SettingsPage({
             </label>
             <div className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4">
               <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-[#1E2D2F]">
-                    Week starts on
-                  </p>
-                  <p className="mt-1 text-sm text-[#6D5C50]">
-                    Affects week-based filters and calendars in the web app.
-                  </p>
-                </div>
+                <p className="text-sm font-semibold text-[#1E2D2F]">
+                  Week starts on
+                </p>
                 <span className="text-sm font-semibold text-[#6D5C50]">
                   {weekStartsOn === 1 ? "Monday" : "Sunday"}
                 </span>
@@ -7467,14 +7033,9 @@ function SettingsPage({
 
         <SettingsDisclosure
           title="Feedback"
-          description="Quick paths for bug reports and product feedback."
+          description="Email us."
         >
-          <div className="space-y-3">
-            <p className="text-sm leading-6 text-[#6D5C50]">
-              Send product feedback or a bug report straight from the app. The
-              email draft includes the current route, connected sync account,
-              and browser details so issues are easier to reproduce.
-            </p>
+          <div>
             <div className="flex flex-wrap gap-3">
               <a
                 href={feedbackHref}
@@ -7489,9 +7050,6 @@ function SettingsPage({
                 Report issue
               </a>
             </div>
-            <p className="rounded-[18px] bg-[var(--app-surface-soft)] px-4 py-3 text-sm leading-6 text-[#6D5C50]">
-              Support inbox: {SUPPORT_EMAIL}
-            </p>
           </div>
         </SettingsDisclosure>
       </TaskGroupGrid>
