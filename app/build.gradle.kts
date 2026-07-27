@@ -39,7 +39,7 @@ android {
         targetSdk = 34
         versionCode = 6
         versionName = "0.2.3"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.notpr.emberlist.EmberlistTestRunner"
         vectorDrawables {
             useSupportLibrary = true
         }

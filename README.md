@@ -102,6 +102,23 @@ Android:
 .\gradlew.bat connectedAndroidTest
 ```
 
+The Google Drive onboarding regression test does not require an emulator Google
+account. Its instrumentation-only application supplies a fake Google
+authorization result and an in-memory Drive `appDataFolder`, while the app still
+uses its production authorization mapping, sync, workspace binding, and
+onboarding logic:
+
+```powershell
+.\gradlew.bat --% :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.notpr.emberlist.GoogleDriveAuthorizationFlowTest
+```
+
+Keep a separate QA emulator signed in to a dedicated test Google account, and
+save its AVD snapshot, for occasional real-provider smoke tests. Run that smoke
+test when OAuth clients, signing certificates, requested scopes, Play services,
+or the authorization integration changes. Routine feature and regression tests
+should use the hermetic test above; never commit the QA account credentials or
+tokens.
+
 Web:
 
 ```bash

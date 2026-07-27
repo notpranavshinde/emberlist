@@ -10,6 +10,7 @@ import com.notpr.emberlist.data.analytics.OnboardingAnalytics
 import com.notpr.emberlist.data.analytics.ProductActivityAnalyticsBridge
 import com.notpr.emberlist.data.onboarding.OnboardingRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
+import com.notpr.emberlist.data.sync.DriveAppDataClient
 import com.notpr.emberlist.data.sync.DriveSyncService
 import com.notpr.emberlist.data.sync.DriveConnectAndSyncUseCase
 import com.notpr.emberlist.data.sync.DriveAuthorizationResult
@@ -21,9 +22,15 @@ import com.notpr.emberlist.data.sync.SyncCoordinator
 import com.notpr.emberlist.data.sync.SyncManager
 import com.notpr.emberlist.data.sync.SyncStatusTracker
 import com.notpr.emberlist.ui.UndoController
+import com.google.android.gms.auth.api.identity.AuthorizationClient
+import com.google.android.gms.auth.api.identity.Identity
 import kotlinx.coroutines.flow.onEach
 
-class AppContainer(context: Context) {
+class AppContainer(
+    context: Context,
+    authorizationClient: AuthorizationClient = Identity.getAuthorizationClient(context),
+    driveClientFactory: (String) -> DriveAppDataClient = ::GoogleDriveAppDataClient
+) {
     val appContext: Context = context.applicationContext
 
     val database: EmberlistDatabase = EmberlistDatabase.getInstance(appContext)
@@ -47,7 +54,7 @@ class AppContainer(context: Context) {
 
     val reminderScheduler = ReminderScheduler(appContext, repository)
     val backupManager = BackupManager(database)
-    val driveAuthManager = DriveAuthManager(appContext)
+    val driveAuthManager = DriveAuthManager(appContext, authorizationClient)
     val syncManager = SyncManager()
     val syncStatusTracker = SyncStatusTracker()
     val driveSyncService = DriveSyncService(
@@ -57,7 +64,7 @@ class AppContainer(context: Context) {
         driveClientProvider = {
             when (val authorization = driveAuthManager.authorize()) {
                 is DriveAuthorizationResult.Authorized ->
-                    GoogleDriveAppDataClient(authorization.access.accessToken)
+                    driveClientFactory(authorization.access.accessToken)
                 else -> null
             }
         },
