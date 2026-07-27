@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.notpr.emberlist.data.EmberlistDatabase
 import com.notpr.emberlist.data.settings.SettingsRepository
 import com.notpr.emberlist.data.settings.SettingsState
-import com.notpr.emberlist.data.TaskRepository
 import com.notpr.emberlist.data.onboarding.OnboardingRepository
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.DriveAuthState
@@ -22,14 +21,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
     private val context: Context,
     private val database: EmberlistDatabase,
     private val settingsRepository: SettingsRepository,
-    private val repository: TaskRepository,
     private val driveAuthManager: DriveAuthManager,
     private val syncStatusTracker: SyncStatusTracker,
     private val onboardingAnalytics: OnboardingAnalytics,
@@ -41,15 +38,8 @@ class SettingsViewModel(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            SettingsState(1, false, "Ember", false, false, false, null, true)
+            SettingsState(1, false, "Ember", false, true, null, true)
         )
-    val workspaceHasContent: StateFlow<Boolean> = combine(
-        repository.observeWorkspaceTaskCount(),
-        repository.observeProjects(),
-        repository.observeAllSections()
-    ) { taskCount, projects, sections ->
-        taskCount > 0 || projects.isNotEmpty() || sections.isNotEmpty()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
     val driveAuthState: StateFlow<DriveAuthState> = driveAuthManager.state
     val syncRuntimeStatus: StateFlow<SyncRuntimeStatus> = syncStatusTracker.state
     private val _syncUiState = MutableStateFlow(SyncUiState())
@@ -67,10 +57,6 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.updateAccent(value) }
     }
 
-    fun updateAutoBackupDaily(value: Boolean) {
-        viewModelScope.launch { settingsRepository.updateAutoBackupDaily(value) }
-    }
-
     fun updateShowCompletedToday(value: Boolean) {
         viewModelScope.launch { settingsRepository.updateShowCompletedToday(value) }
     }
@@ -80,10 +66,6 @@ class SettingsViewModel(
             settingsRepository.updateAnalyticsEnabled(value)
             if (!value) onboardingAnalytics.clearQueueAndId()
         }
-    }
-
-    fun resetAnalyticsId() {
-        viewModelScope.launch { onboardingAnalytics.resetInstallId() }
     }
 
     fun signOut() {
@@ -170,10 +152,6 @@ class SettingsViewModel(
             }
             is DriveConnectAndSyncResult.AuthorizationRequired -> _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
         }
-    }
-
-    fun clearCompleted() {
-        viewModelScope.launch { repository.clearCompletedTasks() }
     }
 
 }

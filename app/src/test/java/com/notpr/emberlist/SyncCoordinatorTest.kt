@@ -230,7 +230,6 @@ class SyncCoordinatorTest {
             weekStart = 1,
             use24h = false,
             accent = "Ember",
-            autoBackupDaily = false,
             showCompletedToday = false,
             syncEnabled = syncEnabled,
             lastSyncedAt = lastSyncedAt,

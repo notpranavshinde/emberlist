@@ -275,17 +275,7 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
             }
             composable("activity") { ActivityScreen(padding, navController) }
             composable("settings") {
-                SettingsScreen(
-                    padding = padding,
-                    onOpenQuickAdd = {
-                        navController.navigate(NavRoute.Today.route)
-                        openQuickAdd()
-                    },
-                    onShowWelcome = {
-                        onboardingViewModel.activate()
-                        navController.navigate(NavRoute.Today.route)
-                    }
-                )
+                SettingsScreen(padding = padding)
             }
         }
     }

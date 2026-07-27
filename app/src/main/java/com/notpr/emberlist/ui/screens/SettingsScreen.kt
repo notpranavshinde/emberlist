@@ -1,25 +1,21 @@
 package com.notpr.emberlist.ui.screens
 
-import android.net.Uri
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Card
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
@@ -28,99 +24,29 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.notpr.emberlist.LocalAppContainer
-import com.notpr.emberlist.R
-import com.notpr.emberlist.data.backup.BackupScheduler
 import com.notpr.emberlist.ui.EmberlistViewModelFactory
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
-fun SettingsScreen(
-    padding: PaddingValues,
-    onOpenQuickAdd: () -> Unit = {},
-    onShowWelcome: () -> Unit = {}
-) {
+fun SettingsScreen(padding: PaddingValues) {
     val container = LocalAppContainer.current
     val viewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val settings by viewModel.settings.collectAsState()
     val driveAuthState by viewModel.driveAuthState.collectAsState()
     val syncRuntimeStatus by viewModel.syncRuntimeStatus.collectAsState()
     val syncUiState by viewModel.syncUiState.collectAsState()
-    val workspaceHasContent by viewModel.workspaceHasContent.collectAsState()
-    val context = LocalContext.current
-    val backupManager = remember { container.backupManager }
-    val scope = remember { CoroutineScope(Dispatchers.IO) }
-
-    var importModeReplace by remember { mutableStateOf(true) }
-    var showClearCompleted by remember { mutableStateOf(false) }
     var showReplaceCorruptCloud by remember { mutableStateOf(false) }
-    var showRestoreDialog by remember { mutableStateOf(false) }
-    var showConfirmRestore by remember { mutableStateOf(false) }
-    var selectedBackup by remember { mutableStateOf<File?>(null) }
-    var backups by remember { mutableStateOf<List<File>>(emptyList()) }
-    var showGettingStarted by remember { mutableStateOf(false) }
 
-    fun refreshBackups() {
-        val dir = File(context.filesDir, "backup")
-        backups = if (dir.exists()) {
-            dir.listFiles()?.filter { it.extension == "json" }?.sortedByDescending { it.lastModified() }.orEmpty()
-        } else {
-            emptyList()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        refreshBackups()
-    }
-    LaunchedEffect(settings.autoBackupDaily) {
-        if (settings.autoBackupDaily) {
-            BackupScheduler.schedule(context.applicationContext)
-        } else {
-            BackupScheduler.cancel(context.applicationContext)
-        }
-    }
-
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                val result = runCatching { backupManager.exportToUri(context, context.contentResolver, uri) }
-                container.onboardingAnalytics.track(
-                    "backup_action",
-                    if (result.isSuccess) mapOf("action" to "export", "result" to "success", "origin" to "settings")
-                    else mapOf("action" to "export", "result" to "failure", "origin" to "settings", "errorCategory" to "storage")
-                )
-            }
-        }
-    }
-
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                val result = runCatching { backupManager.importFromUri(context.contentResolver, uri, importModeReplace) }
-                container.onboardingAnalytics.track(
-                    "backup_action",
-                    if (result.isSuccess) mapOf("action" to "import", "result" to "success", "origin" to "settings")
-                    else mapOf("action" to "import", "result" to "failure", "origin" to "settings", "errorCategory" to "storage")
-                )
-            }
-        }
-    }
     Column(
         modifier = Modifier
             .padding(padding)
@@ -129,107 +55,29 @@ fun SettingsScreen(
     ) {
         Text(text = "Settings", style = MaterialTheme.typography.headlineSmall)
 
-        SectionHeader(text = "Preferences")
-        DropdownRow(
-            label = "Week start",
-            value = if (settings.weekStart == 1) "Monday" else "Sunday",
-            options = listOf("Monday", "Sunday"),
-            onSelect = { value ->
-                viewModel.updateWeekStart(if (value == "Monday") 1 else 7)
-            }
+        SectionHeader(text = "Cloud sync")
+        InfoRow(
+            label = "Account",
+            value = driveAuthState.email
+                ?: driveAuthState.displayName
+                ?: "Not connected"
         )
-
-        RowSwitch(label = "Use 24h time", checked = settings.use24h, onCheckedChange = viewModel::updateUse24h)
-        RowSwitch(
-            label = "Daily local backup (keeps 7)",
-            checked = settings.autoBackupDaily,
-            onCheckedChange = viewModel::updateAutoBackupDaily
+        InfoRow(
+            label = "Last sync",
+            value = settings.lastSyncedAt?.let(::formatTimestamp) ?: "No recent sync"
         )
-        RowSwitch(
-            label = "Show completed in Today",
-            checked = settings.showCompletedToday,
-            onCheckedChange = viewModel::updateShowCompletedToday
-        )
-        RowSwitch(
-            label = stringResource(R.string.analytics_setting),
-            checked = settings.analyticsEnabled,
-            onCheckedChange = viewModel::updateAnalyticsEnabled
-        )
-        Text(
-            text = stringResource(R.string.analytics_explanation),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        OutlinedButton(
-            onClick = {
-                viewModel.resetAnalyticsId()
-                Toast.makeText(context, R.string.analytics_id_reset_done, Toast.LENGTH_SHORT).show()
-            },
-            enabled = settings.analyticsEnabled,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-        ) { Text(stringResource(R.string.analytics_id_reset)) }
-
-        SectionHeader(text = stringResource(R.string.getting_started))
-        OutlinedButton(
-            onClick = { showGettingStarted = !showGettingStarted },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(stringResource(R.string.getting_started)) }
-        if (showGettingStarted) {
-            Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(stringResource(R.string.getting_started_capture))
-                    Text(stringResource(R.string.getting_started_language))
-                    Text(stringResource(R.string.getting_started_projects))
-                    Text(stringResource(R.string.getting_started_sync))
-                    Button(onClick = {
-                        if (!workspaceHasContent) onShowWelcome() else onOpenQuickAdd()
-                    }) {
-                        Text(
-                            stringResource(
-                                if (!workspaceHasContent) R.string.getting_started_show_welcome
-                                else R.string.getting_started_open_quick_add
-                            )
-                        )
-                    }
-                }
-            }
-        }
-
-        SectionHeader(text = "Cloud Sync")
-        Text(
-            text = "Required Google Drive account: ${driveAuthState.email ?: driveAuthState.displayName ?: "connected account"}",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Text(
-            text = "Sync is always on. Edits made during a temporary outage are uploaded when the connection returns.",
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        settings.lastSyncedAt?.let { lastSyncedAt ->
-            Text(
-                text = "Last synced: ${formatTimestamp(lastSyncedAt)}",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp)
+        InfoRow(
+            label = "Status",
+            value = syncStatusText(
+                driveConnected = driveAuthState.hasDriveScope,
+                runtimeStatus = syncRuntimeStatus
             )
-        }
-        syncStatusText(
-            driveConnected = driveAuthState.hasDriveScope,
-            runtimeStatus = syncRuntimeStatus
-        )?.let { status ->
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-        }
+        )
         syncUiState.status?.let { status ->
             Text(
                 text = status,
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
         syncUiState.error?.let { error ->
@@ -237,7 +85,7 @@ fun SettingsScreen(
                 text = error,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 8.dp)
             )
             if (error.contains("invalid or corrupted", ignoreCase = true)) {
                 TextButton(onClick = { showReplaceCorruptCloud = true }) {
@@ -251,18 +99,20 @@ fun SettingsScreen(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(top = 4.dp)
+                    modifier = Modifier.padding(top = 8.dp)
                 )
             }
         }
         ActionRow {
             OutlinedButton(
-                onClick = { viewModel.signOut() },
+                onClick = viewModel::signOut,
                 enabled = !syncUiState.isSyncing,
                 modifier = Modifier.weight(1f)
-            ) { Text("Sign out") }
+            ) {
+                Text("Sign out")
+            }
             Button(
-                onClick = { viewModel.syncNow() },
+                onClick = viewModel::syncNow,
                 enabled = driveAuthState.hasDriveScope && !syncUiState.isSyncing,
                 modifier = Modifier.weight(1f)
             ) {
@@ -277,62 +127,28 @@ fun SettingsScreen(
             }
         }
 
-        SectionHeader(text = "Data")
+        SectionHeader(text = "Preferences")
         RowSwitch(
-            label = "Replace on import",
-            checked = importModeReplace,
-            onCheckedChange = { importModeReplace = it }
+            label = "Anonymous analytics",
+            checked = settings.analyticsEnabled,
+            onCheckedChange = viewModel::updateAnalyticsEnabled
         )
-        ActionRow {
-            OutlinedButton(
-                onClick = { exportLauncher.launch("emberlist-backup.json") },
-                modifier = Modifier.weight(1f)
-            ) { Text("Export") }
-            OutlinedButton(
-                onClick = { importLauncher.launch(arrayOf("application/json")) },
-                modifier = Modifier.weight(1f)
-            ) { Text("Import") }
-        }
-        ActionRow {
-            Button(
-                onClick = {
-                    scope.launch {
-                        val file = backupManager.exportToFile(context)
-                        container.onboardingAnalytics.track("backup_action", mapOf("action" to "save", "result" to "success", "origin" to "settings"))
-                        refreshBackups()
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Backup saved: ${file.name}", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("Backup now") }
-            OutlinedButton(
-                onClick = {
-                    refreshBackups()
-                    showRestoreDialog = true
-                },
-                modifier = Modifier.weight(1f)
-            ) { Text("Restore backup") }
-        }
-        TextButton(onClick = { showClearCompleted = true }) {
-            Text("Clear completed", color = MaterialTheme.colorScheme.error)
-        }
-    }
-
-    if (showClearCompleted) {
-        AlertDialog(
-            onDismissRequest = { showClearCompleted = false },
-            title = { Text("Clear completed tasks") },
-            text = { Text("This will remove all completed tasks from the database.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.clearCompleted()
-                    showClearCompleted = false
-                }) { Text("Clear") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearCompleted = false }) { Text("Cancel") }
+        RowSwitch(
+            label = "Show completed in Today",
+            checked = settings.showCompletedToday,
+            onCheckedChange = viewModel::updateShowCompletedToday
+        )
+        RowSwitch(
+            label = "Use 24-hour time",
+            checked = settings.use24h,
+            onCheckedChange = viewModel::updateUse24h
+        )
+        DropdownRow(
+            label = "Week starts on",
+            value = if (settings.weekStart == 1) "Monday" else "Sunday",
+            options = listOf("Monday", "Sunday"),
+            onSelect = { value ->
+                viewModel.updateWeekStart(if (value == "Monday") 1 else 7)
             }
         )
     }
@@ -342,70 +158,25 @@ fun SettingsScreen(
             onDismissRequest = { showReplaceCorruptCloud = false },
             title = { Text("Replace unreadable cloud workspace?") },
             text = {
-                Text("This uploads this device's cached workspace over the unreadable Google Drive copy. It cannot recover data that exists only in the unreadable file.")
+                Text(
+                    "This uploads this device's workspace over the unreadable " +
+                        "Google Drive copy."
+                )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.replaceCorruptCloudWorkspace()
-                    showReplaceCorruptCloud = false
-                }) { Text("Replace cloud copy") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showReplaceCorruptCloud = false }) { Text("Cancel") }
-            }
-        )
-    }
-
-    if (showRestoreDialog) {
-        AlertDialog(
-            onDismissRequest = { showRestoreDialog = false },
-            title = { Text("Restore backup") },
-            text = {
-                Column {
-                    if (backups.isEmpty()) {
-                        Text("No backups found.")
-                    } else {
-                        backups.forEach { file ->
-                            TextButton(onClick = {
-                                selectedBackup = file
-                                showConfirmRestore = true
-                            }) {
-                                Text(file.name)
-                            }
-                        }
+                TextButton(
+                    onClick = {
+                        viewModel.replaceCorruptCloudWorkspace()
+                        showReplaceCorruptCloud = false
                     }
+                ) {
+                    Text("Replace cloud copy")
                 }
             },
-            confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showRestoreDialog = false }) { Text("Close") }
-            }
-        )
-    }
-
-    if (showConfirmRestore && selectedBackup != null) {
-        AlertDialog(
-            onDismissRequest = { showConfirmRestore = false },
-            title = { Text("Restore backup") },
-            text = { Text("This will replace your current data. Continue?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    val file = selectedBackup
-                    if (file != null) {
-                        scope.launch {
-                            backupManager.importFromFile(file, replace = true)
-                            container.onboardingAnalytics.track("backup_action", mapOf("action" to "restore", "result" to "success", "origin" to "settings"))
-                            showConfirmRestore = false
-                            showRestoreDialog = false
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(context, "Restored ${file.name}", Toast.LENGTH_SHORT).show()
-                            }
-                        }
-                    }
-                }) { Text("Restore") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showConfirmRestore = false }) { Text("Cancel") }
+                TextButton(onClick = { showReplaceCorruptCloud = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
@@ -414,17 +185,34 @@ fun SettingsScreen(
 private fun syncStatusText(
     driveConnected: Boolean,
     runtimeStatus: com.notpr.emberlist.data.sync.SyncRuntimeStatus
-): String? {
-    if (!driveConnected) return null
+): String {
+    if (!driveConnected) return "Not connected"
     return when {
-        runtimeStatus.isSyncing -> "Syncing…"
-        !runtimeStatus.isOnline && runtimeStatus.hasPendingLocalChanges ->
-            "Offline. Local changes are waiting to sync."
-        runtimeStatus.hasPendingLocalChanges ->
-            "Pending local changes."
-        !runtimeStatus.isOnline ->
-            "Offline."
-        else -> "Synced."
+        runtimeStatus.isSyncing -> "Syncing"
+        !runtimeStatus.isOnline -> "Offline"
+        runtimeStatus.hasPendingLocalChanges -> "Pending changes"
+        else -> "Ready"
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -432,15 +220,14 @@ private fun syncStatusText(
 private fun RowSwitch(
     label: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    enabled: Boolean = true
+    onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = label)
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -456,8 +243,10 @@ private fun DropdownRow(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(text = "$label: $value")
-        TextButton(onClick = { open = true }) { Text("Change") }
+        Text(text = label)
+        TextButton(onClick = { open = true }) {
+            Text(value)
+        }
     }
     if (open) {
         AlertDialog(
@@ -466,16 +255,22 @@ private fun DropdownRow(
             text = {
                 Column {
                     options.forEach { option ->
-                        TextButton(onClick = {
-                            onSelect(option)
-                            open = false
-                        }) { Text(option) }
+                        TextButton(
+                            onClick = {
+                                onSelect(option)
+                                open = false
+                            }
+                        ) {
+                            Text(option)
+                        }
                     }
                 }
             },
             confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { open = false }) { Text("Close") }
+                TextButton(onClick = { open = false }) {
+                    Text("Close")
+                }
             }
         )
     }
@@ -489,7 +284,10 @@ private fun SectionHeader(text: String) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
     )
-    Divider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+    HorizontalDivider(
+        modifier = Modifier.padding(vertical = 8.dp),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+    )
 }
 
 @Composable
