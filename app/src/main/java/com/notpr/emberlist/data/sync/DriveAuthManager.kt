@@ -11,6 +11,7 @@ import com.google.android.gms.auth.api.identity.RevokeAccessRequest
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -98,12 +99,29 @@ class DriveAuthManager(
             return DriveAuthorizationResult.ResolutionRequired(pendingIntent)
         }
         val account = result.toGoogleSignInAccount()
-        val accountId = account?.id
         val token = result.accessToken
-        if (accountId.isNullOrBlank() || token.isNullOrBlank()) {
+        val hasDriveScope = result.grantedScopes.contains(DriveScopes.DRIVE_APPDATA)
+        if (!hasDriveScope) {
+            _state.value = DriveAuthState()
+            return DriveAuthorizationResult.Failure("Google Drive app-data access was not granted.")
+        }
+        if (account == null) {
             _state.value = DriveAuthState()
             return DriveAuthorizationResult.Failure(
-                "Google authorization did not return a usable Drive account."
+                "Google authorization did not return account details."
+            )
+        }
+        if (token.isNullOrBlank()) {
+            _state.value = DriveAuthState()
+            return DriveAuthorizationResult.Failure(
+                "Google authorization did not return a Drive access token."
+            )
+        }
+        val accountId = resolveDriveAccountId(account.id, account.email)
+        if (accountId == null) {
+            _state.value = DriveAuthState()
+            return DriveAuthorizationResult.Failure(
+                "Google authorization did not return an account identifier."
             )
         }
         val access = AuthorizedDriveAccess(
@@ -114,17 +132,13 @@ class DriveAuthManager(
         )
         _state.value = DriveAuthState(
             isSignedIn = true,
-            hasDriveScope = result.grantedScopes.contains(DriveScopes.DRIVE_APPDATA),
+            hasDriveScope = true,
             accountId = access.accountId,
             email = access.email,
             displayName = access.displayName,
             requiresUserAction = false
         )
-        return if (_state.value.hasDriveScope) {
-            DriveAuthorizationResult.Authorized(access)
-        } else {
-            DriveAuthorizationResult.Failure("Google Drive app-data access was not granted.")
-        }
+        return DriveAuthorizationResult.Authorized(access)
     }
 
     private fun toAuthorizationError(error: Throwable): String {
@@ -147,3 +161,10 @@ class DriveAuthManager(
         }
     }
 }
+
+internal fun resolveDriveAccountId(accountId: String?, email: String?): String? =
+    accountId?.trim()?.takeIf { it.isNotEmpty() }
+        ?: email?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.lowercase(Locale.ROOT)
+            ?.let { "email:$it" }

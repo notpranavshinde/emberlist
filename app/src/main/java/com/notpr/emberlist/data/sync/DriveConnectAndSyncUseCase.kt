@@ -39,7 +39,13 @@ class DriveConnectAndSyncUseCase(
                 DriveConnectAndSyncResult.Failure(authorization.message)
             is DriveAuthorizationResult.Authorized -> {
                 val binding = settingsRepository.driveWorkspace.first()
-                if (!binding.isBound || binding.accountId != authorization.access.accountId) {
+                if (!binding.isBound || !driveAccountsMatch(
+                        binding.accountId,
+                        binding.email,
+                        authorization.access.accountId,
+                        authorization.access.email
+                    )
+                ) {
                     DriveConnectAndSyncResult.Failure(
                         "Sign in with ${binding.email ?: "the account that owns this device cache"} before replacing its cloud workspace."
                     )
@@ -69,7 +75,13 @@ class DriveConnectAndSyncUseCase(
             DriveConnectAndSyncResult.Failure(authorization.message)
         is DriveAuthorizationResult.Authorized -> {
             val binding = settingsRepository.driveWorkspace.first()
-            if (binding.isBound && binding.accountId != authorization.access.accountId) {
+            if (binding.isBound && !driveAccountsMatch(
+                    binding.accountId,
+                    binding.email,
+                    authorization.access.accountId,
+                    authorization.access.email
+                )
+            ) {
                 DriveConnectAndSyncResult.Failure(
                     "A different Google account owns this device cache. Sign in with ${binding.email ?: "the original account"}."
                 )
@@ -104,4 +116,18 @@ class DriveConnectAndSyncUseCase(
             statusTracker.setSyncing(false)
         }
     }
+}
+
+internal fun driveAccountsMatch(
+    boundAccountId: String?,
+    boundEmail: String?,
+    authorizedAccountId: String,
+    authorizedEmail: String?
+): Boolean {
+    if (boundAccountId == authorizedAccountId) return true
+    val normalizedBoundEmail = boundEmail?.trim()?.takeIf { it.isNotEmpty() }
+    val normalizedAuthorizedEmail = authorizedEmail?.trim()?.takeIf { it.isNotEmpty() }
+    return normalizedBoundEmail != null &&
+        normalizedAuthorizedEmail != null &&
+        normalizedBoundEmail.equals(normalizedAuthorizedEmail, ignoreCase = true)
 }
