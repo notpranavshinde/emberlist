@@ -2,6 +2,8 @@
 
 This file applies to the entire repository. Keep changes focused, preserve unrelated work, and follow any more-specific `AGENTS.md` found below the directory you are editing.
 
+Use subagents for large tasks with clear instructions and review their work. 
+
 ## Repository Map
 
 - `app/` — Android application built with Kotlin, Jetpack Compose, Room, WorkManager, and Google Drive sync.
@@ -49,7 +51,7 @@ Android development requires JDK 17 and Android SDK 34.
 .\gradlew.bat installDebug
 .\gradlew.bat connectedAndroidTest
 ```
-
+Small changes in the code can be verified with gradle compiles and tests, but for UI changes, new/modified features must be tested using an android emulator when available for testing. 
 On macOS/Linux, use `./gradlew` with the same tasks.
 
 `connectedAndroidTest` requires a connected device or emulator. Activity startup and some Compose selectors are currently known to be unreliable on connected targets; if the task cannot run or fails, report the exact limitation instead of claiming the suite passed or dismissing the failure as device-only.
