@@ -11,11 +11,19 @@ import com.google.android.gms.auth.api.identity.RevokeAccessRequest
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 import com.google.api.services.drive.DriveScopes
-import java.util.Locale
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 data class DriveAuthState(
     val isSignedIn: Boolean = false,
@@ -56,20 +64,24 @@ class DriveAuthManager(
                 if (selectAccount) setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT)
             }
             .build()
-        return runCatching { client.authorize(request).await() }
-            .fold(::consumeAuthorizationResult) { error ->
-                _state.value = _state.value.copy(hasDriveScope = false)
-                DriveAuthorizationResult.Failure(toAuthorizationError(error))
-            }
+        val result = try {
+            client.authorize(request).await()
+        } catch (error: Throwable) {
+            _state.value = _state.value.copy(hasDriveScope = false)
+            return DriveAuthorizationResult.Failure(toAuthorizationError(error))
+        }
+        return consumeAuthorizationResult(result)
     }
 
-    fun handleAuthorizationResult(data: Intent?): DriveAuthorizationResult {
+    suspend fun handleAuthorizationResult(data: Intent?): DriveAuthorizationResult {
         if (data == null) return DriveAuthorizationResult.Failure("Google authorization was cancelled.")
-        return runCatching { client.getAuthorizationResultFromIntent(data) }
-            .fold(::consumeAuthorizationResult) { error ->
-                _state.value = _state.value.copy(hasDriveScope = false)
-                DriveAuthorizationResult.Failure(toAuthorizationError(error))
-            }
+        val result = try {
+            client.getAuthorizationResultFromIntent(data)
+        } catch (error: Throwable) {
+            _state.value = _state.value.copy(hasDriveScope = false)
+            return DriveAuthorizationResult.Failure(toAuthorizationError(error))
+        }
+        return consumeAuthorizationResult(result)
     }
 
     suspend fun disconnect(): DriveAuthState {
@@ -86,7 +98,9 @@ class DriveAuthManager(
         return _state.value
     }
 
-    private fun consumeAuthorizationResult(result: AuthorizationResult): DriveAuthorizationResult {
+    private suspend fun consumeAuthorizationResult(
+        result: AuthorizationResult
+    ): DriveAuthorizationResult {
         if (result.hasResolution()) {
             val pendingIntent = result.pendingIntent
                 ?: return DriveAuthorizationResult.Failure(
@@ -98,18 +112,11 @@ class DriveAuthManager(
             )
             return DriveAuthorizationResult.ResolutionRequired(pendingIntent)
         }
-        val account = result.toGoogleSignInAccount()
         val token = result.accessToken
         val hasDriveScope = result.grantedScopes.contains(DriveScopes.DRIVE_APPDATA)
         if (!hasDriveScope) {
             _state.value = DriveAuthState()
             return DriveAuthorizationResult.Failure("Google Drive app-data access was not granted.")
-        }
-        if (account == null) {
-            _state.value = DriveAuthState()
-            return DriveAuthorizationResult.Failure(
-                "Google authorization did not return account details."
-            )
         }
         if (token.isNullOrBlank()) {
             _state.value = DriveAuthState()
@@ -117,17 +124,18 @@ class DriveAuthManager(
                 "Google authorization did not return a Drive access token."
             )
         }
-        val accountId = resolveDriveAccountId(account.id, account.email)
-        if (accountId == null) {
+        val identity = try {
+            fetchGoogleIdentity(token)
+        } catch (error: Throwable) {
             _state.value = DriveAuthState()
             return DriveAuthorizationResult.Failure(
-                "Google authorization did not return an account identifier."
+                error.message ?: "Google account profile could not be verified."
             )
         }
         val access = AuthorizedDriveAccess(
-            accountId = accountId,
-            email = account.email,
-            displayName = account.displayName,
+            accountId = identity.accountId,
+            email = identity.email,
+            displayName = identity.displayName,
             accessToken = token
         )
         _state.value = DriveAuthState(
@@ -141,6 +149,29 @@ class DriveAuthManager(
         return DriveAuthorizationResult.Authorized(access)
     }
 
+    private suspend fun fetchGoogleIdentity(accessToken: String): GoogleIdentity =
+        withContext(Dispatchers.IO) {
+            val connection = (URL(GOOGLE_USERINFO_ENDPOINT).openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                setRequestProperty("Authorization", "Bearer $accessToken")
+                setRequestProperty("Accept", "application/json")
+            }
+            try {
+                val statusCode = connection.responseCode
+                if (statusCode !in 200..299) {
+                    throw IOException(
+                        "Google account profile could not be verified (HTTP $statusCode)."
+                    )
+                }
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                parseGoogleIdentity(body)
+            } finally {
+                connection.disconnect()
+            }
+        }
+
     private fun toAuthorizationError(error: Throwable): String {
         val apiError = error as? ApiException
         return if (apiError != null) {
@@ -151,6 +182,9 @@ class DriveAuthManager(
     }
 
     companion object {
+        private const val GOOGLE_USERINFO_ENDPOINT =
+            "https://www.googleapis.com/oauth2/v3/userinfo"
+
         internal fun googleSignInErrorMessage(statusCode: Int, statusMessage: String?): String = buildString {
             append("Google authorization failed")
             statusCode.takeIf { it != 0 }?.let { append(" (code ").append(it).append(')') }
@@ -162,9 +196,25 @@ class DriveAuthManager(
     }
 }
 
-internal fun resolveDriveAccountId(accountId: String?, email: String?): String? =
-    accountId?.trim()?.takeIf { it.isNotEmpty() }
-        ?: email?.trim()
+internal data class GoogleIdentity(
+    val accountId: String,
+    val email: String?,
+    val displayName: String?
+)
+
+internal fun parseGoogleIdentity(body: String): GoogleIdentity {
+    val profile = Json.parseToJsonElement(body).jsonObject
+    val accountId = profile["sub"]?.jsonPrimitive?.contentOrNull
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: throw IOException("Google account profile did not return an account identifier.")
+    return GoogleIdentity(
+        accountId = accountId,
+        email = profile["email"]?.jsonPrimitive?.contentOrNull
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() },
+        displayName = profile["name"]?.jsonPrimitive?.contentOrNull
+            ?.trim()
             ?.takeIf { it.isNotEmpty() }
-            ?.lowercase(Locale.ROOT)
-            ?.let { "email:$it" }
+    )
+}
