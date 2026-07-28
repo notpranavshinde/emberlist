@@ -1,5 +1,8 @@
 package com.notpr.emberlist.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,9 +45,10 @@ fun SettingsScreen(padding: PaddingValues) {
     val container = LocalAppContainer.current
     val viewModel: SettingsViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val settings by viewModel.settings.collectAsState()
-    val driveAuthState by viewModel.driveAuthState.collectAsState()
+    val driveWorkspace by viewModel.driveWorkspace.collectAsState()
     val syncRuntimeStatus by viewModel.syncRuntimeStatus.collectAsState()
     val syncUiState by viewModel.syncUiState.collectAsState()
+    val syncNow = rememberSyncNow(viewModel)
     var showReplaceCorruptCloud by remember { mutableStateOf(false) }
 
     Column(
@@ -58,8 +62,8 @@ fun SettingsScreen(padding: PaddingValues) {
         SectionHeader(text = "Cloud sync")
         InfoRow(
             label = "Account",
-            value = driveAuthState.email
-                ?: driveAuthState.displayName
+            value = driveWorkspace.email
+                ?: driveWorkspace.displayName
                 ?: "Not connected"
         )
         InfoRow(
@@ -69,7 +73,7 @@ fun SettingsScreen(padding: PaddingValues) {
         InfoRow(
             label = "Status",
             value = syncStatusText(
-                driveConnected = driveAuthState.hasDriveScope,
+                driveConnected = driveWorkspace.isBound,
                 runtimeStatus = syncRuntimeStatus
             )
         )
@@ -112,8 +116,8 @@ fun SettingsScreen(padding: PaddingValues) {
                 Text("Sign out")
             }
             Button(
-                onClick = viewModel::syncNow,
-                enabled = driveAuthState.hasDriveScope && !syncUiState.isSyncing,
+                onClick = syncNow,
+                enabled = driveWorkspace.isBound && !syncUiState.isSyncing,
                 modifier = Modifier.weight(1f)
             ) {
                 if (syncUiState.isSyncing) {
@@ -179,6 +183,20 @@ fun SettingsScreen(padding: PaddingValues) {
                 }
             }
         )
+    }
+}
+
+@Composable
+internal fun rememberSyncNow(viewModel: SettingsViewModel): () -> Unit {
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        viewModel.handleSyncAuthorizationResult(result.data)
+    }
+    return {
+        viewModel.syncNow { pendingIntent ->
+            launcher.launch(IntentSenderRequest.Builder(pendingIntent).build())
+        }
     }
 }
 

@@ -43,7 +43,6 @@ class EmberlistViewModelFactory(private val container: AppContainer) : ViewModel
                     container.appContext,
                     container.database,
                     container.settingsRepository,
-                    container.driveAuthManager,
                     container.syncStatusTracker,
                     container.onboardingAnalytics,
                     container.driveConnectAndSync,

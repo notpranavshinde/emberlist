@@ -98,8 +98,9 @@ fun TodayScreen(
     val completedItems by viewModel.completedToday.collectAsState()
     val workspaceTaskCount by viewModel.workspaceTaskCount.collectAsState()
     val settings by settingsViewModel.settings.collectAsState()
-    val driveAuthState by settingsViewModel.driveAuthState.collectAsState()
+    val driveWorkspace by settingsViewModel.driveWorkspace.collectAsState()
     val syncUiState by settingsViewModel.syncUiState.collectAsState()
+    val syncNow = rememberSyncNow(settingsViewModel)
     val zone = ZoneId.systemDefault()
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val reorderState = remember { TodayManualReorderState() }
@@ -252,8 +253,8 @@ fun TodayScreen(
                         Icon(Icons.Default.Tune, contentDescription = "Sort and group")
                     }
                     IconButton(
-                        onClick = { settingsViewModel.syncNow() },
-                        enabled = driveAuthState.hasDriveScope && !syncUiState.isSyncing
+                        onClick = syncNow,
+                        enabled = driveWorkspace.isBound && !syncUiState.isSyncing
                     ) {
                         if (syncUiState.isSyncing) {
                             androidx.compose.material3.CircularProgressIndicator(

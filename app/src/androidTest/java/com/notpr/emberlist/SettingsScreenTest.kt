@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
@@ -18,10 +19,16 @@ import com.notpr.emberlist.ui.screens.SettingsScreen
 import com.notpr.emberlist.ui.theme.EmberlistTheme
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
 
 class SettingsScreenTest {
+    private val boundDriveWorkspaceRule = BoundDriveWorkspaceRule()
+    private val composeRule = createComposeRule()
+
     @get:Rule
-    val composeRule = createComposeRule()
+    val rules: RuleChain = RuleChain
+        .outerRule(boundDriveWorkspaceRule)
+        .around(composeRule)
 
     @Test
     fun settingsShowsOnlyCloudSyncAndPreferences() {
@@ -36,6 +43,8 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithText("Settings").assertIsDisplayed()
         composeRule.onNodeWithText("Cloud sync").assertIsDisplayed()
+        composeRule.onNodeWithText("instrumentation@example.invalid").assertIsDisplayed()
+        composeRule.onNodeWithText("Sync now").assertIsEnabled()
         composeRule.onNodeWithText("Preferences").assertIsDisplayed()
         composeRule.onNodeWithText("Anonymous analytics").assertIsDisplayed()
         composeRule.onNodeWithText("Show completed in Today").assertIsDisplayed()
