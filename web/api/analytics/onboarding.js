@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { enforceRateLimit } from '../_lib/rate-limit.js';
 
 const EVENTS = new Set([
@@ -105,8 +104,4 @@ function badRequest(message) {
   const error = new Error(message);
   error.statusCode = 400;
   return error;
-}
-
-export function eventDigestForTests(value) {
-  return crypto.createHash('sha256').update(value).digest('hex');
 }

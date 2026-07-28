@@ -1,11 +1,8 @@
 package com.notpr.emberlist
 
 import com.notpr.emberlist.parsing.extractBulkQuickAddLines
-import com.notpr.emberlist.parsing.shouldPromptBulkQuickAdd
 import com.notpr.emberlist.parsing.stripCommonListMarker
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -57,11 +54,4 @@ class BulkQuickAddTest {
         )
     }
 
-    @Test
-    fun shouldPromptBulkQuickAddOnlyForMultipleNonBlankLines() {
-        assertFalse(shouldPromptBulkQuickAdd("one task"))
-        assertFalse(shouldPromptBulkQuickAdd("one task\n\n"))
-        assertTrue(shouldPromptBulkQuickAdd("one task\ntwo task"))
-        assertTrue(shouldPromptBulkQuickAdd("- one task\n* two task"))
-    }
 }

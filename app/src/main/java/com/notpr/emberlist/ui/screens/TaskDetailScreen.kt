@@ -440,7 +440,7 @@ fun TaskDetailScreen(padding: PaddingValues, taskId: String, navController: NavH
                 task = subtask,
                 projectById = projectById,
                 sectionById = sectionById
-            ).copy(isSubtask = true, indentLevel = 1)
+            )
             TaskRow(
                 item = item,
                 onToggle = viewModel::toggleComplete,

@@ -4,24 +4,13 @@ import {
   type OnboardingExampleId,
 } from "../lib/onboarding";
 
-export type OnboardingRestoreStatus =
-  | { kind: "idle" }
-  | { kind: "working"; message: string }
-  | { kind: "empty"; message: string }
-  | { kind: "error"; message: string };
-
 export function FirstRunWelcome({
   onAddTask,
   onChooseExample,
   onSkip,
 }: {
-  cloudConfigured: boolean;
-  isOnline: boolean;
-  restoreStatus: OnboardingRestoreStatus;
   onAddTask: () => void;
   onChooseExample: (id: OnboardingExampleId, value: string) => void;
-  onRestore: () => void;
-  onUseAnotherAccount: () => void;
   onSkip: () => void;
 }) {
   return (

@@ -32,7 +32,6 @@ export type AnalyticsProperties = {
   scheduled?: boolean; recurring?: boolean; reminder?: boolean; priority?: boolean; subtask?: boolean; bulk?: boolean;
 };
 
-export type QueuedOnboardingEvent = QueuedAnalyticsEvent;
 export type QueuedAnalyticsEvent = { createdAt: number; payload: {
   schemaVersion: 2; eventId: string; installId: string; occurredAt: string;
   event: ProductAnalyticsEventName; platform: "web"; appVersion: string; properties: AnalyticsProperties;

@@ -52,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -115,7 +114,6 @@ fun QuickAddSheet(
             val context = LocalContext.current
             val analyticsScope = rememberCoroutineScope()
             val zone = ZoneId.systemDefault()
-            val focusManager = LocalFocusManager.current
             val titleFocusRequester = remember { FocusRequester() }
             val projectNames = projects.map { it.name }
             var inputState by remember { mutableStateOf(TextFieldValue(input)) }
@@ -495,7 +493,6 @@ fun QuickAddSheet(
 
             if (showPriorityDialog) {
                 PriorityDialog(
-                    current = parsed.priority,
                     onDismiss = { showPriorityDialog = false },
                     onSelect = {
                         viewModel.setPriorityOverride(it)
@@ -506,7 +503,6 @@ fun QuickAddSheet(
 
             if (showProjectDialog) {
                 ProjectDialog(
-                    current = parsed.projectName,
                     projects = projects.map { it.name },
                     onDismiss = { showProjectDialog = false },
                     onSelect = {
@@ -844,7 +840,6 @@ private fun pickDateTime(
 
 @Composable
 private fun PriorityDialog(
-    current: Priority,
     onDismiss: () -> Unit,
     onSelect: (Priority) -> Unit
 ) {
@@ -869,7 +864,6 @@ private fun PriorityDialog(
 
 @Composable
 private fun ProjectDialog(
-    current: String?,
     projects: List<String>,
     onDismiss: () -> Unit,
     onSelect: (String?) -> Unit

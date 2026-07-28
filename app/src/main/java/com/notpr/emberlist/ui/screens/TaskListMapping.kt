@@ -10,8 +10,7 @@ fun buildTaskListItem(
     projectById: Map<String, ProjectEntity>,
     sectionById: Map<String, SectionEntity>,
     displayDueAt: Long? = task.dueAt,
-    isOverdue: Boolean = false,
-    isPreview: Boolean = false
+    isOverdue: Boolean = false
 ): TaskListItem {
     val projectName = projectById[task.projectId]?.name ?: "Inbox"
     val sectionName = sectionById[task.sectionId]?.name
@@ -20,8 +19,7 @@ fun buildTaskListItem(
         projectName = projectName,
         sectionName = sectionName,
         displayDueAt = displayDueAt,
-        isOverdue = isOverdue,
-        isPreview = isPreview
+        isOverdue = isOverdue
     )
 }
 

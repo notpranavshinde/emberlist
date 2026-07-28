@@ -1,11 +1,17 @@
 package com.notpr.emberlist.reminders
 
+import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.notpr.emberlist.MainActivity
 import com.notpr.emberlist.R
 
@@ -51,28 +57,14 @@ object NotificationHelper {
             openTaskIntent(context, taskId)
         )
 
-    fun buildLocationNotification(
-        context: Context,
-        taskId: String,
-        reminderId: String,
-        title: String,
-        message: String
-    ) = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_launcher_foreground)
-        .setContentTitle(title)
-        .setContentText(message)
-        .setContentIntent(openTaskIntent(context, taskId))
-        .setAutoCancel(true)
-        .addAction(
-            0,
-            "Complete",
-            NotificationActionReceiver.intentFor(context, NotificationActionReceiver.ACTION_COMPLETE, taskId, reminderId)
-        )
-        .addAction(
-            0,
-            "Open",
-            openTaskIntent(context, taskId)
-        )
+    fun notify(context: Context, id: Int, notification: Notification) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        NotificationManagerCompat.from(context).notify(id, notification)
+    }
 
     private fun openTaskIntent(context: Context, taskId: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)

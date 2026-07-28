@@ -78,11 +78,6 @@ object RecurrenceEngine {
         }
     }
 
-    private fun coerceDay(date: LocalDate, day: Int): Int {
-        val max = date.lengthOfMonth()
-        return day.coerceIn(1, max)
-    }
-
     private fun findMonthWithDay(base: LocalDate, interval: Int, targetDay: Int): LocalDate {
         var candidate = base.plusMonths(interval.toLong())
         while (candidate.lengthOfMonth() < targetDay) {

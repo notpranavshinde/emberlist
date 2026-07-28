@@ -124,9 +124,6 @@ class OnboardingAnalytics(
         dataStore.edit { prefs -> prefs.remove(KEY_QUEUE); prefs.remove(KEY_LEGACY_QUEUE); prefs.remove(KEY_INSTALL_ID); prefs.remove(KEY_LAST_SESSION) }
     }
 
-    suspend fun clearQueue() { dataStore.edit { it.remove(KEY_QUEUE); it.remove(KEY_LEGACY_QUEUE) } }
-    suspend fun resetInstallId() { clearQueueAndId() }
-
     suspend fun flush(): Boolean = withContext(Dispatchers.IO) {
         if (!settingsRepository.settings.first().analyticsEnabled) { clearQueueAndId(); return@withContext true }
         val now = System.currentTimeMillis()

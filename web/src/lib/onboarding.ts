@@ -23,7 +23,6 @@ export type OnboardingState = {
   startedAt: number | null;
   completedAt: number | null;
   completionMethod: OnboardingCompletionMethod | null;
-  restorePending: boolean;
 };
 
 export function hasLiveTasks(payload: SyncPayload | null): boolean {
@@ -46,7 +45,6 @@ export function createActiveOnboardingState(now = Date.now()): OnboardingState {
     startedAt: now,
     completedAt: null,
     completionMethod: null,
-    restorePending: false,
   };
 }
 
@@ -60,14 +58,13 @@ export function createCompletedOnboardingState(
     startedAt: null,
     completedAt: now,
     completionMethod: method,
-    restorePending: false,
   };
 }
 
 export function dismissOnboarding(
   state: OnboardingState,
 ): OnboardingState {
-  return { ...state, status: "dismissed", restorePending: false };
+  return { ...state, status: "dismissed" };
 }
 
 export function completeOnboarding(
@@ -80,15 +77,7 @@ export function completeOnboarding(
     status: "completed",
     completedAt: now,
     completionMethod: method,
-    restorePending: false,
   };
-}
-
-export function setOnboardingRestorePending(
-  state: OnboardingState,
-  restorePending: boolean,
-): OnboardingState {
-  return { ...state, restorePending };
 }
 
 export function initializeOnboardingState({
@@ -131,12 +120,18 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
     !isNullableNumber(candidate.completedAt) ||
     ![null, "first_task", "drive_restore"].includes(
       candidate.completionMethod ?? null,
-    ) ||
-    typeof candidate.restorePending !== "boolean"
+    )
   ) {
     return null;
   }
-  return candidate as OnboardingState;
+  return {
+    version: ONBOARDING_VERSION,
+    status: candidate.status as OnboardingStatus,
+    startedAt: candidate.startedAt ?? null,
+    completedAt: candidate.completedAt ?? null,
+    completionMethod:
+      (candidate.completionMethod as OnboardingCompletionMethod | null) ?? null,
+  };
 }
 
 export function onboardingElapsedBucket(

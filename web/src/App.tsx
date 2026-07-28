@@ -67,10 +67,7 @@ import {
 } from "date-fns";
 import { RecoveryScreen } from "./components/RecoveryScreen";
 import { TaskCalendarView } from "./components/TaskCalendarView";
-import {
-  FirstRunWelcome,
-  type OnboardingRestoreStatus,
-} from "./components/FirstRunWelcome";
+import { FirstRunWelcome } from "./components/FirstRunWelcome";
 import { GettingStartedDialog } from "./components/GettingStartedDialog";
 import {
   resolveBannerAutoDismissMs,
@@ -98,14 +95,12 @@ import {
   createActiveOnboardingState,
   dismissOnboarding,
   hasLiveTasks,
-  hasLiveWorkspaceContent,
   initializeOnboardingState,
   LEGACY_ONBOARDING_DISMISSED_KEY,
   LEGACY_ONBOARDING_STATE_KEY,
   onboardingElapsedBucket,
   ONBOARDING_EXAMPLES,
   ONBOARDING_STORAGE_KEY,
-  setOnboardingRestorePending,
   type OnboardingExampleId,
   type OnboardingState,
 } from "./lib/onboarding";
@@ -123,11 +118,6 @@ import {
   mergeBulkDraftWithDefaults,
   type QuickAddContext,
 } from "./lib/quickAddDrafts";
-import {
-  getQuickAddEscapeAction,
-  shouldCloseQuickAddAfterCreate,
-  type QuickAddSubmitMode,
-} from "./lib/quickAddFlow";
 import { parseQuickAdd } from "./lib/quickParser";
 import {
   buildReminderEditors,
@@ -242,6 +232,7 @@ type Banner = {
 };
 type CloudStatusTone = "ready" | "idle" | "warning" | "muted";
 type FocusedTaskActionMode = "reschedule" | "move" | "priority" | "delete";
+type QuickAddSubmitMode = "close" | "continue";
 type CloudSyncOutcome =
   | { status: "success"; payload: SyncPayload }
   | { status: "cancelled" }
@@ -319,8 +310,6 @@ function App() {
   );
   const [onboardingState, setOnboardingState] =
     useState<OnboardingState | null>(null);
-  const [onboardingRestoreStatus, setOnboardingRestoreStatus] =
-    useState<OnboardingRestoreStatus>({ kind: "idle" });
   const [analyticsEnabled, setAnalyticsEnabled] = useState(() =>
     readAnalyticsEnabled(),
   );
@@ -966,75 +955,15 @@ function App() {
     setOnboardingState(next);
   }
 
-  function completeFirstRun(method: "first_task" | "drive_restore") {
+  function completeFirstRun() {
     const current = onboardingStateRef.current;
     if (!current || current.status !== "active") return;
     const now = Date.now();
     trackOnboardingEvent("onboarding_completed", {
-      method,
+      method: "first_task",
       elapsedBucket: onboardingElapsedBucket(current.startedAt, now),
     });
-    updateOnboardingState(completeOnboarding(current, method, now));
-  }
-
-  function applyOnboardingRestoreOutcome(outcome: CloudSyncOutcome) {
-    const current = onboardingStateRef.current;
-    if (!current || current.status !== "active") return;
-    if (outcome.status === "success") {
-      if (hasLiveWorkspaceContent(outcome.payload)) {
-        trackOnboardingEvent("onboarding_restore_result", { result: "success" });
-        completeFirstRun("drive_restore");
-        setOnboardingRestoreStatus({ kind: "idle" });
-        showBanner("success", "Workspace restored from Google Drive.");
-      } else {
-        trackOnboardingEvent("onboarding_restore_result", { result: "empty" });
-        updateOnboardingState(setOnboardingRestorePending(current, false));
-        setOnboardingRestoreStatus({
-          kind: "empty",
-          message:
-            "No Emberlist workspace was found in this Google account. Add your first task or try another account.",
-        });
-      }
-      return;
-    }
-    updateOnboardingState(setOnboardingRestorePending(current, false));
-    if (outcome.status === "cancelled") {
-      trackOnboardingEvent("onboarding_restore_result", { result: "cancelled" });
-      setOnboardingRestoreStatus({ kind: "idle" });
-    } else if (outcome.status === "error") {
-      trackOnboardingEvent("onboarding_restore_result", { result: "error" });
-      setOnboardingRestoreStatus({ kind: "error", message: outcome.message });
-    }
-  }
-
-  async function handleRestoreFromOnboarding() {
-    const current = onboardingStateRef.current;
-    if (!current || current.status !== "active") return;
-    if (!isOnlineRef.current) {
-      trackOnboardingEvent("onboarding_restore_result", { result: "offline" });
-      setOnboardingRestoreStatus({
-        kind: "error",
-        message: "Connect to the internet to restore your workspace.",
-      });
-      return;
-    }
-    if (!syncService || !cloudSyncEnabled) return;
-    trackOnboardingEvent("onboarding_restore_started");
-    updateOnboardingState(setOnboardingRestorePending(current, true));
-    setOnboardingRestoreStatus({
-      kind: "working",
-      message: cloudSessionRef.current
-        ? "Restoring your workspace..."
-        : "Connecting Google Drive...",
-    });
-    const outcome = await runCloudSync({ interactiveAuth: true, automatic: false });
-    applyOnboardingRestoreOutcome(outcome);
-  }
-
-  async function handleUseAnotherRestoreAccount() {
-    await handleDisconnectCloud();
-    setOnboardingRestoreStatus({ kind: "idle" });
-    await handleRestoreFromOnboarding();
+    updateOnboardingState(completeOnboarding(current, "first_task", now));
   }
 
   async function handleDisconnectCloud() {
@@ -1566,7 +1495,7 @@ function App() {
       );
     }
     if (createdTask && isFirstRunTask) {
-      completeFirstRun("first_task");
+      completeFirstRun();
       setIsQuickAddOpen(false);
       setQuickAddOverride(null);
     }
@@ -1625,7 +1554,7 @@ function App() {
       );
     }
     if (createdTask && isFirstRunTask) {
-      completeFirstRun("first_task");
+      completeFirstRun();
       setIsQuickAddOpen(false);
       setQuickAddOverride(null);
     }
@@ -1849,13 +1778,10 @@ function App() {
           setIsCloudConnectDialogOpen(false);
         }
 
-        const outcome = await runCloudSync({
+        await runCloudSync({
           interactiveAuth: false,
           automatic: false,
         });
-        if (onboardingStateRef.current?.restorePending) {
-          applyOnboardingRestoreOutcome(outcome);
-        }
       } finally {
         if (!cancelled) {
           setRedirectAuthCompletion(null);
@@ -2003,12 +1929,10 @@ function App() {
           undoActivityMapRef.current.has(activityId)
         }
         onboardingState={onboardingState}
-        onboardingRestoreStatus={onboardingRestoreStatus}
         onSkipOnboarding={() => {
           const current = onboardingStateRef.current;
           if (current) updateOnboardingState(dismissOnboarding(current));
           trackOnboardingEvent("onboarding_skipped");
-          setOnboardingRestoreStatus({ kind: "idle" });
           setIsQuickAddOpen(false);
           setQuickAddOverride(null);
         }}
@@ -2027,13 +1951,10 @@ function App() {
           });
           setIsQuickAddOpen(true);
         }}
-        onRestoreOnboarding={() => void handleRestoreFromOnboarding()}
-        onUseAnotherRestoreAccount={() => void handleUseAnotherRestoreAccount()}
         onShowOnboardingWelcome={() => {
           const next = createActiveOnboardingState();
           onboardingViewedRef.current = false;
           updateOnboardingState(next);
-          setOnboardingRestoreStatus({ kind: "idle" });
         }}
         analyticsEnabled={analyticsEnabled}
         onToggleAnalyticsEnabled={() =>
@@ -2151,14 +2072,11 @@ type WorkspaceShellProps = {
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onCloseQuickAdd: () => void;
   onboardingState: OnboardingState | null;
-  onboardingRestoreStatus: OnboardingRestoreStatus;
   onSkipOnboarding: () => void;
   onOpenOnboardingTask: (
     prefill?: string,
     exampleKind?: OnboardingExampleId,
   ) => void;
-  onRestoreOnboarding: () => void;
-  onUseAnotherRestoreAccount: () => void;
   onShowOnboardingWelcome: () => void;
   analyticsEnabled: boolean;
   onToggleAnalyticsEnabled: () => void;
@@ -2214,11 +2132,8 @@ function WorkspaceShell({
   onOpenQuickAdd,
   onCloseQuickAdd,
   onboardingState,
-  onboardingRestoreStatus,
   onSkipOnboarding,
   onOpenOnboardingTask,
-  onRestoreOnboarding,
-  onUseAnotherRestoreAccount,
   onShowOnboardingWelcome,
   analyticsEnabled,
   onToggleAnalyticsEnabled,
@@ -2847,12 +2762,7 @@ function WorkspaceShell({
                     <TodayPage
                       payload={payload}
                       onboardingState={onboardingState}
-                      onboardingRestoreStatus={onboardingRestoreStatus}
-                      cloudConfigured={cloudConfigured}
-                      isOnline={isOnline}
                       onOpenOnboardingTask={onOpenOnboardingTask}
-                      onRestoreOnboarding={onRestoreOnboarding}
-                      onUseAnotherRestoreAccount={onUseAnotherRestoreAccount}
                       onSkipOnboarding={onSkipOnboarding}
                       showCompletedToday={showCompletedToday}
                       showSelectionButtons={showSelectionButtons}
@@ -3676,12 +3586,7 @@ function buildFeedbackMailto(
 function TodayPage({
   payload,
   onboardingState,
-  onboardingRestoreStatus,
-  cloudConfigured,
-  isOnline,
   onOpenOnboardingTask,
-  onRestoreOnboarding,
-  onUseAnotherRestoreAccount,
   onSkipOnboarding,
   showCompletedToday,
   showSelectionButtons,
@@ -3701,15 +3606,10 @@ function TodayPage({
 }: {
   payload: SyncPayload;
   onboardingState: OnboardingState | null;
-  onboardingRestoreStatus: OnboardingRestoreStatus;
-  cloudConfigured: boolean;
-  isOnline: boolean;
   onOpenOnboardingTask: (
     prefill?: string,
     exampleKind?: OnboardingExampleId,
   ) => void;
-  onRestoreOnboarding: () => void;
-  onUseAnotherRestoreAccount: () => void;
   onSkipOnboarding: () => void;
   showCompletedToday: boolean;
   showSelectionButtons: boolean;
@@ -3930,13 +3830,8 @@ function TodayPage({
     >
       {onboardingState?.status === "active" && !hasLiveTasks(payload) ? (
         <FirstRunWelcome
-          cloudConfigured={cloudConfigured}
-          isOnline={isOnline}
-          restoreStatus={onboardingRestoreStatus}
           onAddTask={() => onOpenOnboardingTask()}
           onChooseExample={(id, value) => onOpenOnboardingTask(value, id)}
-          onRestore={onRestoreOnboarding}
-          onUseAnotherAccount={onUseAnotherRestoreAccount}
           onSkip={onSkipOnboarding}
         />
       ) : null}
@@ -8295,8 +8190,7 @@ function QuickAddDialog({
       if (isSaving) return;
 
       event.preventDefault();
-      const action = getQuickAddEscapeAction(showBulkChoices);
-      if (action === "dismiss-bulk") {
+      if (showBulkChoices) {
         setShowBulkChoices(false);
         return;
       }
@@ -8521,7 +8415,7 @@ function QuickAddDialog({
         if (context.relativePosition === "after") {
           setRelativeAnchorTaskId(taskId);
         }
-        if (shouldCloseQuickAddAfterCreate(mode)) {
+        if (mode === "close") {
           onClose();
         } else {
           resetDialogFields();

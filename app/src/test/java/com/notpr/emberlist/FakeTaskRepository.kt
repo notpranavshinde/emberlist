@@ -61,9 +61,6 @@ class FakeTaskRepository : TaskRepository {
     override suspend fun upsertSection(section: SectionEntity) {
         sections[section.id] = section
     }
-    override suspend fun deleteSection(sectionId: String) {
-        sections[sectionId]?.let { sections[sectionId] = it.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()) }
-    }
     override suspend fun deleteProject(projectId: String) {
         projects[projectId]?.let { projects[projectId] = it.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()) }
     }
@@ -96,21 +93,6 @@ class FakeTaskRepository : TaskRepository {
 
     override suspend fun getSubtasks(parentId: String): List<TaskEntity> =
         tasks.values.filter { it.deletedAt == null && it.parentTaskId == parentId }
-
-    override suspend fun clearCompletedTasks() {
-        tasks.entries.forEach { entry ->
-            if (entry.value.status == com.notpr.emberlist.data.model.TaskStatus.COMPLETED && entry.value.deletedAt == null) {
-                entry.setValue(entry.value.copy(deletedAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis()))
-            }
-        }
-    }
-    override suspend fun clearTasksInSection(sectionId: String) {
-        tasks.entries.forEach { entry ->
-            if (entry.value.sectionId == sectionId) {
-                entry.setValue(entry.value.copy(sectionId = null, updatedAt = System.currentTimeMillis()))
-            }
-        }
-    }
 
     override suspend fun upsertReminder(reminder: ReminderEntity) {
         reminders[reminder.id] = reminder

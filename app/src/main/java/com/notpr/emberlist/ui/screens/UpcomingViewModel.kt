@@ -61,8 +61,7 @@ class UpcomingViewModel(
                 task = task,
                 projectById = projectById,
                 sectionById = sectionById,
-                displayDueAt = dueAt,
-                isPreview = false
+                displayDueAt = dueAt
             )
             UpcomingItem(item = item, displayDueAt = dueAt, isPreview = false)
         }
@@ -73,8 +72,7 @@ class UpcomingViewModel(
                 task = task,
                 projectById = projectById,
                 sectionById = sectionById,
-                displayDueAt = nextDue,
-                isPreview = true
+                displayDueAt = nextDue
             )
             UpcomingItem(item = item, displayDueAt = nextDue, isPreview = true)
         }
@@ -105,7 +103,7 @@ class UpcomingViewModel(
                 task = task,
                 projectById = projectById,
                 sectionById = sectionById
-            ).copy(isSubtask = true, indentLevel = 1)
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -171,10 +169,6 @@ class UpcomingViewModel(
                 )
             )
         }
-    }
-
-    fun rescheduleTomorrow(task: TaskEntity) {
-        reschedule(task, 1)
     }
 
     fun rescheduleToDate(task: TaskEntity, date: LocalDate) {

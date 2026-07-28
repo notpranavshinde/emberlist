@@ -23,7 +23,7 @@ fun flattenTaskItemsWithSubtasks(
         )
         if (hasSubtasks && isExpanded) {
             children.forEach { child ->
-                result += child.copy(isSubtask = true, indentLevel = 1)
+                result += child
             }
         }
     }
@@ -54,7 +54,7 @@ fun flattenUpcomingItemsWithSubtasks(
         if (hasSubtasks && isExpanded && !parent.isPreview) {
             children.forEach { child ->
                 result += UpcomingItem(
-                    item = child.copy(isSubtask = true, indentLevel = 1),
+                    item = child,
                     displayDueAt = parent.displayDueAt,
                     isPreview = false
                 )

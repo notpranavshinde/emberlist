@@ -26,7 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.Composable
@@ -164,7 +164,7 @@ fun UpcomingScreen(padding: PaddingValues, navController: NavHostController) {
                         }
                         item {
                             IconButton(onClick = { showProjectPicker = true }) {
-                                Icon(Icons.Default.DriveFileMove, contentDescription = "Move")
+                                Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move")
                             }
                         }
                         item {

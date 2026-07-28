@@ -85,11 +85,6 @@ class TaskRepositoryImpl(
         sectionDao.upsert(section)
     }
 
-    override suspend fun deleteSection(sectionId: String) {
-        val now = System.currentTimeMillis()
-        sectionDao.softDelete(sectionId, now, now)
-    }
-
     override suspend fun deleteProject(projectId: String) {
         val now = System.currentTimeMillis()
         projectDao.softDelete(projectId, now, now)
@@ -118,17 +113,6 @@ class TaskRepositoryImpl(
     }
 
     override suspend fun getSubtasks(parentId: String): List<TaskEntity> = taskDao.getSubtasks(parentId)
-
-    override suspend fun clearCompletedTasks() {
-        val now = System.currentTimeMillis()
-        val taskIds = taskDao.getTaskIdsByStatus(com.notpr.emberlist.data.model.TaskStatus.COMPLETED)
-        if (taskIds.isNotEmpty()) reminderDao.deleteByTaskIds(taskIds)
-        taskDao.softDeleteCompleted(now, now)
-    }
-
-    override suspend fun clearTasksInSection(sectionId: String) {
-        taskDao.clearSection(sectionId)
-    }
 
     override suspend fun upsertReminder(reminder: ReminderEntity) {
         reminderDao.upsert(reminder)

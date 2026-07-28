@@ -79,7 +79,7 @@ class BackupManager(private val database: EmberlistDatabase) : SyncPayloadStore 
     }
 
     suspend fun importFromUri(contentResolver: ContentResolver, uri: Uri, replace: Boolean) {
-        val input = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: return
+        val input = contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } ?: return
         val payload = decodeBackupPayload(input)
         importPayload(payload, replace)
     }

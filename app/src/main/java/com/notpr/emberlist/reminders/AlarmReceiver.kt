@@ -51,7 +51,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 reminderId,
                 task.title
             ).build()
-            androidx.core.app.NotificationManagerCompat.from(context).notify(reminderId.hashCode(), notification)
+            NotificationHelper.notify(context, reminderId.hashCode(), notification)
             if (reminder.ephemeral) {
                 repository.deleteReminder(reminder.id)
             }

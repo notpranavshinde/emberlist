@@ -10,7 +10,6 @@ import {
   initializeOnboardingState,
   onboardingElapsedBucket,
   parseOnboardingState,
-  setOnboardingRestorePending,
 } from "./onboarding";
 
 describe("onboarding v2", () => {
@@ -30,7 +29,6 @@ describe("onboarding v2", () => {
       startedAt: 100,
       completedAt: null,
       completionMethod: null,
-      restorePending: false,
     });
   });
 
@@ -56,7 +54,6 @@ describe("onboarding v2", () => {
         startedAt: 1,
         completedAt: status === "completed" ? 2 : null,
         completionMethod: status === "completed" ? ("first_task" as const) : null,
-        restorePending: false,
       };
       expect(
         initializeOnboardingState({
@@ -115,23 +112,26 @@ describe("onboarding v2", () => {
     expect(hasLiveTasks(payload)).toBe(true);
   });
 
-  it("transitions through restore, completion, and dismissal", () => {
+  it("transitions through completion and dismissal", () => {
     const active = createActiveOnboardingState(10);
-    expect(setOnboardingRestorePending(active, true).restorePending).toBe(true);
     expect(completeOnboarding(active, "drive_restore", 20)).toMatchObject({
       status: "completed",
       completedAt: 20,
       completionMethod: "drive_restore",
-      restorePending: false,
     });
     expect(dismissOnboarding(active)).toMatchObject({
       status: "dismissed",
-      restorePending: false,
     });
   });
 
   it("rejects malformed stored state and buckets elapsed time", () => {
     expect(parseOnboardingState({ version: 1, status: "active" })).toBeNull();
+    expect(
+      parseOnboardingState({
+        ...createActiveOnboardingState(10),
+        restorePending: true,
+      }),
+    ).toEqual(createActiveOnboardingState(10));
     expect(onboardingElapsedBucket(0, 20_000)).toBe("under_30s");
     expect(onboardingElapsedBucket(0, 45_000)).toBe("30_to_60s");
     expect(onboardingElapsedBucket(0, 120_000)).toBe("1_to_5m");

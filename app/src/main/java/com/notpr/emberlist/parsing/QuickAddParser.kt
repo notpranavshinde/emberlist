@@ -9,8 +9,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
-const val DEFAULT_TIME_HOUR = 9
-
 sealed class ReminderSpec {
     data class Absolute(val timeAtMillis: Long) : ReminderSpec()
     data class Offset(val minutes: Int) : ReminderSpec()

@@ -38,7 +38,7 @@ class SettingsViewModel(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5_000),
-            SettingsState(1, false, "Ember", false, true, null, true)
+            SettingsState(1, false, false, true, null, true)
         )
     val driveAuthState: StateFlow<DriveAuthState> = driveAuthManager.state
     val syncRuntimeStatus: StateFlow<SyncRuntimeStatus> = syncStatusTracker.state
@@ -51,10 +51,6 @@ class SettingsViewModel(
 
     fun updateUse24h(value: Boolean) {
         viewModelScope.launch { settingsRepository.updateUse24h(value) }
-    }
-
-    fun updateAccent(value: String) {
-        viewModelScope.launch { settingsRepository.updateAccent(value) }
     }
 
     fun updateShowCompletedToday(value: Boolean) {
@@ -116,13 +112,13 @@ class SettingsViewModel(
         }
     }
 
-    private suspend fun syncNowInternal(connectStatus: String? = null) {
+    private suspend fun syncNowInternal() {
         if (_syncUiState.value.isSyncing) return
         if (!driveAuthState.value.hasDriveScope) {
             _syncUiState.value = SyncUiState(error = "Connect Google Drive first.")
             return
         }
-        _syncUiState.value = SyncUiState(isSyncing = true, status = connectStatus ?: "Syncing…")
+        _syncUiState.value = SyncUiState(isSyncing = true, status = "Syncing…")
         when (val operation = driveConnectAndSync.start()) {
             is DriveConnectAndSyncResult.Success -> {
                 val result = operation.result
@@ -131,11 +127,7 @@ class SettingsViewModel(
                         mapOf("action" to "sync", "result" to "success", "origin" to "settings")
                     )
                     _syncUiState.value = SyncUiState(
-                        status = if (connectStatus != null && result.remoteCreated) {
-                            "Google Drive connected. Cloud sync file created."
-                        } else if (connectStatus != null) {
-                            "Google Drive connected. Workspace restored and synced."
-                        } else if (result.remoteCreated) {
+                        status = if (result.remoteCreated) {
                             "Synced to Google Drive."
                         } else {
                             "Sync complete."

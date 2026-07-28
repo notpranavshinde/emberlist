@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.notpr.emberlist.data.model.ProjectEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -24,9 +23,6 @@ interface ProjectDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(project: ProjectEntity)
-
-    @Update
-    suspend fun update(project: ProjectEntity)
 
     @Query("UPDATE projects SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE id = :id")
     suspend fun softDelete(id: String, deletedAt: Long, updatedAt: Long)

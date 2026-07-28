@@ -17,7 +17,3 @@ fun extractBulkQuickAddLines(input: String): List<String> {
 fun stripCommonListMarker(line: String): String {
     return line.replace(commonListMarkerRegex, "").trim()
 }
-
-fun shouldPromptBulkQuickAdd(input: String): Boolean {
-    return extractBulkQuickAddLines(input).size > 1
-}

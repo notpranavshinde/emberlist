@@ -7,7 +7,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Inbox
-import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Add
@@ -73,7 +73,7 @@ import kotlinx.coroutines.launch
 sealed class NavRoute(val route: String, val labelRes: Int, val icon: @Composable () -> Unit) {
     object Inbox : NavRoute("inbox", R.string.inbox, { Icon(Icons.Default.Inbox, null) })
     object Today : NavRoute("today", R.string.today, { Icon(Icons.Default.CalendarMonth, null) })
-    object Upcoming : NavRoute("upcoming", R.string.upcoming, { Icon(Icons.Default.ListAlt, null) })
+    object Upcoming : NavRoute("upcoming", R.string.upcoming, { Icon(Icons.AutoMirrored.Filled.ListAlt, null) })
     object Search : NavRoute("search", R.string.search, { Icon(Icons.Default.Search, null) })
     object Browse : NavRoute("browse", R.string.browse, { Icon(Icons.Default.Menu, null) })
 }
@@ -273,7 +273,7 @@ fun EmberlistAppRoot(openTaskId: String?, onTaskOpened: () -> Unit) {
                 val taskId = backStack.arguments?.getString("taskId") ?: return@composable
                 TaskDetailScreen(padding, taskId, navController)
             }
-            composable("activity") { ActivityScreen(padding, navController) }
+            composable("activity") { ActivityScreen(padding) }
             composable("settings") {
                 SettingsScreen(padding = padding)
             }

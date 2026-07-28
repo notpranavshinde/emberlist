@@ -3,7 +3,6 @@ package com.notpr.emberlist
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.notpr.emberlist.data.settings.SettingsState
-import com.notpr.emberlist.data.sync.DriveAuthState
 import com.notpr.emberlist.data.sync.SyncCoordinator
 import com.notpr.emberlist.data.sync.SyncJobScheduler
 import com.notpr.emberlist.data.sync.SyncStatusTracker
@@ -27,14 +26,12 @@ class SyncCoordinatorTest {
     @Test
     fun startupSyncIsScheduledWhenSyncBecomesActive() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = false, lastSyncedAt = null))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val scheduler = FakeSyncJobScheduler()
         val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             scheduler = scheduler,
             scope = coordinatorScope
@@ -56,14 +53,12 @@ class SyncCoordinatorTest {
     @Test
     fun localInvalidationSchedulesDebouncedSyncWhenActive() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val scheduler = FakeSyncJobScheduler()
         val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             scheduler = scheduler,
             nowProvider = { 1_000L },
@@ -83,14 +78,12 @@ class SyncCoordinatorTest {
     @Test
     fun recentSyncSuppressesDebouncedLocalSync() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = 995L))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val scheduler = FakeSyncJobScheduler()
         val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             scheduler = scheduler,
             nowProvider = { 1_000L },
@@ -110,7 +103,6 @@ class SyncCoordinatorTest {
     @Test
     fun remoteImportInvalidationDoesNotMarkPendingOrScheduleDebounce() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val scheduler = FakeSyncJobScheduler()
         val statusTracker = SyncStatusTracker().apply {
@@ -120,7 +112,6 @@ class SyncCoordinatorTest {
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             statusTracker = statusTracker,
             scheduler = scheduler,
@@ -140,14 +131,12 @@ class SyncCoordinatorTest {
     @Test
     fun disablingSyncCancelsPendingAndPeriodicWork() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val scheduler = FakeSyncJobScheduler()
         val coordinatorScope = CoroutineScope(coroutineContext + SupervisorJob())
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             scheduler = scheduler,
             scope = coordinatorScope
@@ -166,7 +155,6 @@ class SyncCoordinatorTest {
     @Test
     fun returningToForegroundSchedulesImmediateSync() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val foreground = MutableStateFlow(true)
         val scheduler = FakeSyncJobScheduler()
@@ -174,7 +162,6 @@ class SyncCoordinatorTest {
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             foregroundFlow = foreground,
             scheduler = scheduler,
@@ -197,7 +184,6 @@ class SyncCoordinatorTest {
     @Test
     fun connectivityRegainSchedulesImmediateSync() = runTest {
         val settings = MutableStateFlow(settings(syncEnabled = true, lastSyncedAt = null))
-        val auth = MutableStateFlow(DriveAuthState(isSignedIn = true, hasDriveScope = true))
         val invalidations = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 8)
         val online = MutableStateFlow(true)
         val scheduler = FakeSyncJobScheduler()
@@ -205,7 +191,6 @@ class SyncCoordinatorTest {
         val coordinator = SyncCoordinator(
             context = context,
             settingsFlow = settings,
-            authFlow = auth,
             invalidationFlow = invalidations,
             onlineFlow = online,
             scheduler = scheduler,
@@ -229,7 +214,6 @@ class SyncCoordinatorTest {
         SettingsState(
             weekStart = 1,
             use24h = false,
-            accent = "Ember",
             showCompletedToday = false,
             syncEnabled = syncEnabled,
             lastSyncedAt = lastSyncedAt,

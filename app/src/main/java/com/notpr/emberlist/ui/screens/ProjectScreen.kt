@@ -17,8 +17,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -139,7 +139,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     project?.let { viewModel.updateProject(it.copy(viewPreference = newPref)) }
                 }) {
                     Icon(
-                        imageVector = if (viewPref == ViewPreference.LIST) Icons.Default.Dashboard else Icons.Default.List,
+                        imageVector = if (viewPref == ViewPreference.LIST) Icons.Default.Dashboard else Icons.AutoMirrored.Filled.List,
                         contentDescription = if (viewPref == ViewPreference.LIST) "Board view" else "List view"
                     )
                 }
@@ -188,8 +188,6 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     sectionById = sectionById,
                     isOverdue = task.dueAt?.let { it < startOfToday } ?: false
                 ).copy(
-                    isSubtask = true,
-                    indentLevel = 1,
                     sectionName = sectionById[task.sectionId]?.name ?: "No Section"
                 )
             }
@@ -289,7 +287,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                     ) {
                         Text("Completed (${completedTaskItems.size})")
                         Icon(
-                            imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                            imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = if (completedExpanded) "Hide completed tasks" else "Show completed tasks"
                         )
                     }
@@ -312,7 +310,6 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                 items(sections, key = { it.id }) { section ->
                     BoardColumn(
                         title = section.name,
-                        sectionId = section.id,
                         tasks = grouped[section.id].orEmpty(),
                         projectById = projectById,
                         sectionById = sectionById,
@@ -337,7 +334,6 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                 item {
                     BoardColumn(
                         title = "No Section",
-                        sectionId = null,
                         tasks = grouped[null].orEmpty(),
                         projectById = projectById,
                         sectionById = sectionById,
@@ -374,7 +370,7 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
                         ) {
                             Text("Completed (${completedTaskItems.size})")
                             Icon(
-                                imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                                imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = if (completedExpanded) "Hide completed tasks" else "Show completed tasks"
                             )
                         }
@@ -448,7 +444,6 @@ fun ProjectScreen(padding: PaddingValues, projectId: String, navController: andr
 @Composable
 private fun BoardColumn(
     title: String,
-    sectionId: String?,
     tasks: List<com.notpr.emberlist.data.model.TaskEntity>,
     projectById: Map<String, com.notpr.emberlist.data.model.ProjectEntity>,
     sectionById: Map<String, com.notpr.emberlist.data.model.SectionEntity>,

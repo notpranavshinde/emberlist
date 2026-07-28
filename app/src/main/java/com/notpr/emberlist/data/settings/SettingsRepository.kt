@@ -13,7 +13,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     companion object {
         val KEY_WEEK_START = intPreferencesKey("week_start")
         val KEY_24H = booleanPreferencesKey("use_24h")
-        val KEY_ACCENT = stringPreferencesKey("accent")
         val KEY_SHOW_COMPLETED_TODAY = booleanPreferencesKey("show_completed_today")
         val KEY_LAST_SYNCED_AT = stringPreferencesKey("last_synced_at")
         val KEY_ANALYTICS_ENABLED = booleanPreferencesKey("analytics_enabled")
@@ -28,7 +27,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         SettingsState(
             weekStart = prefs[KEY_WEEK_START] ?: 1,
             use24h = prefs[KEY_24H] ?: false,
-            accent = prefs[KEY_ACCENT] ?: "Ember",
             showCompletedToday = prefs[KEY_SHOW_COMPLETED_TODAY] ?: false,
             syncEnabled = true,
             lastSyncedAt = prefs[KEY_LAST_SYNCED_AT]?.toLongOrNull(),
@@ -52,10 +50,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun updateUse24h(value: Boolean) {
         dataStore.edit { it[KEY_24H] = value }
-    }
-
-    suspend fun updateAccent(value: String) {
-        dataStore.edit { it[KEY_ACCENT] = value }
     }
 
     suspend fun updateShowCompletedToday(value: Boolean) {
@@ -118,7 +112,6 @@ data class DriveWorkspaceState(
 data class SettingsState(
     val weekStart: Int,
     val use24h: Boolean,
-    val accent: String,
     val showCompletedToday: Boolean,
     val syncEnabled: Boolean,
     val lastSyncedAt: Long?,

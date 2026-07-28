@@ -79,7 +79,6 @@ class AppContainer(
     val syncCoordinator = SyncCoordinator(
         context = appContext,
         settingsFlow = settingsRepository.settings,
-        authFlow = driveAuthManager.state,
         invalidationFlow = database.observeSyncInvalidations().onEach {
             settingsRepository.updateDrivePendingChanges(true)
         },

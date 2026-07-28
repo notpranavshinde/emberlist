@@ -1,7 +1,6 @@
 package com.notpr.emberlist.reminders
 
 import android.content.Context
-import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.notpr.emberlist.data.EmberlistDatabase
@@ -53,7 +52,7 @@ class ReminderWorker(
             reminderId,
             task.title
         ).build()
-        NotificationManagerCompat.from(applicationContext).notify(reminderId.hashCode(), notification)
+        NotificationHelper.notify(applicationContext, reminderId.hashCode(), notification)
         if (reminder.ephemeral) {
             repository.deleteReminder(reminderId)
         }

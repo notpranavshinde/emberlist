@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -131,7 +131,7 @@ fun BrowseScreen(padding: PaddingValues, navController: NavHostController) {
                     )
                 }
             }
-            Divider()
+            HorizontalDivider()
         }
 
     }
@@ -175,17 +175,7 @@ private fun BrowseRow(
         }
         Text(text = title, style = MaterialTheme.typography.bodyLarge)
     }
-    Divider()
-}
-
-@Composable
-private fun SectionLabel(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-        modifier = modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
-    )
+    HorizontalDivider()
 }
 
 private fun projectColor(value: String, fallback: Color): Color {

@@ -9,7 +9,6 @@ import com.notpr.emberlist.data.model.Priority
 import com.notpr.emberlist.domain.deleteTaskWithLog
 import com.notpr.emberlist.domain.logTaskActivity
 import com.notpr.emberlist.ui.components.TaskListItem
-import com.notpr.emberlist.ui.startOfTomorrowMillis
 import com.notpr.emberlist.ui.startOfTodayMillis
 import com.notpr.emberlist.ui.UndoController
 import com.notpr.emberlist.ui.UndoEvent
@@ -37,6 +36,7 @@ class SearchViewModel(
 ) : ViewModel() {
     private val query = MutableStateFlow("")
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val results: StateFlow<List<TaskListItem>> = combine(
         query.flatMapLatest { repository.search(it) },
         repository.observeProjects(),
@@ -86,37 +86,12 @@ class SearchViewModel(
                 task = task,
                 projectById = projectById,
                 sectionById = sectionById
-            ).copy(isSubtask = true, indentLevel = 1)
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun updateQuery(value: String) {
         query.value = value
-    }
-
-    fun rescheduleTomorrow(task: TaskEntity) {
-        viewModelScope.launch {
-            val before = task
-            val zone = ZoneId.systemDefault()
-            val newDue = if (task.dueAt != null) {
-                Instant.ofEpochMilli(task.dueAt).atZone(zone).plusDays(1).toInstant().toEpochMilli()
-            } else {
-                startOfTomorrowMillis(zone)
-            }
-            val allDay = if (task.dueAt == null) true else task.allDay
-            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
-            repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
-            undoController.post(
-                UndoEvent(
-                    message = "Undo reschedule: ${task.title}",
-                    undo = {
-                        repository.upsertTask(before)
-                        logTaskActivity(repository, ActivityType.UPDATED, before)
-                    }
-                )
-            )
-        }
     }
 
     fun rescheduleToDate(task: TaskEntity, date: LocalDate) {

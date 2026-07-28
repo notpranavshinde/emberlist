@@ -25,7 +25,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
-import com.notpr.emberlist.ui.startOfTomorrowMillis
 
 class ProjectViewModel(
     private val repository: TaskRepository,
@@ -95,19 +94,6 @@ class ProjectViewModel(
         }
     }
 
-    fun renameSection(section: SectionEntity, name: String) {
-        viewModelScope.launch {
-            repository.upsertSection(section.copy(name = name, updatedAt = System.currentTimeMillis()))
-        }
-    }
-
-    fun deleteSection(section: SectionEntity) {
-        viewModelScope.launch {
-            repository.clearTasksInSection(section.id)
-            repository.deleteSection(section.id)
-        }
-    }
-
     fun toggleComplete(task: TaskEntity) {
         viewModelScope.launch {
             val before = task
@@ -147,31 +133,6 @@ class ProjectViewModel(
                     )
                 )
             }
-        }
-    }
-
-    fun rescheduleTomorrow(task: TaskEntity) {
-        viewModelScope.launch {
-            val before = task
-            val zone = ZoneId.systemDefault()
-            val newDue = if (task.dueAt != null) {
-                Instant.ofEpochMilli(task.dueAt).atZone(zone).plusDays(1).toInstant().toEpochMilli()
-            } else {
-                startOfTomorrowMillis(zone)
-            }
-            val allDay = if (task.dueAt == null) true else task.allDay
-            val updated = task.copy(dueAt = newDue, allDay = allDay, updatedAt = System.currentTimeMillis())
-            repository.upsertTask(updated)
-            logTaskActivity(repository, ActivityType.UPDATED, updated, before)
-            undoController.post(
-                UndoEvent(
-                    message = "Undo reschedule: ${task.title}",
-                    undo = {
-                        repository.upsertTask(before)
-                        logTaskActivity(repository, ActivityType.UPDATED, before)
-                    }
-                )
-            )
         }
     }
 

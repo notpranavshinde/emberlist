@@ -32,14 +32,6 @@ class SyncStatusTracker {
         _state.value = _state.value.copy(hasPendingLocalChanges = true)
     }
 
-    fun clearPendingLocalChanges() {
-        _state.value = _state.value.copy(hasPendingLocalChanges = false)
-    }
-
-    fun setLastError(message: String?) {
-        _state.value = _state.value.copy(lastError = message)
-    }
-
     fun clearError() {
         _state.value = _state.value.copy(lastError = null)
     }

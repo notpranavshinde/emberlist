@@ -25,10 +25,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -289,7 +289,7 @@ fun TodayScreen(
                         }
                         item {
                             IconButton(onClick = { showProjectPicker = true }) {
-                                Icon(Icons.Default.DriveFileMove, contentDescription = "Move")
+                                Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = "Move")
                             }
                         }
                         item {
@@ -386,7 +386,7 @@ fun TodayScreen(
                     onDelete = viewModel::deleteTask,
                     dragState = if (canManualReorder) null else dragState,
                     onDropAsSubtask = if (canManualReorder) null else viewModel::makeSubtask,
-                    reorderEnabled = canManualReorder && !item.isSubtask,
+                    reorderEnabled = canManualReorder && item.task.parentTaskId == null,
                     reorderState = reorderState,
                     onReorderMove = { draggedId, targetId ->
                         manualTodayOrderIds = moveTaskId(manualTodayOrderIds, draggedId, targetId)
@@ -418,7 +418,7 @@ fun TodayScreen(
                         style = MaterialTheme.typography.titleSmall
                     )
                     Icon(
-                        imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                        imageVector = if (completedExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = if (completedExpanded) "Collapse" else "Expand"
                     )
                 }

@@ -355,9 +355,9 @@ function encryptJson(value, secret) {
   ]);
   const tag = cipher.getAuthTag();
   return [
-    base64url(iv),
-    base64url(tag),
-    base64url(encrypted),
+    iv.toString('base64url'),
+    tag.toString('base64url'),
+    encrypted.toString('base64url'),
   ].join('.');
 }
 
@@ -367,11 +367,11 @@ function decryptJson(value, secret) {
   const decipher = crypto.createDecipheriv(
     'aes-256-gcm',
     deriveKey(secret),
-    fromBase64url(ivPart),
+    Buffer.from(ivPart, 'base64url'),
   );
-  decipher.setAuthTag(fromBase64url(tagPart));
+  decipher.setAuthTag(Buffer.from(tagPart, 'base64url'));
   const decrypted = Buffer.concat([
-    decipher.update(fromBase64url(encryptedPart)),
+    decipher.update(Buffer.from(encryptedPart, 'base64url')),
     decipher.final(),
   ]);
   return JSON.parse(decrypted.toString('utf8'));
@@ -379,12 +379,4 @@ function decryptJson(value, secret) {
 
 function deriveKey(secret) {
   return crypto.createHash('sha256').update(secret).digest();
-}
-
-function base64url(buffer) {
-  return Buffer.from(buffer).toString('base64url');
-}
-
-function fromBase64url(value) {
-  return Buffer.from(value, 'base64url');
 }

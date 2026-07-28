@@ -36,15 +36,12 @@ interface TaskRepository {
     fun observeWorkspaceTaskCount(): Flow<Int>
     suspend fun upsertProject(project: ProjectEntity)
     suspend fun upsertSection(section: SectionEntity)
-    suspend fun deleteSection(sectionId: String)
     suspend fun deleteProject(projectId: String)
     suspend fun deleteTasksByProject(projectId: String)
     suspend fun deleteSectionsByProject(projectId: String)
     suspend fun upsertTask(task: TaskEntity)
     suspend fun deleteTask(taskId: String)
     suspend fun getSubtasks(parentId: String): List<TaskEntity>
-    suspend fun clearCompletedTasks()
-    suspend fun clearTasksInSection(sectionId: String)
     suspend fun upsertReminder(reminder: ReminderEntity)
     suspend fun deleteReminder(reminderId: String)
     suspend fun deleteRemindersForTask(taskId: String)

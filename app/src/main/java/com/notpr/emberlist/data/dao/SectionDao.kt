@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.notpr.emberlist.data.model.SectionEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -24,12 +23,6 @@ interface SectionDao {
 
     @Query("SELECT * FROM sections WHERE projectId = :projectId AND name = :name AND deletedAt IS NULL LIMIT 1")
     suspend fun getByProjectAndName(projectId: String, name: String): SectionEntity?
-
-    @Update
-    suspend fun update(section: SectionEntity)
-
-    @Query("UPDATE sections SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun softDelete(id: String, deletedAt: Long, updatedAt: Long)
 
     @Query("UPDATE sections SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE projectId = :projectId AND deletedAt IS NULL")
     suspend fun softDeleteByProject(projectId: String, deletedAt: Long, updatedAt: Long)

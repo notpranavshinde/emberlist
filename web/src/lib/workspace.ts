@@ -747,23 +747,6 @@ export function archiveTask(payload: SyncPayload, taskId: string): SyncPayload {
     }));
 }
 
-export function deleteTask(payload: SyncPayload, taskId: string): SyncPayload {
-    const now = Date.now();
-    return finalizePayload({
-        ...payload,
-        tasks: payload.tasks.map(task =>
-            task.id === taskId
-                ? {
-                    ...task,
-                    deletedAt: now,
-                    updatedAt: now,
-                }
-                : task
-        ),
-        reminders: payload.reminders.filter(reminder => reminder.taskId !== taskId),
-    });
-}
-
 export function rescheduleTasksToDate(payload: SyncPayload, taskIds: string[], dueAt: number | null): SyncPayload {
     return updateTasks(payload, taskIds, task => ({
         ...task,

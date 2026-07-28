@@ -1,27 +1,10 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../src/', import.meta.url));
 
-function collect(dir) {
-  const entries = readdirSync(dir);
-  const files = [];
-  for (const entry of entries) {
-    const full = join(dir, entry);
-    const st = statSync(full);
-    if (st.isDirectory()) {
-      files.push(...collect(full));
-      continue;
-    }
-    if (full.endsWith('.ts') || full.endsWith('.tsx')) {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
-const files = collect(root);
+const files = globSync(['**/*.ts', '**/*.tsx'], { cwd: root }).map((file) => join(root, file));
 const violations = [];
 for (const file of files) {
   if (basename(file) === 'webStorage.ts') continue;

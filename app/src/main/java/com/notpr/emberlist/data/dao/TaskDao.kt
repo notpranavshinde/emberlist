@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import com.notpr.emberlist.data.model.TaskEntity
 import com.notpr.emberlist.data.model.ProjectTaskCount
 import com.notpr.emberlist.data.model.TaskStatus
@@ -63,9 +62,6 @@ interface TaskDao {
     @Query("SELECT * FROM tasks")
     suspend fun getAll(): List<TaskEntity>
 
-    @Query("SELECT id FROM tasks WHERE status = :status AND deletedAt IS NULL")
-    suspend fun getTaskIdsByStatus(status: TaskStatus): List<String>
-
     @Query("SELECT id FROM tasks WHERE projectId = :projectId AND deletedAt IS NULL")
     suspend fun getTaskIdsByProject(projectId: String): List<String>
 
@@ -104,17 +100,8 @@ interface TaskDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(task: TaskEntity)
 
-    @Update
-    suspend fun update(task: TaskEntity)
-
     @Query("UPDATE tasks SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE id = :id OR parentTaskId = :id")
     suspend fun softDelete(id: String, deletedAt: Long, updatedAt: Long)
-
-    @Query("UPDATE tasks SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE status = 'COMPLETED' AND deletedAt IS NULL")
-    suspend fun softDeleteCompleted(deletedAt: Long, updatedAt: Long)
-
-    @Query("UPDATE tasks SET sectionId = NULL WHERE sectionId = :sectionId")
-    suspend fun clearSection(sectionId: String)
 
     @Query("UPDATE tasks SET deletedAt = :deletedAt, updatedAt = :updatedAt WHERE projectId = :projectId AND deletedAt IS NULL")
     suspend fun softDeleteByProject(projectId: String, deletedAt: Long, updatedAt: Long)

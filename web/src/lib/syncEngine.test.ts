@@ -1,114 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import type { Location, Project, Reminder, Section, SyncPayload, Task } from '../types/sync';
-import { createEmptySyncPayload } from './syncPayload';
 import { SyncEngine } from './syncEngine';
+import {
+  TEST_NOW,
+  createTestLocation,
+  createTestPayload,
+  createTestProject,
+  createTestReminder,
+  createTestSection,
+  createTestTask,
+} from './testSyncBuilders';
 import { repairRecurringTasks } from './workspace';
 
-const NOW = 1_710_000_000_000;
-
-function createPayload(overrides: Partial<SyncPayload> = {}): SyncPayload {
-  return {
-    ...createEmptySyncPayload('device-a'),
-    source: 'web',
-    ...overrides,
-  };
-}
-
-function createProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'project-1',
-    name: 'Project',
-    color: '#ffffff',
-    favorite: false,
-    order: 0,
-    archived: false,
-    viewPreference: null,
-    createdAt: 1,
-    updatedAt: 1,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-function createSection(overrides: Partial<Section> = {}): Section {
-  return {
-    id: 'section-1',
-    projectId: 'project-1',
-    name: 'Section',
-    order: 0,
-    createdAt: 1,
-    updatedAt: 1,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-function createTask(overrides: Partial<Task> = {}): Task {
-  return {
-    id: 'task-1',
-    title: 'Task',
-    description: '',
-    projectId: null,
-    sectionId: null,
-    priority: 'P4',
-    dueAt: null,
-    allDay: true,
-    deadlineAt: null,
-    deadlineAllDay: false,
-    recurringRule: null,
-    deadlineRecurringRule: null,
-    status: 'OPEN',
-    completedAt: null,
-    parentTaskId: null,
-    locationId: null,
-    locationTriggerType: null,
-    order: 0,
-    createdAt: 1,
-    updatedAt: 1,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-function createReminder(overrides: Partial<Reminder> = {}): Reminder {
-  return {
-    id: 'reminder-1',
-    taskId: 'task-1',
-    type: 'TIME',
-    timeAt: 5,
-    offsetMinutes: null,
-    locationId: null,
-    locationTriggerType: null,
-    enabled: true,
-    ephemeral: false,
-    createdAt: 1,
-    updatedAt: 1,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
-function createLocation(overrides: Partial<Location> = {}): Location {
-  return {
-    id: 'location-1',
-    label: 'Location',
-    address: '123 Test',
-    lat: 1,
-    lng: 2,
-    radiusMeters: 100,
-    createdAt: 1,
-    updatedAt: 1,
-    deletedAt: null,
-    ...overrides,
-  };
-}
-
 describe('SyncEngine', () => {
-  const engine = new SyncEngine(() => NOW, 'web-test');
+  const engine = new SyncEngine(() => TEST_NOW, 'web-test');
 
   it('uses last-writer-wins for conflicting task updates', () => {
-    const local = createPayload({ tasks: [createTask({ updatedAt: 10, title: 'Local title' })] });
-    const remote = createPayload({ tasks: [createTask({ updatedAt: 20, title: 'Remote title' })] });
+    const local = createTestPayload({ tasks: [createTestTask({ updatedAt: 10, title: 'Local title' })] });
+    const remote = createTestPayload({ tasks: [createTestTask({ updatedAt: 20, title: 'Remote title' })] });
 
     expect(engine.mergePayloads(local, remote).tasks[0]).toMatchObject({
       title: 'Remote title',
@@ -118,14 +26,14 @@ describe('SyncEngine', () => {
 
   it('lets tombstones beat older live rows and newer live rows beat older tombstones', () => {
     const tombstoneWins = engine.mergePayloads(
-      createPayload({ tasks: [createTask({ updatedAt: 10 })] }),
-      createPayload({ tasks: [createTask({ updatedAt: 20, deletedAt: 20 })] }),
+      createTestPayload({ tasks: [createTestTask({ updatedAt: 10 })] }),
+      createTestPayload({ tasks: [createTestTask({ updatedAt: 20, deletedAt: 20 })] }),
     );
     expect(tombstoneWins.tasks[0].deletedAt).toBe(20);
 
     const liveWins = engine.mergePayloads(
-      createPayload({ tasks: [createTask({ updatedAt: 10, deletedAt: 10 })] }),
-      createPayload({ tasks: [createTask({ updatedAt: 20, title: 'Recreated task' })] }),
+      createTestPayload({ tasks: [createTestTask({ updatedAt: 10, deletedAt: 10 })] }),
+      createTestPayload({ tasks: [createTestTask({ updatedAt: 20, title: 'Recreated task' })] }),
     );
     expect(liveWins.tasks[0]).toMatchObject({
       title: 'Recreated task',
@@ -134,18 +42,18 @@ describe('SyncEngine', () => {
   });
 
   it('does not treat a missing row as a deletion', () => {
-    const local = createPayload({ tasks: [createTask({ id: 'task-1', updatedAt: 10 })] });
-    const remote = createPayload({ tasks: [] });
+    const local = createTestPayload({ tasks: [createTestTask({ id: 'task-1', updatedAt: 10 })] });
+    const remote = createTestPayload({ tasks: [] });
 
     expect(engine.mergePayloads(local, remote).tasks.map(task => task.id)).toEqual(['task-1']);
   });
 
   it('drops reminders for completed tasks and repairs invalid task references', () => {
-    const project = createProject();
-    const local = createPayload({
+    const project = createTestProject();
+    const local = createTestPayload({
       projects: [project],
-      sections: [createSection({ projectId: project.id })],
-      tasks: [createTask({
+      sections: [createTestSection({ projectId: project.id })],
+      tasks: [createTestTask({
         id: 'child',
         projectId: project.id,
         sectionId: 'missing-section',
@@ -153,27 +61,27 @@ describe('SyncEngine', () => {
         updatedAt: 10,
         status: 'COMPLETED',
       })],
-      reminders: [createReminder({ updatedAt: 10 })],
+      reminders: [createTestReminder({ updatedAt: 10 })],
     });
 
-    const merged = engine.mergePayloads(local, createPayload());
+    const merged = engine.mergePayloads(local, createTestPayload());
 
     expect(merged.tasks[0]).toMatchObject({
       sectionId: null,
       parentTaskId: null,
-      updatedAt: NOW,
+      updatedAt: TEST_NOW,
     });
     expect(merged.reminders).toEqual([]);
   });
 
   it('tombstones dependent sections and clears task project references when a project is deleted', () => {
-    const project = createProject({ updatedAt: 20, deletedAt: 20 });
-    const section = createSection({ projectId: project.id, updatedAt: 10 });
-    const task = createTask({ projectId: project.id, sectionId: section.id, updatedAt: 10 });
+    const project = createTestProject({ updatedAt: 20, deletedAt: 20 });
+    const section = createTestSection({ projectId: project.id, updatedAt: 10 });
+    const task = createTestTask({ projectId: project.id, sectionId: section.id, updatedAt: 10 });
 
     const merged = engine.mergePayloads(
-      createPayload({ projects: [project], sections: [section], tasks: [task] }),
-      createPayload(),
+      createTestPayload({ projects: [project], sections: [section], tasks: [task] }),
+      createTestPayload(),
     );
 
     expect(merged.sections[0].deletedAt).not.toBeNull();
@@ -184,18 +92,18 @@ describe('SyncEngine', () => {
   });
 
   it('drops invalid location reminders but normalizes time reminders with missing locations', () => {
-    const task = createTask();
+    const task = createTestTask();
     const merged = engine.mergePayloads(
-      createPayload({
+      createTestPayload({
         tasks: [task],
         reminders: [
-          createReminder({
+          createTestReminder({
             id: 'time-reminder',
             type: 'TIME',
             locationId: 'missing',
             locationTriggerType: 'ARRIVE',
           }),
-          createReminder({
+          createTestReminder({
             id: 'location-reminder',
             type: 'LOCATION',
             locationId: 'missing',
@@ -203,7 +111,7 @@ describe('SyncEngine', () => {
           }),
         ],
       }),
-      createPayload(),
+      createTestPayload(),
     );
 
     expect(merged.reminders).toHaveLength(1);
@@ -215,14 +123,14 @@ describe('SyncEngine', () => {
   });
 
   it('merges locations by updatedAt', () => {
-    const local = createPayload({ locations: [createLocation({ updatedAt: 10, label: 'Local' })] });
-    const remote = createPayload({ locations: [createLocation({ updatedAt: 20, label: 'Remote' })] });
+    const local = createTestPayload({ locations: [createTestLocation({ updatedAt: 10, label: 'Local' })] });
+    const remote = createTestPayload({ locations: [createTestLocation({ updatedAt: 20, label: 'Remote' })] });
 
     expect(engine.mergePayloads(local, remote).locations[0].label).toBe('Remote');
   });
 
   it('does not duplicate a recurring task after sync when the open successor changes priority', () => {
-    const completedLocal = createTask({
+    const completedLocal = createTestTask({
       id: 'task-recurring-completed',
       title: 'wifi bill',
       projectId: 'project-1',
@@ -233,7 +141,7 @@ describe('SyncEngine', () => {
       completedAt: new Date('2026-04-08T07:00:00').getTime(),
       updatedAt: 10,
     });
-    const openRemote = createTask({
+    const openRemote = createTestTask({
       id: 'task-recurring-open',
       title: 'wifi bill',
       projectId: 'project-1',
@@ -245,8 +153,8 @@ describe('SyncEngine', () => {
     });
 
     const merged = engine.mergePayloads(
-      createPayload({ projects: [createProject()], tasks: [completedLocal] }),
-      createPayload({ projects: [createProject()], tasks: [openRemote] }),
+      createTestPayload({ projects: [createTestProject()], tasks: [completedLocal] }),
+      createTestPayload({ projects: [createTestProject()], tasks: [openRemote] }),
     );
     const repaired = repairRecurringTasks(merged);
 
@@ -257,7 +165,7 @@ describe('SyncEngine', () => {
   });
 
   it('does not recover a deleted recurring successor after sync merge', () => {
-    const completedLocal = createTask({
+    const completedLocal = createTestTask({
       id: 'task-recurring-completed',
       title: 'laundry',
       projectId: 'project-1',
@@ -268,7 +176,7 @@ describe('SyncEngine', () => {
       completedAt: new Date('2026-04-08T07:00:00').getTime(),
       updatedAt: 10,
     });
-    const deletedRemote = createTask({
+    const deletedRemote = createTestTask({
       id: 'task-recurring-open',
       title: 'laundry',
       projectId: 'project-1',
@@ -280,8 +188,8 @@ describe('SyncEngine', () => {
     });
 
     const merged = engine.mergePayloads(
-      createPayload({ projects: [createProject()], tasks: [completedLocal] }),
-      createPayload({ projects: [createProject()], tasks: [deletedRemote] }),
+      createTestPayload({ projects: [createTestProject()], tasks: [completedLocal] }),
+      createTestPayload({ projects: [createTestProject()], tasks: [deletedRemote] }),
     );
     const repaired = repairRecurringTasks(merged);
 
@@ -292,7 +200,7 @@ describe('SyncEngine', () => {
   });
 
   it('does not revert a recurring due-date edit after sync merge and repair', () => {
-    const completedLocal = createTask({
+    const completedLocal = createTestTask({
       id: 'task-recurring-completed',
       title: 'cancel Google one Subscription',
       projectId: 'project-1',
@@ -303,7 +211,7 @@ describe('SyncEngine', () => {
       completedAt: new Date('2026-04-08T07:00:00').getTime(),
       updatedAt: 10,
     });
-    const dueEditedRemote = createTask({
+    const dueEditedRemote = createTestTask({
       id: 'task-recurring-open',
       title: 'cancel Google one Subscription',
       projectId: 'project-1',
@@ -314,8 +222,8 @@ describe('SyncEngine', () => {
     });
 
     const merged = engine.mergePayloads(
-      createPayload({ projects: [createProject()], tasks: [completedLocal] }),
-      createPayload({ projects: [createProject()], tasks: [dueEditedRemote] }),
+      createTestPayload({ projects: [createTestProject()], tasks: [completedLocal] }),
+      createTestPayload({ projects: [createTestProject()], tasks: [dueEditedRemote] }),
     );
     const repaired = repairRecurringTasks(merged);
 

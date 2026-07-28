@@ -1,7 +1,5 @@
 import type { Priority } from '../types/sync';
 
-export const DEFAULT_TIME_HOUR = 9;
-
 export type ReminderSpec =
   | { kind: 'ABSOLUTE'; timeAt: number }
   | { kind: 'OFFSET'; minutes: number };

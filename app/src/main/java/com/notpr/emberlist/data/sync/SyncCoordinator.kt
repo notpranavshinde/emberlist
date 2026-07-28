@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 class SyncCoordinator(
     private val context: Context,
     private val settingsFlow: Flow<SettingsState>,
-    private val authFlow: Flow<DriveAuthState>,
     private val invalidationFlow: Flow<Unit>,
     private val foregroundFlow: Flow<Boolean> = flowOf(true),
     private val onlineFlow: Flow<Boolean> = flowOf(true),
@@ -49,7 +48,8 @@ class SyncCoordinator(
 
         scope.launch {
             settingsFlow
-                .mapDistinctLastSyncedAt()
+                .map { it.lastSyncedAt }
+                .distinctUntilChanged()
                 .collect { lastSyncedAt = it }
         }
 
@@ -75,7 +75,8 @@ class SyncCoordinator(
         }
 
         scope.launch {
-            settingsFlow.mapDistinctSyncEnabled()
+            settingsFlow
+                .map { it.syncEnabled }
                 .distinctUntilChanged()
                 .collect { active ->
                     currentActive = active
@@ -119,9 +120,4 @@ class SyncCoordinator(
         }
     }
 
-    private fun Flow<SettingsState>.mapDistinctLastSyncedAt(): Flow<Long?> =
-        map { it.lastSyncedAt }.distinctUntilChanged()
-
-    private fun Flow<SettingsState>.mapDistinctSyncEnabled(): Flow<Boolean> =
-        map { it.syncEnabled }.distinctUntilChanged()
 }

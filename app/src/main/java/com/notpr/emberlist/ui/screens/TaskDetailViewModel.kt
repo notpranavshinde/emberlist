@@ -352,7 +352,7 @@ class TaskDetailViewModel(
         existingReminders: List<ReminderEntity>,
         desiredSpecs: List<ReminderSpec>
     ): List<ReminderEntity> {
-        val existingComparable = canonicalReminders(existingReminders).map { it.toComparable() }
+        val existingComparable = canonicalReminders(existingReminders).map { it.timeAt to it.offsetMinutes }
         val newReminders = desiredSpecs.map { spec ->
             ReminderEntity(
                 id = UUID.randomUUID().toString(),
@@ -367,7 +367,7 @@ class TaskDetailViewModel(
                 createdAt = System.currentTimeMillis()
             )
         }
-        val desiredComparable = canonicalReminders(newReminders).map { it.toComparable() }
+        val desiredComparable = canonicalReminders(newReminders).map { it.timeAt to it.offsetMinutes }
 
         if (existingComparable == desiredComparable) {
             return canonicalReminders(existingReminders)
@@ -495,7 +495,7 @@ class TaskDetailViewModel(
                 beforeTask = beforeTask,
                 beforeReminders = beforeReminders,
                 afterReminders = afterReminders,
-                details = buildActivityDetails(beforeTask, afterTask, beforeReminders, afterReminders)
+                details = buildActivityDetails(beforeReminders, afterReminders)
             )
         }
         editSessionBaseTask = afterTask
@@ -505,8 +505,6 @@ class TaskDetailViewModel(
     }
 
     private fun buildActivityDetails(
-        beforeTask: TaskEntity,
-        afterTask: TaskEntity,
         beforeReminders: List<ReminderEntity>,
         afterReminders: List<ReminderEntity>
     ): Map<String, String> {
@@ -531,15 +529,6 @@ class TaskDetailViewModel(
         editSessionBaseReminders = emptyList()
         pendingLoggedTask = null
         pendingLoggedReminders = emptyList()
-    }
-
-    private data class ComparableReminder(
-        val timeAt: Long?,
-        val offsetMinutes: Int?
-    )
-
-    private fun ReminderEntity.toComparable(): ComparableReminder {
-        return ComparableReminder(timeAt = timeAt, offsetMinutes = offsetMinutes)
     }
 
     override fun onCleared() {

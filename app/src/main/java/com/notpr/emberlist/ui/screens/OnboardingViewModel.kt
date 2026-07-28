@@ -95,13 +95,6 @@ class OnboardingViewModel(
         }
     }
 
-    fun activate() {
-        viewModelScope.launch {
-            onboardingRepository.activate()
-            if (onboardingRepository.markViewedIfNeeded()) analytics.track("onboarding_viewed")
-        }
-    }
-
     fun beginRestore(onAuthorizationRequired: (PendingIntent) -> Unit) {
         if (_restoreState.value == OnboardingRestoreState.Authorizing ||
             _restoreState.value == OnboardingRestoreState.Syncing) return

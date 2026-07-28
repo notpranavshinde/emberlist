@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -60,9 +60,6 @@ data class TaskListItem(
     val sectionName: String?,
     val displayDueAt: Long? = task.dueAt,
     val isOverdue: Boolean = false,
-    val isPreview: Boolean = false,
-    val isSubtask: Boolean = false,
-    val indentLevel: Int = 0,
     val hasSubtasks: Boolean = false,
     val isExpanded: Boolean = false,
     val subtaskCount: Int = 0,
@@ -96,11 +93,7 @@ fun TaskRow(
         Modifier.fillMaxWidth()
     }
 
-    val indentPadding = if (item.isSubtask && item.task.parentTaskId != null) {
-        18.dp * (item.indentLevel.coerceAtLeast(1))
-    } else {
-        0.dp
-    }
+    val indentPadding = if (item.task.parentTaskId != null) 18.dp else 0.dp
     val isHoverTarget = dragState?.hoverTargetId == item.task.id && dragState.draggingTaskId != item.task.id
     val hoverIndent = if (isHoverTarget) 16.dp else 0.dp
     val dragModifier = if (dragState != null && onDropAsSubtask != null) {
@@ -212,7 +205,7 @@ fun TaskRow(
                 )
             }
         }
-        Divider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
     }
 
     if (showDeleteConfirm && onDelete != null) {

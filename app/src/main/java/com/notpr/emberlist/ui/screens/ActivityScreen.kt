@@ -19,7 +19,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavHostController
 import com.notpr.emberlist.LocalAppContainer
 import com.notpr.emberlist.data.model.ActivityEventEntity
 import com.notpr.emberlist.domain.formatActivityLabel
@@ -30,7 +29,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 
 @Composable
-fun ActivityScreen(padding: PaddingValues, navController: NavHostController) {
+fun ActivityScreen(padding: PaddingValues) {
     val container = LocalAppContainer.current
     val viewModel: ActivityViewModel = viewModel(factory = EmberlistViewModelFactory(container))
     val events by viewModel.events.collectAsState()
