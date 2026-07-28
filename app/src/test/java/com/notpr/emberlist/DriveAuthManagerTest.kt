@@ -2,11 +2,11 @@ package com.notpr.emberlist
 
 import com.notpr.emberlist.data.sync.DriveAuthManager
 import com.notpr.emberlist.data.sync.driveAccountsMatch
-import com.notpr.emberlist.data.sync.resolveDriveAccountId
+import com.notpr.emberlist.data.sync.parseGoogleIdentity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class DriveAuthManagerTest {
@@ -28,20 +28,23 @@ class DriveAuthManagerTest {
     }
 
     @Test
-    fun authorizationUsesGoogleAccountIdWhenAvailable() {
-        assertEquals(
-            "google-account-id",
-            resolveDriveAccountId("google-account-id", "person@example.com")
+    fun authorizationUsesStableIdentityFromGoogleUserInfo() {
+        val identity = parseGoogleIdentity(
+            """{"sub":" google-account-id ","email":" person@example.com ","name":" Person "}"""
         )
+
+        assertEquals("google-account-id", identity.accountId)
+        assertEquals("person@example.com", identity.email)
+        assertEquals("Person", identity.displayName)
     }
 
     @Test
-    fun authorizationFallsBackToNormalizedEmailWhenGoogleAccountIdIsMissing() {
-        assertEquals(
-            "email:person@example.com",
-            resolveDriveAccountId(null, " Person@Example.com ")
-        )
-        assertNull(resolveDriveAccountId(null, " "))
+    fun authorizationRejectsGoogleUserInfoWithoutStableSubject() {
+        val error = assertThrows(java.io.IOException::class.java) {
+            parseGoogleIdentity("""{"email":"person@example.com"}""")
+        }
+
+        assertTrue(error.message.orEmpty().contains("account identifier"))
     }
 
     @Test
@@ -50,7 +53,7 @@ class DriveAuthManagerTest {
             driveAccountsMatch(
                 boundAccountId = "legacy-google-account-id",
                 boundEmail = "Person@Example.com",
-                authorizedAccountId = "email:person@example.com",
+                authorizedAccountId = "stable-google-subject",
                 authorizedEmail = "person@example.com"
             )
         )
@@ -58,7 +61,7 @@ class DriveAuthManagerTest {
             driveAccountsMatch(
                 boundAccountId = "legacy-google-account-id",
                 boundEmail = "person@example.com",
-                authorizedAccountId = "email:other@example.com",
+                authorizedAccountId = "other-stable-google-subject",
                 authorizedEmail = "other@example.com"
             )
         )
