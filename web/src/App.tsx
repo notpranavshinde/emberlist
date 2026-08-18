@@ -2498,10 +2498,10 @@ function WorkspaceShell({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--app-shell-bg)] text-[#202020] md:h-screen md:overflow-hidden">
-      <div className="flex min-h-screen flex-col md:h-screen md:flex-row">
+    <div className="min-h-screen bg-[var(--app-shell-bg)] text-[#202020] lg:h-screen lg:overflow-hidden">
+      <div className="flex min-h-screen flex-col lg:h-screen lg:flex-row">
         <aside
-          className={`hidden h-screen shrink-0 overscroll-contain border-r border-[var(--app-shell-border)] bg-[var(--app-shell-bg-sidebar)] py-3 transition-[width,padding] duration-200 md:flex md:flex-col md:overflow-y-auto ${isSidebarCollapsed ? "w-16 px-2" : "w-[300px] px-3"}`}
+          className={`hidden h-screen shrink-0 overscroll-contain border-r border-[var(--app-shell-border)] bg-[var(--app-shell-bg-sidebar)] py-3 transition-[width,padding] duration-200 lg:flex lg:flex-col lg:overflow-y-auto ${isSidebarCollapsed ? "w-16 px-2" : "w-[clamp(16rem,19vw,19rem)] px-3"}`}
         >
           <div
             className={`flex items-center rounded-[16px] py-2 ${isSidebarCollapsed ? "justify-center px-0" : "justify-between px-2"}`}
@@ -2674,14 +2674,14 @@ function WorkspaceShell({
           </div>
         </aside>
 
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col md:h-screen md:min-h-0 md:overflow-y-auto md:overscroll-contain">
-          <header className="sticky top-0 z-20 border-b border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-4 py-4 backdrop-blur md:px-8">
-            <div className="mx-auto flex w-full max-w-[1240px] items-center justify-between gap-3">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:h-screen lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+          <header className="sticky top-0 z-20 border-b border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-4 py-3 backdrop-blur sm:px-6 lg:px-8 lg:py-4 2xl:px-12">
+            <div className="mx-auto flex w-full max-w-[1600px] items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] md:hidden">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#9d6b54] lg:hidden">
                   Emberlist
                 </p>
-                <h2 className="text-2xl font-semibold text-[#202020]">
+                <h2 className="text-xl font-semibold text-[#202020] sm:text-2xl">
                   {title}
                 </h2>
               </div>
@@ -2689,7 +2689,7 @@ function WorkspaceShell({
                 <button
                   type="button"
                   onClick={() => setIsProjectSwitcherOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-3 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] md:hidden"
+                  className="inline-flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-3 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] lg:hidden"
                 >
                   <Folder size={16} />
                   <span>Projects</span>
@@ -2699,7 +2699,7 @@ function WorkspaceShell({
                   onClick={onCloudSync}
                   disabled={isSyncing}
                   className={`inline-flex items-center gap-2 rounded-lg border border-[#ece7e3] bg-[var(--app-surface)] px-3 py-2 text-sm font-semibold text-[#2b2b2b] transition hover:bg-[var(--app-surface-soft)] disabled:cursor-not-allowed disabled:opacity-70 md:px-4 ${
-                    isSidebarCollapsed ? "md:flex" : "md:hidden"
+                    isSidebarCollapsed ? "lg:flex" : "lg:hidden"
                   }`}
                 >
                   {isSyncing ? (
@@ -2714,7 +2714,7 @@ function WorkspaceShell({
             </div>
             {banner ? (
               <div
-                className={`mx-auto mt-4 flex w-full max-w-[1240px] items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}
+                className={`mx-auto mt-4 flex w-full max-w-[1600px] items-start justify-between gap-3 rounded-lg px-4 py-3 text-sm ${bannerClasses(banner.tone)}`}
               >
                 <p>{banner.message}</p>
                 <div className="flex items-center gap-2">
@@ -2752,8 +2752,8 @@ function WorkspaceShell({
             ) : null}
           </header>
 
-          <main className="flex-1 scroll-pb-32 px-4 pb-[calc(8.75rem+env(safe-area-inset-bottom))] pt-6 md:px-8 md:pb-10">
-            <div className="mx-auto w-full max-w-[1240px]">
+          <main className="flex-1 scroll-pb-32 px-3 pb-[calc(8.75rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-6 lg:px-8 lg:pb-10 2xl:px-12 2xl:pt-8">
+            <div className="mx-auto w-full max-w-[1600px]">
               <Routes>
                 <Route path="/" element={<Navigate to="/today" replace />} />
                 <Route
@@ -2984,12 +2984,12 @@ function WorkspaceShell({
         type="button"
         onClick={() => onOpenQuickAdd()}
         aria-label="Quick add"
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#dc4c3e] text-white shadow-[0_12px_30px_rgba(220,76,62,0.28)] transition hover:bg-[#c84335] md:hidden"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#dc4c3e] text-white shadow-[0_12px_30px_rgba(220,76,62,0.28)] transition hover:bg-[#c84335] lg:hidden"
       >
         <Plus size={22} />
       </button>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
           <BottomLink to="/today" icon={Home} label="Today" />
           <BottomLink to="/inbox" icon={ListTodo} label="Inbox" />
@@ -6955,10 +6955,10 @@ function SettingsPage({
 function TaskGroupGrid({ children }: { children: ReactNode }) {
   return (
     <div
-      className="grid items-start gap-4"
+      className="grid items-start gap-4 2xl:gap-6"
       style={{
         gridTemplateColumns:
-          "repeat(auto-fill, minmax(min(100%, 520px), 1fr))",
+          "repeat(auto-fit, minmax(min(100%, 500px), 1fr))",
       }}
     >
       {children}
@@ -7006,7 +7006,7 @@ function PageViewToggle({
 }
 
 function TaskTimelineColumn({ children }: { children: ReactNode }) {
-  return <div className="w-full max-w-[612px] space-y-4">{children}</div>;
+  return <div className="w-full space-y-4">{children}</div>;
 }
 
 function TaskGroup({
