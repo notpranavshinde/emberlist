@@ -62,6 +62,14 @@ class SettingsViewModel(
         viewModelScope.launch { settingsRepository.updateShowCompletedToday(value) }
     }
 
+    fun updateTodaySortMode(value: String) {
+        viewModelScope.launch { settingsRepository.updateTodaySortMode(value) }
+    }
+
+    fun updateTodayGroupMode(value: String) {
+        viewModelScope.launch { settingsRepository.updateTodayGroupMode(value) }
+    }
+
     fun updateAnalyticsEnabled(value: Boolean) {
         viewModelScope.launch {
             settingsRepository.updateAnalyticsEnabled(value)

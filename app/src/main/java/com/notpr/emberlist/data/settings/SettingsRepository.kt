@@ -14,6 +14,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         val KEY_WEEK_START = intPreferencesKey("week_start")
         val KEY_24H = booleanPreferencesKey("use_24h")
         val KEY_SHOW_COMPLETED_TODAY = booleanPreferencesKey("show_completed_today")
+        val KEY_TODAY_SORT_MODE = stringPreferencesKey("today_sort_mode")
+        val KEY_TODAY_GROUP_MODE = stringPreferencesKey("today_group_mode")
         val KEY_LAST_SYNCED_AT = stringPreferencesKey("last_synced_at")
         val KEY_ANALYTICS_ENABLED = booleanPreferencesKey("analytics_enabled")
         val KEY_DRIVE_ACCOUNT_ID = stringPreferencesKey("drive_account_id")
@@ -28,6 +30,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
             weekStart = prefs[KEY_WEEK_START] ?: 1,
             use24h = prefs[KEY_24H] ?: false,
             showCompletedToday = prefs[KEY_SHOW_COMPLETED_TODAY] ?: false,
+            todaySortMode = prefs[KEY_TODAY_SORT_MODE] ?: "MANUAL",
+            todayGroupMode = prefs[KEY_TODAY_GROUP_MODE] ?: "NONE",
             syncEnabled = true,
             lastSyncedAt = prefs[KEY_LAST_SYNCED_AT]?.toLongOrNull(),
             analyticsEnabled = prefs[KEY_ANALYTICS_ENABLED] ?: true
@@ -54,6 +58,14 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun updateShowCompletedToday(value: Boolean) {
         dataStore.edit { it[KEY_SHOW_COMPLETED_TODAY] = value }
+    }
+
+    suspend fun updateTodaySortMode(value: String) {
+        dataStore.edit { it[KEY_TODAY_SORT_MODE] = value }
+    }
+
+    suspend fun updateTodayGroupMode(value: String) {
+        dataStore.edit { it[KEY_TODAY_GROUP_MODE] = value }
     }
 
     suspend fun updateLastSyncedAt(value: Long?) {
@@ -115,5 +127,7 @@ data class SettingsState(
     val showCompletedToday: Boolean,
     val syncEnabled: Boolean,
     val lastSyncedAt: Long?,
-    val analyticsEnabled: Boolean
+    val analyticsEnabled: Boolean,
+    val todaySortMode: String = "MANUAL",
+    val todayGroupMode: String = "NONE"
 )

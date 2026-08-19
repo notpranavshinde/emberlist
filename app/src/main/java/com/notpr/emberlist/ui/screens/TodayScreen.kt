@@ -104,14 +104,16 @@ fun TodayScreen(
     val zone = ZoneId.systemDefault()
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     val reorderState = remember { TodayManualReorderState() }
-    var sortMode by rememberSaveable { mutableStateOf(TodaySortMode.MANUAL.name) }
-    var groupMode by rememberSaveable { mutableStateOf(TodayGroupMode.NONE.name) }
+    val sortMode = TodaySortMode.entries.firstOrNull { it.name == settings.todaySortMode }
+        ?: TodaySortMode.MANUAL
+    val groupMode = TodayGroupMode.entries.firstOrNull { it.name == settings.todayGroupMode }
+        ?: TodayGroupMode.NONE
     var showOrganizeDialog by remember { mutableStateOf(false) }
     var manualTodayOrderIds by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var selectionMode by remember { mutableStateOf(false) }
     val selectedIds = remember { mutableStateOf(setOf<String>()) }
     val sortedParents = remember(parentItems, sortMode) {
-        sortTodayItems(parentItems, TodaySortMode.valueOf(sortMode))
+        sortTodayItems(parentItems, sortMode)
     }
     val overdueParents = sortedParents.filter { it.isOverdue }
     val todayParents = sortedParents.filterNot { it.isOverdue }
@@ -120,8 +122,8 @@ fun TodayScreen(
         manualTodayOrderIds = reconcileManualOrder(manualTodayOrderIds, manualTodayBaseIds)
     }
     val canManualReorder = !selectionMode &&
-        TodaySortMode.valueOf(sortMode) == TodaySortMode.MANUAL &&
-        TodayGroupMode.valueOf(groupMode) == TodayGroupMode.NONE
+        sortMode == TodaySortMode.MANUAL &&
+        groupMode == TodayGroupMode.NONE
     val todayDisplayParents = remember(todayParents, manualTodayOrderIds, canManualReorder) {
         if (canManualReorder) {
             applyManualOrder(todayParents, manualTodayOrderIds)
@@ -139,7 +141,7 @@ fun TodayScreen(
         parents = todayDisplayParents,
         subtasks = subtaskItems,
         expandedState = expanded,
-        groupMode = TodayGroupMode.valueOf(groupMode),
+        groupMode = groupMode,
         zone = zone
     )
     val completedToday = flattenTaskItemsWithSubtasks(
@@ -556,12 +558,12 @@ fun TodayScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { sortMode = option.name },
+                                .clickable { settingsViewModel.updateTodaySortMode(option.name) },
                             horizontalArrangement = Arrangement.Start
                         ) {
                             RadioButton(
-                                selected = sortMode == option.name,
-                                onClick = { sortMode = option.name }
+                                selected = sortMode == option,
+                                onClick = { settingsViewModel.updateTodaySortMode(option.name) }
                             )
                             Text(
                                 text = option.label,
@@ -574,12 +576,12 @@ fun TodayScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { groupMode = option.name },
+                                .clickable { settingsViewModel.updateTodayGroupMode(option.name) },
                             horizontalArrangement = Arrangement.Start
                         ) {
                             RadioButton(
-                                selected = groupMode == option.name,
-                                onClick = { groupMode = option.name }
+                                selected = groupMode == option,
+                                onClick = { settingsViewModel.updateTodayGroupMode(option.name) }
                             )
                             Text(
                                 text = option.label,
