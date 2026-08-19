@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildBackendAuthStartUrl, createCloudSyncService } from './syncService';
+import {
+  buildBackendAuthStartUrl,
+  createCloudSyncService,
+  normalizeCloudSyncErrorMessage,
+} from './syncService';
 import { db } from './db';
 
 describe('backend Drive sync service', () => {
@@ -10,6 +14,14 @@ describe('backend Drive sync service', () => {
   it('builds a same-origin authorization start URL', () => {
     expect(buildBackendAuthStartUrl('/#/today')).toBe(
       '/api/auth/google/start?returnTo=%2F%23%2Ftoday',
+    );
+  });
+
+  it('turns a Drive storage quota failure into actionable guidance', () => {
+    expect(normalizeCloudSyncErrorMessage(
+      "Google Drive request failed (502) - Failed to upload sync payload (403) - The user's Drive storage quota has been exceeded.",
+    )).toBe(
+      'Google Drive is out of storage. Free up space in that Google account, then try syncing again. Your changes remain saved in this browser.',
     );
   });
 

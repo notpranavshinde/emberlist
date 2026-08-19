@@ -48,6 +48,26 @@ export function buildBackendAuthStartUrl(returnTo: string): string {
     return `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}`;
 }
 
+export function normalizeCloudSyncErrorMessage(message: string): string {
+    if (message.toLowerCase().includes('drive storage quota has been exceeded')) {
+        return 'Google Drive is out of storage. Free up space in that Google account, then try syncing again. Your changes remain saved in this browser.';
+    }
+
+    if (message.includes('insufficientPermissions')) {
+        return 'Google sign-in finished, but Drive access was not granted. Try again and check the final box that allows Emberlist to access its own configuration data in Google Drive.';
+    }
+
+    if (message.includes('popup_failed_to_open')) {
+        return 'Google sign-in was blocked by the browser. Allow popups for Emberlist or try again from a browser that permits the Google sign-in window.';
+    }
+
+    if (message.includes('popup_closed')) {
+        return 'Google sign-in was closed before it finished. Try again and keep the Google window open until you return to Emberlist.';
+    }
+
+    return message;
+}
+
 export class BackendDriveSyncService implements CloudSyncService {
     private session: CloudSession | null = null;
     private readonly syncEngine = new SyncEngine();
