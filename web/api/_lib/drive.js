@@ -11,7 +11,12 @@ export async function getAccessTokenForRequest(req) {
 export async function downloadSyncPayload(accessToken) {
   const fileId = await findSyncFileId(accessToken);
   if (!fileId) {
-    return { fileId: null, payload: null };
+    return { fileId: null, payload: null, etag: null };
+  }
+
+  const metadata = await getDriveFileMetadata(fileId, accessToken);
+  if (!metadata?.version) {
+    return { fileId: null, payload: null, etag: null };
   }
 
   const response = await driveFetch(
@@ -19,7 +24,7 @@ export async function downloadSyncPayload(accessToken) {
     accessToken,
   );
   if (response.status === 404) {
-    return { fileId: null, payload: null };
+    return { fileId: null, payload: null, etag: null };
   }
   if (!response.ok) {
     await throwDriveError('download sync payload', response);
@@ -27,7 +32,18 @@ export async function downloadSyncPayload(accessToken) {
   return {
     fileId,
     payload: await readDriveSyncPayload(response),
+    etag: `version:${metadata.version}`,
   };
+}
+
+async function getDriveFileMetadata(fileId, accessToken) {
+  const response = await driveFetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id%2Cversion`,
+    accessToken,
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) await throwDriveError('read sync payload metadata', response);
+  return response.json();
 }
 
 export async function readDriveSyncPayload(response) {
@@ -64,8 +80,13 @@ export async function readDriveSyncPayload(response) {
   return payload;
 }
 
-export async function uploadSyncPayload(accessToken, payload) {
-  const fileId = await findSyncFileId(accessToken);
+export async function uploadSyncPayload(accessToken, payload, options = {}) {
+  const fileId = options.fileId === undefined
+    ? await findSyncFileId(accessToken)
+    : options.fileId;
+  if (fileId && options.ifMatch) {
+    return uploadSyncPayloadConditionally(accessToken, fileId, payload, options.ifMatch);
+  }
   const metadata = {
     name: SYNC_FILE_NAME,
     mimeType: 'application/json',
@@ -86,17 +107,63 @@ export async function uploadSyncPayload(accessToken, payload) {
   ].join('\r\n');
 
   const url = fileId
-    ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id`
-    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
-  const response = await driveFetch(url, accessToken, {
+    ? `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=multipart&fields=id%2Cversion`
+    : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id%2Cversion';
+  const response = await uploadFetch(url, accessToken, {
     method: fileId ? 'PATCH' : 'POST',
-    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    headers: {
+      'Content-Type': `multipart/related; boundary=${boundary}`,
+    },
     body,
   });
   if (!response.ok) {
-    await throwDriveError('upload sync payload', response);
+    if (response.status === 412) {
+      throwRevisionConflict();
+    }
+    await throwUploadError('upload sync payload', response);
   }
-  return response.json();
+  return readUploadResult(response);
+}
+
+async function uploadSyncPayloadConditionally(accessToken, fileId, payload, ifMatch) {
+  // Drive v3 omits file ETags; v2 supplies the strong ETag required for atomic If-Match updates.
+  const response = await driveFetch(
+    `https://www.googleapis.com/drive/v2/files/${fileId}?fields=id%2Cversion%2Cetag`,
+    accessToken,
+  );
+  if (response.status === 404) throwRevisionConflict();
+  if (!response.ok) await throwDriveError('read sync payload precondition', response);
+  const current = await response.json();
+  if (ifMatch !== `version:${current.version}`) throwRevisionConflict();
+  if (typeof current.etag !== 'string' || !current.etag) {
+    const error = new Error('Google Drive did not return the ETag required for a conditional update.');
+    error.statusCode = 502;
+    error.code = 'drive_precondition_unavailable';
+    throw error;
+  }
+
+  const upload = await uploadFetch(
+    `https://www.googleapis.com/upload/drive/v2/files/${fileId}?uploadType=media&fields=id%2Cversion`,
+    accessToken,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json; charset=UTF-8',
+        'If-Match': current.etag,
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+  if (upload.status === 412) throwRevisionConflict();
+  if (!upload.ok) await throwUploadError('conditionally upload sync payload', upload);
+  return readUploadResult(upload);
+}
+
+function throwRevisionConflict() {
+  const error = new Error('The Drive workspace changed since it was read.');
+  error.statusCode = 409;
+  error.code = 'revision_conflict';
+  throw error;
 }
 
 async function findSyncFileId(accessToken) {
@@ -137,6 +204,36 @@ async function driveFetch(url, accessToken, init = {}) {
       Authorization: `Bearer ${accessToken}`,
     },
   });
+}
+
+async function uploadFetch(url, accessToken, init) {
+  try {
+    return await driveFetch(url, accessToken, init);
+  } catch (error) {
+    throw commitUncertain(error);
+  }
+}
+
+async function readUploadResult(response) {
+  try {
+    return await response.json();
+  } catch (error) {
+    throw commitUncertain(error);
+  }
+}
+
+async function throwUploadError(action, response) {
+  try {
+    await throwDriveError(action, response);
+  } catch (error) {
+    throw response.status >= 500 ? commitUncertain(error) : error;
+  }
+}
+
+function commitUncertain(error) {
+  const result = error instanceof Error ? error : new Error('The Drive upload outcome is uncertain.', { cause: error });
+  result.commitUncertain = true;
+  return result;
 }
 
 async function throwDriveError(action, response) {

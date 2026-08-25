@@ -232,6 +232,14 @@ type Banner = {
   autoDismissMs?: number;
 };
 type CloudStatusTone = "ready" | "idle" | "warning" | "muted";
+type McpGrant = {
+  id: string;
+  clientName: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+  expiresAt: number;
+  timeZone: string;
+};
 type FocusedTaskActionMode = "reschedule" | "move" | "priority" | "delete";
 type QuickAddSubmitMode = "close" | "continue";
 type CloudSyncOutcome =
@@ -2965,14 +2973,16 @@ function WorkspaceShell({
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={() => onOpenQuickAdd()}
-        aria-label="Quick add"
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#dc4c3e] text-white shadow-[0_12px_30px_rgba(220,76,62,0.28)] transition hover:bg-[#c84335] lg:hidden"
-      >
-        <Plus size={22} />
-      </button>
+      {location.pathname !== "/settings" ? (
+        <button
+          type="button"
+          onClick={() => onOpenQuickAdd()}
+          aria-label="Quick add"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#dc4c3e] text-white shadow-[0_12px_30px_rgba(220,76,62,0.28)] transition hover:bg-[#c84335] lg:hidden"
+        >
+          <Plus size={22} />
+        </button>
+      ) : null}
 
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--app-shell-border)] bg-[color-mix(in_srgb,var(--app-shell-bg)_95%,transparent)] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-2 backdrop-blur lg:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
@@ -3136,7 +3146,7 @@ function WorkspaceShell({
   );
 }
 
-const LEGAL_LAST_UPDATED = "July 21, 2026";
+const LEGAL_LAST_UPDATED = "August 21, 2026";
 const SUPPORT_EMAIL = "support@emberlist.dev";
 const GITHUB_REPOSITORY_URL = "https://github.com/notpranavshinde/emberlist";
 
@@ -3363,7 +3373,7 @@ function PrivacyPolicyPage() {
     <PublicSiteLayout
       eyebrow="Privacy policy"
       title="How Emberlist stores and uses your data."
-      description={`Last updated ${LEGAL_LAST_UPDATED}. This page explains what data Emberlist uses and how its required Google Drive workspace is stored.`}
+      description={`Last updated ${LEGAL_LAST_UPDATED}. This page explains Google Drive workspace storage, connected Codex clients, and the security metadata Emberlist retains.`}
     >
       <div className="grid gap-5">
         <PublicSection title="What Emberlist collects">
@@ -3376,6 +3386,13 @@ function PrivacyPolicyPage() {
             Emberlist also reads your Google
             account email address and basic profile name so the app can show
             which Google account is currently connected.
+          </p>
+          <p>
+            If you connect a Codex client, Emberlist records the client name,
+            authorization dates, selected time zone, and security metadata
+            needed to operate and protect that connection. Workspace content
+            is processed only while fulfilling an authorized request and is
+            not stored in Emberlist's application database or logs.
           </p>
           <p>
             When anonymous usage analytics are enabled, Emberlist records web
@@ -3397,6 +3414,29 @@ function PrivacyPolicyPage() {
             your Google Drive appData folder. That folder is reserved for
             app-specific data and is not used to access your ordinary Drive
             files.
+          </p>
+          <p>
+            Codex connection records are stored in a managed Postgres database.
+            Access and refresh tokens are stored only as hashes, the Google
+            credential needed for the connection is encrypted, and mutation
+            replay records contain request hashes and result identifiers rather
+            than task content.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Connected Codex clients">
+          <p>
+            A connected Codex client receives the single
+            <span className="font-mono"> emberlist.workspace</span> permission.
+            It can read and change the workspace on your behalf, including
+            deleting items or replacing a workspace when you explicitly ask it
+            to do so. You can review and immediately disconnect clients in
+            Settings.
+          </p>
+          <p>
+            Emberlist sends only the data required to answer the authorized
+            tool request to that client. Its handling of the response is also
+            governed by the terms and privacy policy of the client provider.
           </p>
         </PublicSection>
 
@@ -3423,6 +3463,7 @@ function PrivacyPolicyPage() {
               to synchronize your workspace between authorized devices
             </li>
             <li>to show which account is connected for sync</li>
+            <li>to carry out requests from Codex clients you authorize</li>
             <li>to understand onboarding, feature adoption, and reliability</li>
           </ul>
         </PublicSection>
@@ -3463,6 +3504,14 @@ function PrivacyPolicyPage() {
           <p>
             You can sign out, clear account-bound browser data, or export your
             workspace. Signing out preserves the sync file in your Google Drive.
+          </p>
+          <p>
+            Codex access tokens expire after one hour. Rotating refresh tokens
+            expire after 90 days, grants expire after one year, mutation replay
+            records expire after 24 hours, and security audit records are kept
+            for 30 days. Disconnecting a client deletes its encrypted grant and
+            invalidates its Emberlist tokens without revoking the shared Google
+            authorization used by normal web sync.
           </p>
         </PublicSection>
 
@@ -3506,6 +3555,16 @@ function TermsOfServicePage() {
             You can sign out at any time while connected. Emberlist synchronizes
             pending changes, revokes access, and clears its account-bound device
             cache while preserving the Drive workspace.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Connected tools">
+          <p>
+            You may authorize Codex clients to manage your Emberlist workspace.
+            The connection includes broad workspace access, including semantic
+            changes, deletions, raw export and, only when explicitly requested,
+            exact workspace replacement. Review requested actions carefully and
+            disconnect clients you no longer trust from Settings.
           </p>
         </PublicSection>
 
@@ -6790,6 +6849,130 @@ function SettingsPage({
     location.pathname,
     cloudSession,
   );
+  const [mcpGrants, setMcpGrants] = useState<McpGrant[]>([]);
+  const [mcpGrantError, setMcpGrantError] = useState<string | null>(null);
+  const [isLoadingMcpGrants, setIsLoadingMcpGrants] = useState(false);
+  const [revokingMcpGrantId, setRevokingMcpGrantId] = useState<string | null>(
+    null,
+  );
+  const [updatingMcpGrantId, setUpdatingMcpGrantId] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!cloudSession) {
+      setMcpGrants([]);
+      setMcpGrantError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setIsLoadingMcpGrants(true);
+    setMcpGrantError(null);
+    void fetch("/api/mcp/grants", {
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as {
+            message?: string;
+          } | null;
+          throw new Error(body?.message ?? "Codex connections are unavailable.");
+        }
+        return response.json() as Promise<{ grants: McpGrant[] }>;
+      })
+      .then((body) => setMcpGrants(Array.isArray(body.grants) ? body.grants : []))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setMcpGrantError(
+          error instanceof Error
+            ? error.message
+            : "Codex connections are unavailable.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoadingMcpGrants(false);
+      });
+
+    return () => controller.abort();
+  }, [cloudSession]);
+
+  async function revokeMcpGrant(grant: McpGrant) {
+    if (
+      !window.confirm(
+        `Disconnect ${grant.clientName}? Its Emberlist access will stop immediately.`,
+      )
+    ) {
+      return;
+    }
+
+    setRevokingMcpGrantId(grant.id);
+    setMcpGrantError(null);
+    try {
+      const response = await fetch("/api/mcp/grants", {
+        method: "DELETE",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantId: grant.id }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(body?.message ?? "The Codex connection could not be revoked.");
+      }
+      setMcpGrants((current) => current.filter((item) => item.id !== grant.id));
+    } catch (error) {
+      setMcpGrantError(
+        error instanceof Error
+          ? error.message
+          : "The Codex connection could not be revoked.",
+      );
+    } finally {
+      setRevokingMcpGrantId(null);
+    }
+  }
+
+  async function updateMcpGrantTimeZone(
+    event: FormEvent<HTMLFormElement>,
+    grant: McpGrant,
+  ) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const timeZone = String(form.get("timeZone") ?? "").trim();
+    if (!timeZone || timeZone === grant.timeZone) return;
+
+    setUpdatingMcpGrantId(grant.id);
+    setMcpGrantError(null);
+    try {
+      const response = await fetch("/api/mcp/grants", {
+        method: "PATCH",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ grantId: grant.id, timeZone }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(body?.message ?? "The time zone could not be updated.");
+      }
+      setMcpGrants((current) =>
+        current.map((item) =>
+          item.id === grant.id ? { ...item, timeZone } : item,
+        ),
+      );
+    } catch (error) {
+      setMcpGrantError(
+        error instanceof Error
+          ? error.message
+          : "The time zone could not be updated.",
+      );
+    } finally {
+      setUpdatingMcpGrantId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -6830,6 +7013,100 @@ function SettingsPage({
               ) : null}
             </div>
           </div>
+        </SettingsDisclosure>
+
+        <SettingsDisclosure
+          title="Codex connections"
+          description={
+            mcpGrants.length
+              ? `${mcpGrants.length} connected client${mcpGrants.length === 1 ? "" : "s"}`
+              : "Manage tools authorized to use your workspace."
+          }
+        >
+          {!cloudSession ? (
+            <p className="rounded-[18px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4 text-sm leading-6 text-[#6D5C50]">
+              Connect Google Drive to view authorized Codex clients.
+            </p>
+          ) : isLoadingMcpGrants ? (
+            <p className="text-sm text-[#6D5C50]" aria-live="polite">
+              Loading Codex connections…
+            </p>
+          ) : mcpGrants.length ? (
+            <div className="space-y-3">
+              {mcpGrants.map((grant) => (
+                <div
+                  key={grant.id}
+                  className="rounded-[20px] border border-[#E7DDD4] bg-[var(--app-surface-soft)] px-4 py-4"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#1E2D2F]">
+                        {grant.clientName}
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-[#6D5C50]">
+                        Authorized {formatDateTime(grant.createdAt)}
+                      </p>
+                      <p className="text-xs leading-5 text-[#6D5C50]">
+                        {grant.lastUsedAt
+                          ? `Last used ${formatDateTime(grant.lastUsedAt)}`
+                          : "Not used yet"}{" "}
+                        · Expires {formatDateTimeWithYear(grant.expiresAt)}
+                      </p>
+                      <form
+                        className="mt-3 flex max-w-lg flex-col gap-2 sm:flex-row"
+                        onSubmit={(event) =>
+                          void updateMcpGrantTimeZone(event, grant)
+                        }
+                      >
+                        <label className="flex-1 text-xs font-semibold text-[#6D5C50]">
+                          Time zone
+                          <input
+                            type="text"
+                            name="timeZone"
+                            defaultValue={grant.timeZone}
+                            autoComplete="off"
+                            spellCheck={false}
+                            className="mt-1 min-h-11 w-full rounded-2xl border border-[#D9CABC] bg-[var(--app-surface)] px-3 py-2 text-sm font-normal text-[#1E2D2F] outline-none focus:border-[#FE8C2F]"
+                            aria-describedby={`mcp-time-zone-hint-${grant.id}`}
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={updatingMcpGrantId === grant.id}
+                          className="min-h-11 self-end rounded-full border border-[#D9CABC] bg-[var(--app-surface)] px-4 py-2.5 text-sm font-semibold text-[#1E2D2F] transition hover:bg-[var(--app-surface-muted)] disabled:opacity-55"
+                        >
+                          {updatingMcpGrantId === grant.id ? "Saving…" : "Save"}
+                        </button>
+                        <span id={`mcp-time-zone-hint-${grant.id}`} className="sr-only">
+                          Enter an IANA time zone such as America/Phoenix.
+                        </span>
+                      </form>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void revokeMcpGrant(grant)}
+                      disabled={revokingMcpGrantId === grant.id}
+                      className="min-h-11 shrink-0 rounded-full border border-[#F3B7A4] bg-[#FFF5F1] px-4 py-2.5 text-sm font-semibold text-[#B64B28] transition hover:bg-[#FDE9E1] disabled:opacity-55"
+                    >
+                      {revokingMcpGrantId === grant.id ? "Disconnecting…" : "Disconnect"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : !mcpGrantError ? (
+            <p className="rounded-[18px] border border-dashed border-[#D9CABC] bg-[var(--app-surface-soft)] px-4 py-4 text-sm text-[#6D5C50]">
+              No Codex clients are connected.
+            </p>
+          ) : null}
+          {mcpGrantError ? (
+            <p
+              className="rounded-[18px] bg-[#FFF1EB] px-4 py-3 text-sm leading-6 text-[#A24628]"
+              role="status"
+            >
+              {mcpGrantError}
+            </p>
+          ) : null}
         </SettingsDisclosure>
 
         <SettingsDisclosure
@@ -11558,7 +11835,10 @@ function formatTaskDate(timestamp: number, allDay: boolean): string {
 
 function formatDateTime(timestamp: number): string {
   return formatDateTimeValue(timestamp);
-  return format(timestamp, "MMM d, h:mm a");
+}
+
+function formatDateTimeWithYear(timestamp: number): string {
+  return `${format(timestamp, "MMM d, yyyy")} · ${formatClock(timestamp)}`;
 }
 
 function toInputValue(timestamp: number | null, allDay: boolean): string {

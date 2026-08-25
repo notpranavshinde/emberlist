@@ -28,6 +28,9 @@ object-src 'none';
 The browser reaches Google through top-level OAuth redirects. Google API calls happen only in Vercel functions, so Google script, frame, and connection origins are not allowed by the application CSP.
 
 ## Rollout
-1. Run as `Content-Security-Policy-Report-Only` from HTTP headers.
-2. Triage/allowlist legitimate violations.
-3. Enforce CSP before GA rollout.
+
+The baseline policy is enforced in production. For future policy changes:
+
+1. stage the changed policy as `Content-Security-Policy-Report-Only`
+2. triage and allowlist legitimate violations
+3. update this baseline and enforce the reviewed policy

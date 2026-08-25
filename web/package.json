@@ -12,17 +12,24 @@
     "security:config": "node scripts/validate-security-config.mjs",
     "security:storage": "node scripts/check-storage-usage.mjs",
     "security:check": "npm run security:config && npm run security:storage",
-    "analytics:report": "node scripts/report-onboarding-analytics.mjs"
+    "analytics:report": "node scripts/report-onboarding-analytics.mjs",
+    "db:migrate": "node scripts/migrate-mcp.mjs",
+    "test:mcp:postgres": "node scripts/test-mcp-postgres.mjs"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@tailwindcss/vite": "^4.2.2",
     "@vercel/analytics": "^2.0.1",
     "date-fns": "^4.1.0",
     "idb": "^8.0.3",
     "lucide-react": "^0.577.0",
+    "postgres": "^3.4.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "8.3.0"
+    "react-router": "8.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

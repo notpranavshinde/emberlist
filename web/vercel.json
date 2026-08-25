@@ -1,8 +1,66 @@
 {
   "rewrites": [
     {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/api/mcp",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-protected-resource"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-authorization-server"
+    },
+    {
+      "source": "/api/mcp",
+      "destination": "/api/drive/sync-file?mcp_route=resource"
+    },
+    {
+      "source": "/api/mcp/grants",
+      "destination": "/api/drive/sync-file?mcp_route=grants"
+    },
+    {
+      "source": "/api/mcp/oauth/authorization-server",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-authorization-server"
+    },
+    {
+      "source": "/api/mcp/oauth/authorize",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-authorize"
+    },
+    {
+      "source": "/api/mcp/oauth/google/callback",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-google-callback"
+    },
+    {
+      "source": "/api/mcp/oauth/protected-resource",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-protected-resource"
+    },
+    {
+      "source": "/api/mcp/oauth/register",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-register"
+    },
+    {
+      "source": "/api/mcp/oauth/revoke",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-revoke"
+    },
+    {
+      "source": "/api/mcp/oauth/token",
+      "destination": "/api/drive/sync-file?mcp_route=oauth-token"
+    },
+    {
+      "source": "/api/internal/mcp-cleanup",
+      "destination": "/api/drive/sync-file?mcp_route=cleanup"
+    },
+    {
       "source": "/((?!api/|assets/|favicon\\.ico|robots\\.txt|sitemap\\.xml).*)",
       "destination": "/index.html"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/internal/mcp-cleanup",
+      "schedule": "0 4 * * *"
     }
   ],
   "headers": [

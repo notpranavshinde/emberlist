@@ -12,7 +12,7 @@ The Android and web clients are functional and share the same task and sync form
 
 Android includes the complete device experience: task and project management, natural-language entry, recurring tasks, notifications, background scheduling, private backups, and automatic Google Drive sync.
 
-The web client includes the main workspace, task and project editing, search, bulk actions, JSON backup tools, an account-bound browser cache, and automatic Google Drive sync. Its OAuth and Drive operations use the serverless endpoints in `web/api/`.
+The web client includes the main workspace, task and project editing, search, bulk actions, JSON backup tools, an account-bound browser cache, and automatic Google Drive sync. Its public serverless entry points are under `web/api/`; shared Drive and MCP route handlers live under `web/server/` and are bundled through those entry points.
 
 Open release work is tracked in [`TODO.md`](TODO.md).
 
@@ -33,7 +33,9 @@ Android keeps an account-bound workspace cache in Room. The web client keeps an 
 
 Both clients automatically exchange a versioned `SyncPayload` through one hidden `emberlist_sync.json` file in the user's Drive app-data folder. Merge behavior is deterministic, uses deletion tombstones, and repairs invalid references after conflicts.
 
-The web serverless API handles OAuth and Drive requests but does not maintain a separate task database. Android system backup and device transfer exclude task content, locations, sync identity, and private JSON snapshots; only non-content settings are eligible.
+The web serverless API handles OAuth, Drive sync, and the remote MCP endpoint at `https://emberlist.dev/api/mcp`. Vercel rewrites the MCP URLs to the existing `web/api/drive/sync-file.js` function, which dispatches to handlers in `web/server/mcp/`. It does not maintain a task database: MCP workspace content remains in the user's Drive file. Postgres stores only OAuth/security metadata, hashed tokens, encrypted grant credentials, and content-free mutation replay records. Android system backup and device transfer exclude task content, locations, sync identity, and private JSON snapshots; only non-content settings are eligible.
+
+The public [privacy policy](https://emberlist.dev/privacy) and [terms of service](https://emberlist.dev/terms) describe Codex access, retention, and disconnection. Security questions can be sent to `support@emberlist.dev`.
 
 Security documentation is in [`web/docs/security/`](web/docs/security/).
 
@@ -84,13 +86,17 @@ Web configuration:
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 EMBERLIST_AUTH_SECRET=at-least-32-random-bytes
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+EMBERLIST_MCP_AUTH_SECRET=a-different-32-byte-random-secret
+EMBERLIST_MCP_ENABLED=false
+CRON_SECRET=another-random-secret
 ANALYTICS_ID_SECRET=a-different-32-byte-random-secret
 EMBERLIST_ADMIN_AUTH_SECRET=another-32-byte-random-secret
 EMBERLIST_ANALYTICS_ADMIN_EMAILS=notpranavshinde@gmail.com
 EMBERLIST_APP_ORIGIN=http://localhost:3000
 ```
 
-Production deployments should also configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for rate limiting and anonymous aggregate analytics. Add `https://emberlist.dev/api/admin/auth/google/callback` to the Google web OAuth client. The private dashboard is available at `emberlist.dev/#/stats`; it requests only Google profile/email access and is independent of Drive authorization.
+Production deployments should set `EMBERLIST_APP_ORIGIN=https://emberlist.dev` and configure `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` for distributed rate limiting and anonymous aggregate analytics. Add both `https://emberlist.dev/api/admin/auth/google/callback` and `https://emberlist.dev/api/mcp/oauth/google/callback` to the Google web OAuth client. Apply the additive MCP migrations with `npm run db:migrate` before changing the staged default `EMBERLIST_MCP_ENABLED=false` to `true`. The authenticated daily cleanup route is `/api/internal/mcp-cleanup`; an authenticated `DELETE` to the same route is the emergency all-grants revocation control. The private dashboard is available at `emberlist.dev/#/stats`; it requests only Google profile/email access and is independent of Drive authorization.
 
 ## Testing
 
@@ -131,7 +137,8 @@ The web workflow runs these checks and generates a CycloneDX SBOM. The Android r
 
 - `app/` — Android application and tests
 - `web/src/` — web client
-- `web/api/` — OAuth and Drive sync endpoints
+- `web/api/` — public serverless entry points
+- `web/server/` — shared Drive and MCP handlers bundled by the serverless entry points
 - `web/tests/` — API security tests
 - `web/docs/security/` — security and release documentation
 - `.github/workflows/` — CI and signed Android releases

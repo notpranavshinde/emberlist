@@ -53,3 +53,4 @@ mobile-sync-snapshot.md
 .vscode/
 .codex
 Emberlist Sync - Complete Explainer.tldr
+.env*

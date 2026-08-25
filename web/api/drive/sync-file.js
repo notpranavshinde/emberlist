@@ -1,97 +1,37 @@
-import {
-  assertSameOrigin,
-  handleApiError,
-  json,
-  methodNotAllowed,
-  setNoStore,
-} from '../_lib/auth.js';
-import {
-  downloadSyncPayload,
-  getAccessTokenForRequest,
-  uploadSyncPayload,
-} from '../_lib/drive.js';
-import { enforceRateLimit } from '../_lib/rate-limit.js';
-import { MAX_SYNC_BODY_BYTES, validateSyncPayload } from '../_lib/sync-payload.js';
+import driveSync from '../../server/drive-sync.js';
+import cleanup from '../../server/mcp/cleanup.js';
+import grants from '../../server/mcp/grants.js';
+import resource from '../../server/mcp/resource.js';
+import authorizationServer from '../../server/mcp/oauth/authorization-server.js';
+import authorize from '../../server/mcp/oauth/authorize.js';
+import googleCallback from '../../server/mcp/oauth/google/callback.js';
+import protectedResource from '../../server/mcp/oauth/protected-resource.js';
+import register from '../../server/mcp/oauth/register.js';
+import revoke from '../../server/mcp/oauth/revoke.js';
+import token from '../../server/mcp/oauth/token.js';
 
-export default async function handler(req, res) {
-  setNoStore(res);
-  if (!['GET', 'PUT'].includes(req.method)) {
-    methodNotAllowed(res, ['GET', 'PUT']);
-    return;
-  }
+export { readJsonBody } from '../../server/drive-sync.js';
 
-  try {
-    if (req.method !== 'GET') {
-      assertSameOrigin(req);
-    }
-    await enforceRateLimit(req, res, {
-      name: req.method === 'GET' ? 'sync-read' : 'sync-write',
-      limit: req.method === 'GET' ? 120 : 30,
-      windowSeconds: 60,
-      includeSession: true,
-    });
+const routes = {
+  resource,
+  grants,
+  'oauth-authorization-server': authorizationServer,
+  'oauth-authorize': authorize,
+  'oauth-google-callback': googleCallback,
+  'oauth-protected-resource': protectedResource,
+  'oauth-register': register,
+  'oauth-revoke': revoke,
+  'oauth-token': token,
+  cleanup,
+};
 
-    let uploadPayload = null;
-    if (req.method === 'PUT') {
-      uploadPayload = await readJsonBody(req);
-      validateSyncPayload(uploadPayload);
-    }
-
-    const accessToken = await getAccessTokenForRequest(req);
-
-    if (req.method === 'GET') {
-      const result = await downloadSyncPayload(accessToken);
-      json(res, 200, result);
-      return;
-    }
-
-    if (req.method === 'PUT') {
-      await uploadSyncPayload(accessToken, uploadPayload);
-      json(res, 200, { ok: true });
-      return;
-    }
-
-  } catch (error) {
-    handleApiError(res, error);
-  }
-}
-
-export async function readJsonBody(req) {
-  const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
-  if (contentType !== 'application/json') {
-    const error = new Error('Content-Type must be application/json.');
-    error.statusCode = 415;
-    throw error;
-  }
-  const declaredLength = Number(req.headers['content-length']);
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_SYNC_BODY_BYTES) {
-    throwPayloadTooLarge();
-  }
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    const buffer = Buffer.from(chunk);
-    size += buffer.length;
-    if (size > MAX_SYNC_BODY_BYTES) throwPayloadTooLarge();
-    chunks.push(buffer);
-  }
-  const raw = Buffer.concat(chunks).toString('utf8');
-  if (!raw) {
-    const error = new Error('Request body is required.');
-    error.statusCode = 400;
-    throw error;
-  }
-  try {
-    return JSON.parse(raw);
-  } catch {
-    const error = new Error('Request body must be valid JSON.');
-    error.statusCode = 400;
-    throw error;
-  }
-}
-
-function throwPayloadTooLarge() {
-  const error = new Error(`Request body exceeds the ${MAX_SYNC_BODY_BYTES}-byte limit.`);
-  error.statusCode = 413;
-  throw error;
+export default function handler(req, res) {
+  const route = req.query?.mcp_route
+    ?? new URL(req.url ?? '/api/drive/sync-file', 'https://emberlist.invalid').searchParams.get('mcp_route');
+  if (!route) return driveSync(req, res);
+  const routeHandler = routes[route];
+  if (routeHandler) return routeHandler(req, res);
+  res.statusCode = 404;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify({ error: 'not_found' }));
 }

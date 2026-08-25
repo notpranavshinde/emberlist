@@ -8,6 +8,7 @@ const requiredDocs = [
   'docs/security/incident-response.md',
   'docs/security/launch-checklist.md',
   'docs/security/adr-auth-architecture.md',
+  'docs/security/adr-mcp-oauth.md',
 ];
 
 const missing = requiredDocs.filter((path) => !existsSync(new URL(`../${path}`, import.meta.url)));
