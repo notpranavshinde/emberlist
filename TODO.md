@@ -1,11 +1,13 @@
 # TODO
 
+The Codex plugin is distributed through this repository's marketplace for personal installation. Publication in OpenAI's public plugin directory is intentionally deferred.
+
 ## Deployment
 
 - [ ] Add `https://emberlist.dev/api/auth/google/callback` to the Google web OAuth client's authorized redirect URIs.
 - [ ] Set Vercel environment variables for backend authentication: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `EMBERLIST_AUTH_SECRET`.
 - [ ] Add `https://emberlist.dev/api/admin/auth/google/callback` to the Google web OAuth client's authorized redirect URIs.
-- [ ] Set `ANALYTICS_ID_SECRET`, `EMBERLIST_ADMIN_AUTH_SECRET`, and `EMBERLIST_ANALYTICS_ADMIN_EMAILS=notpranavshinde@gmail.com` in Vercel before enabling schema-v2 clients.
+- [ ] Set `ANALYTICS_ID_SECRET`, `EMBERLIST_ADMIN_AUTH_SECRET`, and `EMBERLIST_ANALYTICS_ADMIN_EMAILS=admin@example.com` in Vercel before enabling schema-v2 clients.
 - [x] Verify production Neon main branch `br-billowing-shape-av2ohfej` contains `schema_migrations`, all eight MCP tables, and production rows, proving the additive migrations are applied.
 - [x] Verify Vercel Production config includes `DATABASE_URL`, `EMBERLIST_MCP_AUTH_SECRET`, `CRON_SECRET`, and `EMBERLIST_MCP_ENABLED`, with no `VITE_` exposure; variable values were not inspected.
 - [x] Verify in the signed-in Google Cloud console that the Emberlist Web client registers exactly `https://emberlist.dev/api/mcp/oauth/google/callback` as an authorized redirect URI.

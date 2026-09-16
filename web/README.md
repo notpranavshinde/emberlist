@@ -23,7 +23,7 @@ EMBERLIST_MCP_ENABLED=false
 CRON_SECRET=another-random-secret
 ANALYTICS_ID_SECRET=a-different-32-byte-random-secret
 EMBERLIST_ADMIN_AUTH_SECRET=another-32-byte-random-secret
-EMBERLIST_ANALYTICS_ADMIN_EMAILS=notpranavshinde@gmail.com
+EMBERLIST_ANALYTICS_ADMIN_EMAILS=admin@example.com
 EMBERLIST_APP_ORIGIN=http://localhost:3000
 ```
 
@@ -40,7 +40,7 @@ The remote MCP endpoint is `/api/mcp`. `vercel.json` rewrites its public OAuth, 
 
 Run `npm run db:migrate` after setting `DATABASE_URL`, and keep the staged default `EMBERLIST_MCP_ENABLED=false` until migrations, callback registration, metadata, and disabled health behavior are verified. Production should pin `EMBERLIST_APP_ORIGIN=https://emberlist.dev` and use Upstash for distributed rate limits. Vercel calls `GET /api/internal/mcp-cleanup` daily with `CRON_SECRET`; an authenticated `DELETE` to that route deletes every MCP grant during rollback without revoking the Google authorization shared with web sync.
 
-Public disclosures are available at [Privacy](https://emberlist.dev/privacy) and [Terms](https://emberlist.dev/terms). Contact `support@emberlist.dev` for security or privacy questions.
+The public [Codex plugin page](https://emberlist.dev/plugin) documents repository installation. Disclosures are available at [Privacy](https://emberlist.dev/privacy) and [Terms](https://emberlist.dev/terms). Contact `support@emberlist.dev` for security or privacy questions.
 
 ## Verify
 

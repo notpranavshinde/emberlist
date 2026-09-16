@@ -1,0 +1,15 @@
+interface:
+  display_name: "Emberlist Tasks"
+  short_description: "Manage tasks, projects, and reminders"
+  brand_color: "#FE8C2F"
+  icon_small: "./assets/logo.svg"
+  icon_large: "./assets/icon.png"
+  default_prompt: "Use $emberlist-tasks to review and organize my Emberlist tasks."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "emberlist"
+      description: "Emberlist workspace MCP server"
+      transport: "streamable_http"
+      url: "https://emberlist.dev/api/mcp"

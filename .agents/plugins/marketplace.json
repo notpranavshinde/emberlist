@@ -1,0 +1,20 @@
+{
+  "name": "emberlist",
+  "interface": {
+    "displayName": "Emberlist"
+  },
+  "plugins": [
+    {
+      "name": "emberlist",
+      "source": {
+        "source": "local",
+        "path": "./plugins/emberlist"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

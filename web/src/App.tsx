@@ -251,7 +251,12 @@ type CloudSyncOutcome =
 let activeDraggedTaskId: string | null = null;
 
 function isPublicMarketingPath(pathname: string) {
-  return pathname === "/" || pathname === "/privacy" || pathname === "/terms";
+  return (
+    pathname === "/" ||
+    pathname === "/plugin" ||
+    pathname === "/privacy" ||
+    pathname === "/terms"
+  );
 }
 
 function App() {
@@ -2481,6 +2486,9 @@ function WorkspaceShell({
   ]);
 
   if (isPublicPage) {
+    if (location.pathname === "/plugin") {
+      return <CodexPluginPage />;
+    }
     if (location.pathname === "/privacy") {
       return <PrivacyPolicyPage />;
     }
@@ -3146,9 +3154,12 @@ function WorkspaceShell({
   );
 }
 
-const LEGAL_LAST_UPDATED = "August 21, 2026";
+const LEGAL_LAST_UPDATED = "September 2, 2026";
 const SUPPORT_EMAIL = "support@emberlist.dev";
 const GITHUB_REPOSITORY_URL = "https://github.com/notpranavshinde/emberlist";
+const PLUGIN_MARKETPLACE_COMMAND =
+  "codex plugin marketplace add notpranavshinde/emberlist --ref main";
+const PLUGIN_INSTALL_COMMAND = "codex plugin add emberlist@emberlist";
 
 function PublicSiteLayout({
   eyebrow,
@@ -3191,14 +3202,20 @@ function PublicSiteLayout({
               GitHub
             </a>
             <NavLink
+              to="/plugin"
+              className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)] sm:inline-flex"
+            >
+              Codex plugin
+            </NavLink>
+            <NavLink
               to="/privacy"
-              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)]"
+              className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)] lg:inline-flex"
             >
               Privacy
             </NavLink>
             <NavLink
               to="/terms"
-              className="rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)]"
+              className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#6d5c50] transition hover:bg-[var(--app-surface-soft)] lg:inline-flex"
             >
               Terms
             </NavLink>
@@ -3240,7 +3257,7 @@ function PublicSection({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-[var(--app-shell-border)] bg-[var(--app-surface)] p-6 shadow-sm">
+    <section className="min-w-0 rounded-[28px] border border-[var(--app-shell-border)] bg-[var(--app-surface)] p-6 shadow-sm">
       <h2 className="text-xl font-semibold text-[#221E1C]">{title}</h2>
       <div className="mt-4 space-y-4 text-sm leading-7 text-[#4d4a45]">
         {children}
@@ -3270,6 +3287,12 @@ function MarketingHomePage() {
               className="rounded-full border border-[var(--app-shell-border)] bg-[var(--app-surface-soft)] px-5 py-2.5 text-sm font-semibold text-[#221E1C] transition hover:bg-[var(--app-surface)]"
             >
               How sync works
+            </NavLink>
+            <NavLink
+              to="/plugin"
+              className="rounded-full border border-[var(--app-shell-border)] bg-[var(--app-surface-soft)] px-5 py-2.5 text-sm font-semibold text-[#221E1C] transition hover:bg-[var(--app-surface)]"
+            >
+              Use with Codex
             </NavLink>
             <a
               href={GITHUB_REPOSITORY_URL}
@@ -3306,6 +3329,22 @@ function MarketingHomePage() {
         </section>
 
         <div className="grid gap-5">
+          <PublicSection title="Manage it from Codex">
+            <p>
+              Install the Emberlist plugin from this GitHub repository, connect
+              your account, and manage tasks, projects, reminders, and recurring
+              work from a Codex task.
+            </p>
+            <p>
+              <NavLink
+                to="/plugin"
+                className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+              >
+                Install the Codex plugin
+              </NavLink>
+            </p>
+          </PublicSection>
+
           <PublicSection title="Built for real task maintenance">
             <p>
               Emberlist handles recurring work, overdue cleanup, subtasks,
@@ -3368,6 +3407,120 @@ function MarketingHomePage() {
   );
 }
 
+function CodexPluginPage() {
+  return (
+    <PublicSiteLayout
+      eyebrow="Codex plugin"
+      title="Manage Emberlist from Codex."
+      description="Install the plugin directly from the Emberlist GitHub repository, authorize your account, and use structured tools for tasks, projects, reminders, locations, and recurring work."
+    >
+      <div className="grid gap-5 lg:grid-cols-2">
+        <PublicSection title="Install on this machine">
+          <p>
+            The plugin is distributed through Emberlist&apos;s repository
+            marketplace for personal installation. It is not listed in the
+            public OpenAI plugin directory.
+          </p>
+          <ol className="list-decimal space-y-4 pl-5">
+            <li>
+              Add the Emberlist GitHub repository as a Codex marketplace.
+              <pre className="mt-3 overflow-x-auto rounded-2xl bg-[#221E1C] p-4 text-xs leading-6 text-[#fff8ef]">
+                <code>{PLUGIN_MARKETPLACE_COMMAND}</code>
+              </pre>
+            </li>
+            <li>
+              Install the plugin.
+              <pre className="mt-3 overflow-x-auto rounded-2xl bg-[#221E1C] p-4 text-xs leading-6 text-[#fff8ef]">
+                <code>{PLUGIN_INSTALL_COMMAND}</code>
+              </pre>
+            </li>
+            <li>
+              Start a new Codex task, choose Emberlist, and complete the Google
+              authorization screen when prompted.
+            </li>
+          </ol>
+          <p>
+            The repository contains no account secrets. OAuth credentials stay
+            with the Emberlist service and your local Codex installation.
+          </p>
+        </PublicSection>
+
+        <div className="grid gap-5">
+          <PublicSection title="What it can do">
+            <ul className="list-disc space-y-2 pl-5">
+              <li>review and search tasks, projects, reminders, and locations</li>
+              <li>create, edit, move, complete, reopen, and delete workspace items</li>
+              <li>preserve recurrence, reminders, subtasks, and sync conflict rules</li>
+              <li>guide focused Android and web development in this repository</li>
+            </ul>
+          </PublicSection>
+
+          <PublicSection title="Access and control">
+            <p>
+              The plugin requests one broad workspace permission,
+              <span className="font-mono"> emberlist.workspace</span>. You can
+              review its connected client, time zone, and expiry—or disconnect
+              it immediately—from Emberlist Settings.
+            </p>
+            <p>
+              Read the{" "}
+              <NavLink className="font-semibold text-[#dc4c3e]" to="/privacy">
+                privacy policy
+              </NavLink>{" "}
+              and{" "}
+              <NavLink className="font-semibold text-[#dc4c3e]" to="/terms">
+                terms
+              </NavLink>{" "}
+              before connecting.
+            </p>
+          </PublicSection>
+        </div>
+
+        <PublicSection title="Update or remove">
+          <p>Refresh the Git marketplace, then reinstall the plugin:</p>
+          <pre className="overflow-x-auto rounded-2xl bg-[#221E1C] p-4 text-xs leading-6 text-[#fff8ef]">
+            <code>
+              {"codex plugin marketplace upgrade emberlist\n"}
+              {PLUGIN_INSTALL_COMMAND}
+            </code>
+          </pre>
+          <p>
+            Remove it with
+            <span className="font-mono"> codex plugin remove emberlist@emberlist</span>.
+            Disconnecting the Codex grant is a separate action in Emberlist
+            Settings.
+          </p>
+        </PublicSection>
+
+        <PublicSection title="Source and support">
+          <p>
+            The plugin bundle and its marketplace manifest are versioned with
+            the Emberlist source code. Review them before installation or open
+            an issue if something is unclear.
+          </p>
+          <p>
+            <a
+              href={`${GITHUB_REPOSITORY_URL}/tree/main/plugins/emberlist`}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+            >
+              Review the plugin source
+            </a>
+            {" · "}
+            <a
+              href={`mailto:${SUPPORT_EMAIL}`}
+              className="font-semibold text-[#dc4c3e] transition hover:text-[#c84335]"
+            >
+              Contact support
+            </a>
+          </p>
+        </PublicSection>
+      </div>
+    </PublicSiteLayout>
+  );
+}
+
 function PrivacyPolicyPage() {
   return (
     <PublicSiteLayout
@@ -3425,6 +3578,11 @@ function PrivacyPolicyPage() {
         </PublicSection>
 
         <PublicSection title="Connected Codex clients">
+          <p>
+            Emberlist&apos;s Codex plugin is distributed from the public Emberlist
+            GitHub repository for personal installation. It is not listed in
+            OpenAI&apos;s public plugin directory.
+          </p>
           <p>
             A connected Codex client receives the single
             <span className="font-mono"> emberlist.workspace</span> permission.
@@ -3560,7 +3718,8 @@ function TermsOfServicePage() {
 
         <PublicSection title="Connected tools">
           <p>
-            You may authorize Codex clients to manage your Emberlist workspace.
+            You may install Emberlist&apos;s Codex plugin from its GitHub repository
+            and authorize Codex clients to manage your Emberlist workspace.
             The connection includes broad workspace access, including semantic
             changes, deletions, raw export and, only when explicitly requested,
             exact workspace replacement. Review requested actions carefully and
@@ -11729,6 +11888,7 @@ function getWorkspaceIdentity(cloudSession: CloudSession | null): {
 
 function getRouteTitle(pathname: string, payload: SyncPayload): string {
   if (pathname === "/") return "Emberlist";
+  if (pathname === "/plugin") return "Codex Plugin";
   if (pathname === "/privacy") return "Privacy Policy";
   if (pathname === "/terms") return "Terms of Service";
   if (pathname.startsWith("/search/no-due")) return "Tasks without due dates";
@@ -11757,6 +11917,9 @@ function getRouteDescription(pathname: string): string {
   if (pathname === "/") {
     return "Emberlist is a Google Drive-backed task manager with natural-language quick add, recurring tasks, reminders, and subtasks.";
   }
+  if (pathname === "/plugin") {
+    return "Install the Emberlist Codex plugin from its GitHub marketplace and manage your workspace with authenticated tools.";
+  }
   if (pathname === "/privacy") {
     return "Read how Emberlist uses Google Drive appData and account-bound device caches.";
   }
@@ -11777,7 +11940,10 @@ function updateRouteMetadata(pathname: string, title: string) {
 
   const description = getRouteDescription(pathname);
   const canonicalPath =
-    pathname === "/" || pathname === "/privacy" || pathname === "/terms"
+    pathname === "/" ||
+    pathname === "/plugin" ||
+    pathname === "/privacy" ||
+    pathname === "/terms"
       ? pathname
       : "/today";
   const canonicalUrl = `https://emberlist.dev${canonicalPath}`;

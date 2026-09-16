@@ -1,0 +1,47 @@
+{
+  "name": "emberlist",
+  "version": "0.1.0",
+  "description": "Manage your Emberlist workspace and develop the Emberlist app from Codex.",
+  "author": {
+    "name": "Emberlist",
+    "email": "support@emberlist.dev",
+    "url": "https://emberlist.dev/"
+  },
+  "homepage": "https://emberlist.dev/plugin",
+  "repository": "https://github.com/notpranavshinde/emberlist",
+  "keywords": [
+    "emberlist",
+    "codex",
+    "tasks",
+    "projects",
+    "reminders",
+    "productivity",
+    "android",
+    "web"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Emberlist",
+    "shortDescription": "Manage tasks and build Emberlist",
+    "longDescription": "Review and manage your Emberlist workspace, or follow repository-aware guidance while developing the Android and web clients.",
+    "developerName": "Emberlist",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://emberlist.dev/plugin",
+    "privacyPolicyURL": "https://emberlist.dev/privacy",
+    "termsOfServiceURL": "https://emberlist.dev/terms",
+    "defaultPrompt": [
+      "Review my open Emberlist tasks and suggest what to focus on today.",
+      "Create an Emberlist task with a due date and reminder from my request.",
+      "Help me implement and validate a focused change in the Emberlist repository."
+    ],
+    "brandColor": "#FE8C2F",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.svg",
+    "screenshots": []
+  }
+}

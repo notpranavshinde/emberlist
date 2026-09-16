@@ -1,0 +1,7 @@
+interface:
+  display_name: "Emberlist Development"
+  short_description: "Build and validate Emberlist changes"
+  brand_color: "#FE8C2F"
+  icon_small: "./assets/logo.svg"
+  icon_large: "./assets/icon.png"
+  default_prompt: "Use $emberlist-development to make a focused Emberlist code change."

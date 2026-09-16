@@ -5,6 +5,7 @@ Emberlist is a Google Drive-backed task manager for Android and the web with fas
 - Use the web app: [emberlist.dev](https://emberlist.dev)
 - Download Android: [emberlist-release.apk](https://github.com/notpranavshinde/emberlist/releases/download/android-latest/emberlist-release.apk)
 - View Android releases: [android-latest](https://github.com/notpranavshinde/emberlist/releases/tag/android-latest)
+- Install the Codex plugin: [emberlist.dev/plugin](https://emberlist.dev/plugin)
 
 ## Current state
 
@@ -38,6 +39,17 @@ The web serverless API handles OAuth, Drive sync, and the remote MCP endpoint at
 The public [privacy policy](https://emberlist.dev/privacy) and [terms of service](https://emberlist.dev/terms) describe Codex access, retention, and disconnection. Security questions can be sent to `support@emberlist.dev`.
 
 Security documentation is in [`web/docs/security/`](web/docs/security/).
+
+## Codex plugin
+
+The repository includes a personal Codex plugin for managing an Emberlist workspace and for repository-aware development guidance. It is distributed from this GitHub repository rather than OpenAI's public plugin directory.
+
+```bash
+codex plugin marketplace add notpranavshinde/emberlist --ref main
+codex plugin add emberlist@emberlist
+```
+
+Start a new Codex task after installation and authorize Emberlist when prompted. See the [installation and update guide](docs/codex-plugin.md) for updates, removal, permissions, and troubleshooting.
 
 ## Android development
 
@@ -92,7 +104,7 @@ EMBERLIST_MCP_ENABLED=false
 CRON_SECRET=another-random-secret
 ANALYTICS_ID_SECRET=a-different-32-byte-random-secret
 EMBERLIST_ADMIN_AUTH_SECRET=another-32-byte-random-secret
-EMBERLIST_ANALYTICS_ADMIN_EMAILS=notpranavshinde@gmail.com
+EMBERLIST_ANALYTICS_ADMIN_EMAILS=admin@example.com
 EMBERLIST_APP_ORIGIN=http://localhost:3000
 ```
 
@@ -141,4 +153,6 @@ The web workflow runs these checks and generates a CycloneDX SBOM. The Android r
 - `web/server/` — shared Drive and MCP handlers bundled by the serverless entry points
 - `web/tests/` — API security tests
 - `web/docs/security/` — security and release documentation
+- `plugins/emberlist/` — installable Codex plugin bundle
+- `.agents/plugins/marketplace.json` — repository marketplace manifest
 - `.github/workflows/` — CI and signed Android releases

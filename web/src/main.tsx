@@ -4,6 +4,11 @@ import { inject } from '@vercel/analytics'
 import './index.css'
 import { isAnalyticsEnabled } from './lib/analytics'
 
+const directPublicPaths = new Set(['/plugin', '/privacy', '/terms'])
+if (!window.location.hash && directPublicPaths.has(window.location.pathname)) {
+  window.history.replaceState(null, '', `/#${window.location.pathname}${window.location.search}`)
+}
+
 const isStatsRoute = window.location.hash === '#/stats' || window.location.hash.startsWith('#/stats?')
 const root = createRoot(document.getElementById('root')!)
 

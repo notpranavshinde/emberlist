@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "emberlist": {
+      "type": "http",
+      "url": "https://emberlist.dev/api/mcp",
+      "oauth_resource": "https://emberlist.dev/api/mcp"
+    }
+  }
+}
