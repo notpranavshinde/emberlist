@@ -27,6 +27,11 @@ object-src 'none';
 
 The browser reaches Google through top-level OAuth redirects. Google API calls happen only in Vercel functions, so Google script, frame, and connection origins are not allowed by the application CSP.
 
+The MCP consent response uses a stricter per-response policy. Its `form-action`
+allows `'self'` plus only the origin of the exact, previously validated OAuth
+redirect URI so browsers can follow the approval response to a Codex loopback
+callback without permitting arbitrary form destinations.
+
 ## Rollout
 
 The baseline policy is enforced in production. For future policy changes:

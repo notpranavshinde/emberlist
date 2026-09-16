@@ -133,12 +133,12 @@ describe('MCP authorization and tokens', () => {
   it('escapes client and account text in consent and stores only the application scope', async () => {
     db.getOAuthClient.mockResolvedValue({
       client_id: 'client', client_name: '<img src=x onerror=alert(1)>',
-      redirect_uris: ['https://client.test/callback'],
+      redirect_uris: ['http://127.0.0.1:4567/callback/codex'],
     });
     const verifier = 'a'.repeat(43);
     const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
     const query = new URLSearchParams({
-      client_id: 'client', redirect_uri: 'https://client.test/callback', response_type: 'code',
+      client_id: 'client', redirect_uri: 'http://127.0.0.1:4567/callback/codex', response_type: 'code',
       code_challenge: challenge, code_challenge_method: 'S256', resource: 'https://emberlist.test/api/mcp',
       scope: 'emberlist.workspace offline_access', state: 'csrf-state',
     });
@@ -152,8 +152,36 @@ describe('MCP authorization and tokens', () => {
     expect(res.body).toContain('&lt;img src=x onerror=alert(1)&gt;');
     expect(res.body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(res.body).not.toContain('<img src=x');
+    expect(res.getHeader('Content-Security-Policy')).toContain("form-action 'self' http://127.0.0.1:4567");
     expect(db.createAuthorizationRequest).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'emberlist.workspace', offlineAccess: true, state: 'csrf-state',
+    }));
+  });
+
+  it('approves a form submission and redirects to the registered loopback callback', async () => {
+    const authorizationRequest = {
+      id: 'request', redirect_uri: 'http://127.0.0.1:4567/callback/codex', state: 'csrf-state',
+      scope: 'emberlist.workspace', client_id: 'client', offline_access: true,
+      resource: 'https://emberlist.test/api/mcp', code_challenge: 'challenge',
+      expires_at: new Date(Date.now() + 60_000), approved_at: null, denied_at: null,
+    };
+    db.getAuthorizationRequest.mockResolvedValue(authorizationRequest);
+    db.approveAuthorizationRequest.mockResolvedValue(authorizationRequest);
+    const req = request('POST', '/api/mcp/oauth/authorize', 'request_id=request&decision=allow&time_zone=America%2FPhoenix');
+    req.headers['content-type'] = 'application/x-www-form-urlencoded';
+    req.headers.cookie = sessionCookie({ email: 'friend@example.test' });
+    const res = response();
+
+    await authorize(req, res);
+
+    const location = new URL(res.getHeader('Location'));
+    expect(res.statusCode).toBe(302);
+    expect(location.origin + location.pathname).toBe('http://127.0.0.1:4567/callback/codex');
+    expect(location.searchParams.get('code')).toMatch(/^el_code_/u);
+    expect(location.searchParams.get('state')).toBe('csrf-state');
+    expect(location.searchParams.get('iss')).toBe('https://emberlist.test');
+    expect(db.approveAuthorizationRequest).toHaveBeenCalledWith(expect.objectContaining({
+      requestId: 'request', grant: expect.objectContaining({ timeZone: 'America/Phoenix' }),
     }));
   });
 

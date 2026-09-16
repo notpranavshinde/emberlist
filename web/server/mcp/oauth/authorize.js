@@ -148,9 +148,10 @@ async function authorize(req, res) {
 
 function renderConsent(res, request, session) {
   const nonce = crypto.randomBytes(18).toString('base64url');
+  const redirectOrigin = new URL(request.redirect_uri).origin;
   res.statusCode = 200;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`);
+  res.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; form-action 'self' ${redirectOrigin}; base-uri 'none'; frame-ancestors 'none'`);
   res.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connect ${escapeHtml(request.client_name)}</title><style>body{font:16px system-ui;max-width:36rem;margin:4rem auto;padding:0 1.25rem;color:#241b16}button,input{font:inherit;padding:.7rem}button[value=allow]{background:#FE8C2F;border:0;border-radius:.4rem}form{display:grid;gap:1rem}.actions{display:flex;gap:.75rem}</style><main><h1>Connect ${escapeHtml(request.client_name)} to Emberlist?</h1><p>Signed in as ${escapeHtml(session.email || session.name || 'your Google account')}.</p><p>This client can read, create, edit, move, complete, delete, and import workspace items. It can replace the full workspace only when you explicitly request that action. Emberlist does not store task content on its server.</p><form method="post" action="/api/mcp/oauth/authorize"><input type="hidden" name="request_id" value="${escapeHtml(request.id)}"><label>Time zone <input id="time-zone" name="time_zone" value="UTC" required></label><div class="actions"><button name="decision" value="allow">Allow</button><button name="decision" value="deny">Deny</button></div></form></main><script nonce="${nonce}">document.getElementById('time-zone').value=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'</script></html>`);
 }
 
