@@ -91,6 +91,13 @@ Use `npm ci` for verification. Only change `package-lock.json` through an intent
 - Android release or signing change: run `:app:testDebugUnitTest` and `:app:assembleRelease`. Before describing an APK as signed or distributable, verify its signature with `apksigner`; a release build without credentials may be unsigned.
 - CI, release, authentication, or security change: validate the affected workflow/configuration and follow the relevant documentation under `web/docs/security/`.
 
+### Local Web Browser Testing
+
+- Do not stop local web UI testing to request authentication, production secrets, or permission to create test data. Use a disposable local QA workspace with synthetic tasks instead of the user's real workspace.
+- Prefer the normal local runtime when its development auth environment is complete. When auth secrets are unavailable, use a temporary ignored Vite configuration that mocks only `/api/auth/session` and `/api/drive/sync-file` with a valid synthetic `SyncPayload`; do not weaken production auth code or copy production secrets/task data locally.
+- Run the QA harness on a fresh localhost port so IndexedDB and account bindings cannot collide with prior sessions. Exercise the affected flow at desktop width and an explicit narrow viewport, capture visual evidence, then reset the viewport.
+- Delete temporary QA configuration and environment files and stop local servers before handoff. Never commit fixtures containing credentials, tokens, private workspace content, or temporary security-header changes.
+
 Do not silently skip required checks. In the final handoff, list what ran, what passed, and anything that could not run.
 
 ## Code and Test Conventions
@@ -124,9 +131,3 @@ There is no repository-wide autoformatter. Keep diffs minimal, follow nearby cod
 - Treat product-analytics schema versions, event/property names, enum values, identity/reset behavior, and retention as an Android/web/API/reporting contract. Never send task titles, notes, project names, emails, or raw identifiers as analytics.
 - For auth, analytics, storage, or sync API work, read the relevant material in `web/docs/security/` and add or update security-focused tests. New public endpoints, OAuth flows, cookies, admin surfaces, external processors, identifiers, or retention behavior must update the applicable threat model, ADR, test matrix, launch checklist, and privacy disclosure in the same change.
 - Route web `localStorage` access through `web/src/lib/webStorage.ts` so security checks and storage behavior remain centralized.
-
-## Commits and Handoff
-
-- Do not commit, push, publish, deploy, or create a release unless the user explicitly requests it.
-- When asked to commit, use a short imperative message such as `Fix reminder parsing`.
-- Pull requests should summarize behavior changes, call out schema/configuration/security effects, include screenshots or GIFs for visible UI changes, and report validation results or the reason a check could not run.

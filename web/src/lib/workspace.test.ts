@@ -12,6 +12,7 @@ import {
   getActiveProjects,
   getInboxTasks,
   getProjectSections,
+  getProjectTasks,
   getSubtasks,
   getTaskReminderDrafts,
   getTodayViewData,
@@ -21,6 +22,7 @@ import {
   postponeTasks,
   promoteSubtask,
   repairRecurringTasks,
+  reorderTask,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   searchArchivedTasks,
@@ -620,6 +622,35 @@ describe('workspace bulk task helpers', () => {
       order: 5,
       updatedAt: 9500,
     });
+  });
+
+  it('reorders a task relative to a target and moves it into the target section', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9550);
+    const payload = createPayload();
+    payload.tasks.push(
+      createTask({ id: 'task-first', title: 'First', projectId: 'project-home', sectionId: 'section-weekend', dueAt: 3000, order: 0 }),
+      createTask({ id: 'task-target', title: 'Target', projectId: 'project-home', sectionId: 'section-weekend', dueAt: 1000, order: 1 }),
+      createTask({ id: 'task-dragged', title: 'Dragged', projectId: 'project-home', sectionId: null, order: 0 }),
+      createTask({ id: 'task-dragged-child', title: 'Dragged child', projectId: 'project-home', sectionId: null, parentTaskId: 'task-dragged', order: 0 }),
+    );
+
+    const updated = reorderTask(payload, 'task-dragged', 'task-target', 'before');
+    const ordered = updated.tasks
+      .filter(task => ['task-first', 'task-target', 'task-dragged'].includes(task.id))
+      .sort((left, right) => left.order - right.order);
+
+    expect(ordered.map(task => task.id)).toEqual(['task-first', 'task-dragged', 'task-target']);
+    expect(ordered[1]).toMatchObject({ parentTaskId: null, updatedAt: 9550 });
+    expect(updated.tasks.find(task => task.id === 'task-dragged-child')).toMatchObject({
+      parentTaskId: 'task-dragged',
+      sectionId: 'section-weekend',
+      updatedAt: 9550,
+    });
+    expect(
+      getProjectTasks(updated, 'project-home')
+        .filter(task => ['task-first', 'task-target', 'task-dragged'].includes(task.id))
+        .map(task => task.id),
+    ).toEqual(['task-first', 'task-dragged', 'task-target']);
   });
 
   it('rejects invalid subtask reparent targets', () => {

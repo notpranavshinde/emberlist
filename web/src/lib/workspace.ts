@@ -127,7 +127,7 @@ export function getProjectTasks(payload: SyncPayload, projectId: string, include
             if (includeArchived) return task.status !== 'COMPLETED';
             return task.status === 'OPEN';
         })
-        .sort(compareTasks);
+        .sort((left, right) => left.order - right.order || left.title.localeCompare(right.title));
 }
 
 export function getCompletedProjectTasks(payload: SyncPayload, projectId: string): Task[] {
@@ -500,6 +500,61 @@ export function reparentTaskAsSubtask(payload: SyncPayload, draggedTaskId: strin
                 }
                 : task
         ),
+    });
+}
+
+export function reorderTask(
+    payload: SyncPayload,
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: 'before' | 'after',
+): SyncPayload {
+    const dragged = payload.tasks.find(task => task.id === draggedTaskId && !task.deletedAt) ?? null;
+    const target = payload.tasks.find(task => task.id === targetTaskId && !task.deletedAt) ?? null;
+    if (!dragged || !target || dragged.id === target.id || dragged.status !== 'OPEN' || target.status !== 'OPEN') {
+        return payload;
+    }
+
+    const descendantIds = new Set<string>();
+    let parentIds = new Set([draggedTaskId]);
+    while (parentIds.size) {
+        const children = payload.tasks.filter(task => task.parentTaskId && parentIds.has(task.parentTaskId));
+        parentIds = new Set(children.map(task => task.id).filter(id => !descendantIds.has(id)));
+        parentIds.forEach(id => descendantIds.add(id));
+    }
+    if (descendantIds.has(targetTaskId)) return payload;
+
+    const siblings = payload.tasks
+        .filter(task =>
+            !task.deletedAt &&
+            task.status === 'OPEN' &&
+            task.id !== draggedTaskId &&
+            task.projectId === target.projectId &&
+            task.sectionId === target.sectionId &&
+            task.parentTaskId === target.parentTaskId
+        )
+        .sort((left, right) => left.order - right.order || left.createdAt - right.createdAt);
+    const targetIndex = siblings.findIndex(task => task.id === targetTaskId);
+    if (targetIndex < 0) return payload;
+
+    siblings.splice(targetIndex + (position === 'after' ? 1 : 0), 0, dragged);
+    const orderById = new Map(siblings.map((task, index) => [task.id, index]));
+    const now = Date.now();
+
+    return finalizePayload({
+        ...payload,
+        tasks: payload.tasks.map(task => {
+            const order = orderById.get(task.id);
+            if (order === undefined && !descendantIds.has(task.id)) return task;
+            return {
+                ...task,
+                projectId: target.projectId,
+                sectionId: target.sectionId,
+                parentTaskId: order === undefined ? task.parentTaskId : target.parentTaskId,
+                order: order ?? task.order,
+                updatedAt: now,
+            };
+        }),
     });
 }
 

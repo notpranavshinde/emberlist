@@ -182,6 +182,7 @@ import {
   postponeTasks,
   promoteSubtask,
   repairRecurringTasks,
+  reorderTask,
   reparentTaskAsSubtask,
   rescheduleTasksToDate,
   searchArchivedTasks,
@@ -1324,6 +1325,26 @@ function App() {
     trackProductEvent("task_moved", { origin: "project" });
   }
 
+  async function handleReorderTask(
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) {
+    await applyUndoablePayloadUpdate(
+      (current) => reorderTask(current, draggedTaskId, targetTaskId, position),
+      {
+        message: "Task moved.",
+        undoMessage: "Reverted task move.",
+        activity: {
+          taskIds: [draggedTaskId],
+          title: "Reordered task",
+          detail: "Changed its position in the project.",
+        },
+      },
+    );
+    trackProductEvent("task_moved", { origin: "project" });
+  }
+
   async function handleSetTasksPriority(taskIds: string[], priority: Priority) {
     if (!taskIds.length) return;
     await applyUndoablePayloadUpdate(
@@ -1866,6 +1887,9 @@ function App() {
         onMoveTasksToSection={(taskIds, sectionId) =>
           void handleMoveTasksToSection(taskIds, sectionId)
         }
+        onReorderTask={(draggedTaskId, targetTaskId, position) =>
+          void handleReorderTask(draggedTaskId, targetTaskId, position)
+        }
         onSetTasksPriority={(taskIds, priority) =>
           void handleSetTasksPriority(taskIds, priority)
         }
@@ -2028,6 +2052,11 @@ type WorkspaceShellProps = {
   onPostponeTasks: (taskIds: string[]) => void;
   onMoveTasksToProject: (taskIds: string[], projectId: string | null) => void;
   onMoveTasksToSection: (taskIds: string[], sectionId: string | null) => void;
+  onReorderTask: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onSetTasksPriority: (taskIds: string[], priority: Priority) => void;
   onDeleteTasks: (taskIds: string[]) => void;
   onReparentTaskAsSubtask: (
@@ -2097,6 +2126,7 @@ function WorkspaceShell({
   onPostponeTasks,
   onMoveTasksToProject,
   onMoveTasksToSection,
+  onReorderTask,
   onSetTasksPriority,
   onDeleteTasks,
   onReparentTaskAsSubtask,
@@ -2913,6 +2943,7 @@ function WorkspaceShell({
                       onUpdateSection={onUpdateSection}
                       onDeleteSection={onDeleteSection}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
                       onPostponeTasks={onPostponeTasks}
@@ -5843,6 +5874,7 @@ function ProjectPage({
   onUpdateSection,
   onDeleteSection,
   onToggleTask,
+  onReorderTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
   onPostponeTasks,
@@ -5870,6 +5902,11 @@ function ProjectPage({
   ) => void;
   onDeleteSection: (sectionId: string) => void;
   onToggleTask: (taskId: string) => void;
+  onReorderTask: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -6446,6 +6483,7 @@ function ProjectPage({
                       : "No tasks without a section."
                   }
                   onToggleTask={onToggleTask}
+                  onReorderTask={onReorderTask}
                   onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                   onPromoteSubtask={onPromoteSubtask}
                   onOpenTask={openTaskEditor}
@@ -6470,6 +6508,7 @@ function ProjectPage({
                 tasks={unsectionedTasks}
                 emptyMessage="No tasks without a section."
                 onToggleTask={onToggleTask}
+                onReorderTask={onReorderTask}
                 onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                 onPromoteSubtask={onPromoteSubtask}
                 onOpenTask={openTaskEditor}
@@ -6576,6 +6615,7 @@ function ProjectPage({
                     tasks={sectionTasks}
                     emptyMessage="No tasks in this section yet."
                     onToggleTask={onToggleTask}
+                    onReorderTask={onReorderTask}
                     onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                     onPromoteSubtask={onPromoteSubtask}
                     onOpenTask={openTaskEditor}
@@ -7438,6 +7478,7 @@ function TaskGroup({
   tasks,
   emptyMessage,
   onToggleTask,
+  onReorderTask,
   onReparentTaskAsSubtask,
   onPromoteSubtask,
   onOpenTask,
@@ -7460,6 +7501,11 @@ function TaskGroup({
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
+  onReorderTask?: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -7543,6 +7589,7 @@ function TaskGroup({
           tasks={tasks}
           emptyMessage={emptyMessage}
           onToggleTask={onToggleTask}
+          onReorderTask={onReorderTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={onOpenTask}
@@ -7564,6 +7611,7 @@ function TaskListBlock({
   tasks,
   emptyMessage,
   onToggleTask,
+  onReorderTask,
   onReparentTaskAsSubtask,
   onPromoteSubtask,
   onOpenTask,
@@ -7580,6 +7628,11 @@ function TaskListBlock({
   tasks: Task[];
   emptyMessage: string;
   onToggleTask: (taskId: string) => void;
+  onReorderTask?: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -7619,6 +7672,7 @@ function TaskListBlock({
           hasVisibleSubtasks={item.hasVisibleSubtasks}
           visibleSubtaskCount={item.visibleSubtaskCount}
           onToggleTask={onToggleTask}
+          onReorderTask={onReorderTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={onOpenTask}
@@ -7642,6 +7696,7 @@ function TaskRow({
   hasVisibleSubtasks,
   visibleSubtaskCount,
   onToggleTask,
+  onReorderTask,
   onReparentTaskAsSubtask,
   onPromoteSubtask,
   onOpenTask,
@@ -7659,6 +7714,11 @@ function TaskRow({
   hasVisibleSubtasks: boolean;
   visibleSubtaskCount: number;
   onToggleTask: (taskId: string) => void;
+  onReorderTask?: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
     parentTaskId: string,
@@ -7690,7 +7750,9 @@ function TaskRow({
       showDueDate ||
       (task.parentTaskId && depth === 0),
   );
-  const [isDropActive, setIsDropActive] = useState(false);
+  const [dropIntent, setDropIntent] = useState<
+    "before" | "after" | "subtask" | null
+  >(null);
   const [isTouchActionsVisible, setIsTouchActionsVisible] = useState(false);
   const longPressTimerRef = useRef<number | null>(null);
   const suppressNextClickRef = useRef(false);
@@ -7777,48 +7839,59 @@ function TaskRow({
 
   function handleDragEnd() {
     activeDraggedTaskId = null;
-    setIsDropActive(false);
+    setDropIntent(null);
   }
 
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
     const draggedTaskId = getDraggedTaskId(event);
-    if (
-      !draggedTaskId ||
-      !canAcceptSubtaskDrop ||
-      !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)
-    ) {
-      setIsDropActive(false);
+    if (!draggedTaskId || draggedTaskId === task.id) {
+      setDropIntent(null);
       return;
     }
 
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    if (!isDropActive) {
-      setIsDropActive(true);
-    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const shiftedRight = event.clientX - bounds.left >= 72;
+    const canNest =
+      shiftedRight &&
+      canAcceptSubtaskDrop &&
+      canReparentTaskAsSubtask(payload, draggedTaskId, task.id);
+    setDropIntent(
+      canNest
+        ? "subtask"
+        : onReorderTask
+          ? event.clientY < bounds.top + bounds.height / 2
+            ? "before"
+            : "after"
+          : null,
+    );
   }
 
   function handleDragLeave(event: DragEvent<HTMLDivElement>) {
     if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
       return;
     }
-    setIsDropActive(false);
+    setDropIntent(null);
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     const draggedTaskId = getDraggedTaskId(event);
-    setIsDropActive(false);
-    if (
-      !draggedTaskId ||
-      !canAcceptSubtaskDrop ||
-      !canReparentTaskAsSubtask(payload, draggedTaskId, task.id)
-    ) {
-      return;
-    }
+    const intent = dropIntent;
+    setDropIntent(null);
+    if (!draggedTaskId || !intent) return;
 
     event.preventDefault();
     event.stopPropagation();
-    onReparentTaskAsSubtask(draggedTaskId, task.id);
+    if (
+      intent === "subtask" &&
+      canAcceptSubtaskDrop &&
+      canReparentTaskAsSubtask(payload, draggedTaskId, task.id)
+    ) {
+      onReparentTaskAsSubtask(draggedTaskId, task.id);
+    } else if (intent !== "subtask") {
+      onReorderTask?.(draggedTaskId, task.id, intent);
+    }
   }
 
   return (
@@ -7914,13 +7987,21 @@ function TaskRow({
         }
       }}
       className={`group/task-row relative flex items-start gap-2 border-b border-[#f1eeeb] px-2 py-2.5 text-left transition last:border-b-0 md:gap-3 md:px-4 ${
-        isDropActive
+        dropIntent === "subtask"
           ? "bg-[#FFF6F0] ring-1 ring-inset ring-[#EE6A3C]"
           : selected
             ? "bg-[#FFF3EE]"
             : "hover:bg-[#fcfaf7]"
       } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#EE6A3C]`}
     >
+      {dropIntent === "before" || dropIntent === "after" ? (
+        <span
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-2 z-20 h-0.5 rounded-full bg-[#EE6A3C] ${
+            dropIntent === "before" ? "top-0" : "bottom-0"
+          }`}
+        />
+      ) : null}
       {canDrag ? (
         <button
           type="button"
@@ -8008,9 +8089,9 @@ function TaskRow({
             {task.description}
           </p>
         ) : null}
-        {isDropActive ? (
+        {dropIntent === "subtask" ? (
           <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#B64B28]">
-            Drop to make subtask
+            Drop indented to make subtask
           </p>
         ) : null}
         {showMetadata ? (
