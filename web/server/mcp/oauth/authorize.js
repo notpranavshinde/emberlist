@@ -69,7 +69,7 @@ async function showConsent(req, res) {
       const redirectUri = url.searchParams.get('redirect_uri');
       const state = url.searchParams.get('state');
       if (state && client.redirect_uris.includes(redirectUri)) {
-        return redirectWithOAuthResult(res, { redirect_uri: redirectUri, state }, issuer, {
+        return redirectWithOAuthResult(res, { redirect_uri: redirectUri, state }, {
           error: error?.oauthError || 'invalid_request',
         });
       }
@@ -108,7 +108,7 @@ async function authorize(req, res) {
   assertSameOrigin(req);
   const body = readBody(req);
   const request = await getAuthorizationRequest(String(body.request_id || ''));
-  const { issuer, authSecret } = getMcpConfig(req);
+  const { authSecret } = getMcpConfig(req);
   try {
     assertPendingRequest(request);
     const { cookieSecret } = getConfig();
@@ -117,7 +117,7 @@ async function authorize(req, res) {
     if (body.decision !== 'allow') {
       const denied = await denyAuthorizationRequest(request.id);
       if (!denied) throw oauthRequestError('Authorization request is no longer available.');
-      return redirectWithOAuthResult(res, denied, issuer, { error: 'access_denied' });
+      return redirectWithOAuthResult(res, denied, { error: 'access_denied' });
     }
     const timeZone = validateTimeZone(body.time_zone);
     const rawCode = createOpaqueToken('el_code_');
@@ -137,10 +137,10 @@ async function authorize(req, res) {
     });
     if (!approved) throw oauthRequestError('Authorization request is no longer available.');
     clearCookie(res, MCP_GOOGLE_STATE_COOKIE);
-    return redirectWithOAuthResult(res, approved, issuer, { code: rawCode });
+    return redirectWithOAuthResult(res, approved, { code: rawCode });
   } catch (error) {
     if (request?.redirect_uri && request?.state && (error?.statusCode ?? 500) < 500) {
-      return redirectWithOAuthResult(res, request, issuer, { error: error?.oauthError || 'invalid_request' });
+      return redirectWithOAuthResult(res, request, { error: error?.oauthError || 'invalid_request' });
     }
     throw error;
   }

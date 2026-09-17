@@ -26,7 +26,7 @@
 5. **MCP OAuth security**
    - protected-resource and authorization-server discovery metadata
    - public dynamic registration with exact safe redirects
-   - mandatory S256 PKCE, CSRF/state rejection, one-time five-minute codes, and RFC 9207 issuer binding
+   - mandatory S256 PKCE, CSRF/state rejection, one-time five-minute codes, and server-specific callback binding
    - exact resource/audience and `emberlist.workspace` scope checks
    - one-hour access expiry, rotating refresh tokens, reuse detection, 90-day refresh expiry, and one-year grant expiry
    - revocation, immediate connected-client removal, rate limits, HTML escaping, and open-redirect rejection
@@ -59,8 +59,7 @@ On August 21, 2026, `npm audit --audit-level=high`, lint (zero errors), 42
 Vitest files with 298 tests, `npm run security:check`, and the production build
 passed locally. Final production deployment
 `dpl_GHipUDnEn1uPFjYt2h4f2tL7GSeK` reached Ready and was aliased to
-`https://emberlist.dev`. Live metadata advertised RFC 9207 issuer-response
-support as `true`, and the unauthenticated MCP endpoint remained `401` with its
+`https://emberlist.dev`. The unauthenticated MCP endpoint remained `401` with its
 protected-resource URL. Production privacy, terms, and security headers were
 also verified. The signed-in Google Cloud console showed the exact MCP
 callback under the Emberlist Web client's authorized redirect URIs. A connected plugin also passed a content-free

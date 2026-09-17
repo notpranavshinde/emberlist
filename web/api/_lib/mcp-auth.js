@@ -302,9 +302,9 @@ export function readBody(req) {
   return Object.fromEntries(new URLSearchParams(raw));
 }
 
-export function redirectWithOAuthResult(res, request, issuer, values) {
+export function redirectWithOAuthResult(res, request, values) {
   const url = new URL(request.redirect_uri);
-  for (const [key, value] of Object.entries({ ...values, state: request.state, iss: issuer })) {
+  for (const [key, value] of Object.entries({ ...values, state: request.state })) {
     if (value != null) url.searchParams.set(key, value);
   }
   res.statusCode = 302;

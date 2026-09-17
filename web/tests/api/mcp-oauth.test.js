@@ -75,8 +75,8 @@ describe('MCP OAuth discovery and registration', () => {
       issuer: 'https://emberlist.test',
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
-      authorization_response_iss_parameter_supported: true,
     });
+    expect(JSON.parse(serverResponse.body)).not.toHaveProperty('authorization_response_iss_parameter_supported');
   });
 
   it('routes both RFC protected-resource discovery forms', () => {
@@ -179,7 +179,7 @@ describe('MCP authorization and tokens', () => {
     expect(location.origin + location.pathname).toBe('http://127.0.0.1:4567/callback/codex');
     expect(location.searchParams.get('code')).toMatch(/^el_code_/u);
     expect(location.searchParams.get('state')).toBe('csrf-state');
-    expect(location.searchParams.get('iss')).toBe('https://emberlist.test');
+    expect(location.searchParams.has('iss')).toBe(false);
     expect(db.approveAuthorizationRequest).toHaveBeenCalledWith(expect.objectContaining({
       requestId: 'request', grant: expect.objectContaining({ timeZone: 'America/Phoenix' }),
     }));
@@ -264,7 +264,7 @@ describe('MCP authorization and tokens', () => {
     }
   });
 
-  it('redirects valid-client authorization errors with exact state and RFC 9207 issuer', async () => {
+  it('redirects valid-client authorization errors with exact state', async () => {
     db.getOAuthClient.mockResolvedValue({
       client_id: 'client', client_name: 'Codex', redirect_uris: ['https://client.test/callback'],
     });
@@ -277,7 +277,7 @@ describe('MCP authorization and tokens', () => {
     const location = new URL(res.getHeader('Location'));
     expect(location.origin + location.pathname).toBe('https://client.test/callback');
     expect(location.searchParams.get('state')).toBe('csrf-state');
-    expect(location.searchParams.get('iss')).toBe('https://emberlist.test');
+    expect(location.searchParams.has('iss')).toBe(false);
     expect(location.searchParams.get('error')).toBe('unsupported_response_type');
   });
 

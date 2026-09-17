@@ -25,7 +25,7 @@ export default async function handler(req, res) {
   try {
     assertMcpEnabled();
     await enforceRateLimit(req, res, { name: 'mcp-google-callback', limit: 60, windowSeconds: 10 * 60 });
-    const { issuer, authSecret } = getMcpConfig(req);
+    const { authSecret } = getMcpConfig(req);
     const state = readEncryptedCookie(req, MCP_GOOGLE_STATE_COOKIE, authSecret);
     clearCookie(res, MCP_GOOGLE_STATE_COOKIE);
     const url = new URL(req.url, getOrigin(req));
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const request = await getAuthorizationRequest(state.requestId);
     if (!request || toMillis(request.expires_at) <= Date.now()) throw callbackError('Authorization request expired.');
     if (url.searchParams.get('error')) {
-      return redirectWithOAuthResult(res, request, issuer, { error: 'access_denied' });
+      return redirectWithOAuthResult(res, request, { error: 'access_denied' });
     }
     const code = url.searchParams.get('code');
     if (!code) throw callbackError('Google authorization code is missing.');

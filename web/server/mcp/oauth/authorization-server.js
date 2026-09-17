@@ -14,7 +14,6 @@ export default function handler(req, res) {
     grant_types_supported: ['authorization_code', 'refresh_token'],
     token_endpoint_auth_methods_supported: ['none'],
     code_challenge_methods_supported: ['S256'],
-    authorization_response_iss_parameter_supported: true,
     scopes_supported: ['emberlist.workspace', 'offline_access'],
   });
 }

@@ -6,7 +6,7 @@
 - [x] Security headers and CSP enforced on the production privacy and terms routes.
 - [x] Local dependency audit passed with no vulnerabilities; lint passed with zero errors; 42 test files and 298 tests passed; security checks and production build passed.
 - [x] Final production deployment `dpl_GHipUDnEn1uPFjYt2h4f2tL7GSeK` reached Ready and was aliased to `https://emberlist.dev`.
-- [x] Live authorization-server metadata advertises `authorization_response_iss_parameter_supported: true`; the unauthenticated MCP endpoint remains `401` with the protected-resource URL in `WWW-Authenticate`.
+- [x] The unauthenticated MCP endpoint remains `401` with the protected-resource URL in `WWW-Authenticate`; Codex uses its server-specific callback path for mix-up protection.
 - [x] The signed-in Google Cloud console shows exactly `https://emberlist.dev/api/mcp/oauth/google/callback` under the Emberlist Web client's authorized redirect URIs.
 - [x] A connected personal plugin passed a content-free smoke: default `list_tasks` returned 20 open tasks, a no-op semantic write returned a committed revision with `replayed: false`, and an identical replay returned `replayed: true` without a duplicate or workspace-content change.
 - [x] `npm run test:mcp:postgres` passed against disposable Neon branch `br-bitter-block-av6vn7j9`, exercising the migration, encrypted refresh-token storage/decryption, atomic one-time code consumption, refresh rotation race and reuse retention, cleanup retention, and grant cascade deletion.

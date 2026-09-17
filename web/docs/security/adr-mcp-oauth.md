@@ -20,7 +20,8 @@ client and web session already establish the Google identity and Drive grant.
   keeps a single serverless entry point without changing the public interface.
 - Support public dynamic client registration, exact registered redirects,
   mandatory S256 PKCE, one-time five-minute authorization codes, exact resource
-  matching, and RFC 9207 issuer identification.
+  matching, and Codex's server-specific callback path for authorization-server
+  mix-up protection.
 - Use one application scope, `emberlist.workspace`. Accept `offline_access` only
   as a protocol request for refresh tokens.
 - Reuse an active Emberlist web session during consent. Otherwise use the
@@ -57,9 +58,8 @@ migrations.
 
 On August 21, 2026, final production deployment
 `dpl_GHipUDnEn1uPFjYt2h4f2tL7GSeK` reached Ready and was aliased to
-`https://emberlist.dev`. Live metadata advertised RFC 9207 issuer-response
-support, and the unauthenticated MCP challenge remained `401` with the
-protected-resource URL. The signed-in Google Cloud console showed the exact MCP callback
+`https://emberlist.dev`. The unauthenticated MCP challenge remained `401` with
+the protected-resource URL. The signed-in Google Cloud console showed the exact MCP callback
 under the Emberlist Web client's authorized redirect URIs. A connected plugin passed a content-free smoke covering a default
 task list, a no-op semantic mutation, and an identical replay without duplicate
 or workspace-content change. Desktop and narrow mobile Settings/consent layouts

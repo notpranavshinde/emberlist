@@ -49,7 +49,7 @@
 - Workspace routes are blocked until a backend Google session is present.
 - IndexedDB workspace data is bound to the stable Google subject identifier; a mismatched account is rejected before merge.
 - Sign-out requires a final sync, then clears workspace storage without deleting the remote Drive file.
-- Public MCP clients use exact registered redirects, mandatory S256 PKCE, exact resource matching, one-time five-minute codes, and RFC 9207 issuer binding; production metadata advertises issuer-response support.
+- Public MCP clients use exact registered redirects, mandatory S256 PKCE, exact resource matching, one-time five-minute codes, and Codex's server-specific callback path for authorization-server mix-up protection.
 - Access tokens expire after one hour; refresh tokens rotate, expire after 90 days, and trigger grant revocation on reuse; grants have a one-year absolute expiry.
 - Google refresh tokens are encrypted with a dedicated MCP secret. Access/refresh tokens are hashed and task payloads, raw arguments, titles, and bearer tokens are excluded from storage and logs.
 - Every write requires a mutation ID. Only request hashes and result identifiers are retained for 24-hour replay protection.
