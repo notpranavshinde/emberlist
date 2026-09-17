@@ -3902,6 +3902,9 @@ function TodayPage({
     taskId: string;
     anchorRect?: DOMRect | null;
   } | null>(null);
+  const [activeDropGroup, setActiveDropGroup] = useState<
+    "overdue" | "today" | null
+  >(null);
   const visibleTasks = useMemo(
     () =>
       showCompletedToday
@@ -3930,6 +3933,39 @@ function TodayPage({
     [selectedIds, visibleTasks],
   );
   const selectedCount = selectedIds.length;
+
+  function readDraggedTaskId(event: DragEvent<HTMLElement>) {
+    const directValue = activeDraggedTaskId?.trim();
+    if (directValue) return directValue;
+    const transferValue = event.dataTransfer.getData("text/task-id").trim();
+    return transferValue || null;
+  }
+
+  function getTodayGroupDropHandlers(
+    group: "overdue" | "today",
+    dueAt: number,
+  ) {
+    return {
+      onDragOver(event: DragEvent<HTMLElement>) {
+        if (!readDraggedTaskId(event)) return;
+        event.preventDefault();
+        setActiveDropGroup(group);
+      },
+      onDragLeave(event: DragEvent<HTMLElement>) {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          return;
+        }
+        setActiveDropGroup((current) => (current === group ? null : current));
+      },
+      onDrop(event: DragEvent<HTMLElement>) {
+        const draggedTaskId = readDraggedTaskId(event);
+        setActiveDropGroup(null);
+        if (!draggedTaskId) return;
+        event.preventDefault();
+        onRescheduleTasks([draggedTaskId], dueAt);
+      },
+    };
+  }
 
   function clearSelection() {
     setSelectionMode(false);
@@ -4143,24 +4179,32 @@ function TodayPage({
       ) : null}
 
       <TaskGroupGrid>
-        {data.overdue.length ? (
-          <TaskGroup
-            title="Overdue"
-            payload={payload}
-            todayStartMs={todayStartMs}
-            tasks={data.overdue}
-            emptyMessage="Nothing overdue."
-            onToggleTask={onToggleTask}
-            onReorderTask={onReorderTask}
-            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-            onOpenTask={openTaskEditor}
-            selectionMode={selectionMode}
-            selectedTaskIds={selectedTaskIds}
-            onToggleSelection={toggleSelection}
-            onStartSelection={openSelection}
-            onPromoteSubtask={onPromoteSubtask}
-            rowActions={renderTaskRowActions}
-            headerActions={
+        <TaskGroup
+          title="Overdue"
+          payload={payload}
+          todayStartMs={todayStartMs}
+          tasks={data.overdue}
+          emptyMessage="Nothing overdue."
+          onToggleTask={onToggleTask}
+          onReorderTask={onReorderTask}
+          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+          onOpenTask={openTaskEditor}
+          selectionMode={selectionMode}
+          selectedTaskIds={selectedTaskIds}
+          onToggleSelection={toggleSelection}
+          onStartSelection={openSelection}
+          onPromoteSubtask={onPromoteSubtask}
+          rowActions={renderTaskRowActions}
+          dropTargetState={{
+            active: activeDropGroup === "overdue",
+            hint: "Drop task here to make it overdue.",
+            ...getTodayGroupDropHandlers(
+              "overdue",
+              addDays(todayStartMs, -1).getTime(),
+            ),
+          }}
+          headerActions={
+            data.overdue.length ? (
               <button
                 type="button"
                 onClick={() => openDateDialog("reschedule-overdue")}
@@ -4168,9 +4212,9 @@ function TodayPage({
               >
                 Reschedule overdue
               </button>
-            }
-          />
-        ) : null}
+            ) : null
+          }
+        />
 
         <div data-onboarding-target="today-due">
           <TaskGroup
@@ -4193,6 +4237,11 @@ function TodayPage({
             onStartSelection={openSelection}
             onPromoteSubtask={onPromoteSubtask}
             rowActions={renderTaskRowActions}
+            dropTargetState={{
+              active: activeDropGroup === "today",
+              hint: "Drop task here to make it due today.",
+              ...getTodayGroupDropHandlers("today", todayStartMs),
+            }}
             hideDueDate
           />
         </div>
