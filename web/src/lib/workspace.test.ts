@@ -16,6 +16,7 @@ import {
   getSubtasks,
   getTaskReminderDrafts,
   getTodayViewData,
+  getUpcomingGroups,
   getUpcomingOpenTasks,
   moveTasksToSection,
   moveTasksToProject,
@@ -651,6 +652,38 @@ describe('workspace bulk task helpers', () => {
         .filter(task => ['task-first', 'task-target', 'task-dragged'].includes(task.id))
         .map(task => task.id),
     ).toEqual(['task-first', 'task-dragged', 'task-target']);
+  });
+
+  it('keeps manual task order in inbox, today, upcoming, and search views', () => {
+    const payload = createPayload();
+    const upcomingDueAt = Date.now() + 2 * 24 * 60 * 60 * 1000;
+    payload.tasks = [
+      createTask({ id: 'task-second', title: 'Second', dueAt: 2000, order: 1 }),
+      createTask({ id: 'task-first', title: 'First', dueAt: 3000, order: 0 }),
+      createTask({ id: 'task-upcoming-second', title: 'Upcoming second', dueAt: upcomingDueAt, order: 1 }),
+      createTask({ id: 'task-upcoming-first', title: 'Upcoming first', dueAt: upcomingDueAt, order: 0 }),
+    ];
+
+    expect(getInboxTasks(payload).map(task => task.id)).toEqual([
+      'task-first',
+      'task-upcoming-first',
+      'task-second',
+      'task-upcoming-second',
+    ]);
+    expect(getTodayViewData(payload, 0, 4000).today.map(task => task.id)).toEqual([
+      'task-first',
+      'task-second',
+    ]);
+    expect(getUpcomingGroups(payload)[0]?.tasks.map(task => task.id)).toEqual([
+      'task-upcoming-first',
+      'task-upcoming-second',
+    ]);
+    expect(searchTasks(payload, '', new Set()).map(task => task.id)).toEqual([
+      'task-first',
+      'task-upcoming-first',
+      'task-second',
+      'task-upcoming-second',
+    ]);
   });
 
   it('rejects invalid subtask reparent targets', () => {

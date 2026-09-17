@@ -2799,6 +2799,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2821,6 +2822,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2843,6 +2845,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2865,6 +2868,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2888,6 +2892,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -2915,6 +2920,7 @@ function WorkspaceShell({
                       showSelectionButtons={showSelectionButtons}
                       onOpenQuickAdd={onOpenQuickAdd}
                       onToggleTask={onToggleTask}
+                      onReorderTask={onReorderTask}
                       onArchiveTask={onArchiveTask}
                       onReparentTaskAsSubtask={onReparentTaskAsSubtask}
                       onRescheduleTasks={onRescheduleTasks}
@@ -3826,6 +3832,7 @@ function TodayPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onReorderTask,
   onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -3849,6 +3856,11 @@ function TodayPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onReorderTask: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -4139,6 +4151,7 @@ function TodayPage({
             tasks={data.overdue}
             emptyMessage="Nothing overdue."
             onToggleTask={onToggleTask}
+            onReorderTask={onReorderTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onOpenTask={openTaskEditor}
             selectionMode={selectionMode}
@@ -4171,6 +4184,7 @@ function TodayPage({
                 : "No tasks due today."
             }
             onToggleTask={onToggleTask}
+            onReorderTask={onReorderTask}
             onReparentTaskAsSubtask={onReparentTaskAsSubtask}
             onOpenTask={openTaskEditor}
             selectionMode={selectionMode}
@@ -4316,6 +4330,7 @@ function UpcomingPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onReorderTask,
   onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -4332,6 +4347,11 @@ function UpcomingPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onReorderTask: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -4668,6 +4688,7 @@ function UpcomingPage({
           tasks={todayData.overdue}
           emptyMessage="Nothing overdue."
           onToggleTask={onToggleTask}
+          onReorderTask={onReorderTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={openTaskEditor}
@@ -4726,6 +4747,7 @@ function UpcomingPage({
               tasks={group.tasks}
               emptyMessage="No tasks."
               onToggleTask={onToggleTask}
+              onReorderTask={onReorderTask}
               onReparentTaskAsSubtask={onReparentTaskAsSubtask}
               onPromoteSubtask={onPromoteSubtask}
               onOpenTask={openTaskEditor}
@@ -4862,6 +4884,7 @@ function SearchPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onReorderTask,
   onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -4879,6 +4902,11 @@ function SearchPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onReorderTask: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -5301,6 +5329,7 @@ function SearchPage({
           tasks={results}
           emptyMessage="No open tasks match this search yet."
           onToggleTask={onToggleTask}
+          onReorderTask={onReorderTask}
           onReparentTaskAsSubtask={onReparentTaskAsSubtask}
           onPromoteSubtask={onPromoteSubtask}
           onOpenTask={openTaskEditor}
@@ -5482,6 +5511,7 @@ function InboxPage({
   showSelectionButtons,
   onOpenQuickAdd,
   onToggleTask,
+  onReorderTask,
   onArchiveTask,
   onReparentTaskAsSubtask,
   onRescheduleTasks,
@@ -5498,6 +5528,11 @@ function InboxPage({
   showSelectionButtons: boolean;
   onOpenQuickAdd: (overrides?: Partial<QuickAddContext>) => void;
   onToggleTask: (taskId: string) => void;
+  onReorderTask: (
+    draggedTaskId: string,
+    targetTaskId: string,
+    position: "before" | "after",
+  ) => void;
   onArchiveTask: (taskId: string) => void;
   onReparentTaskAsSubtask: (
     draggedTaskId: string,
@@ -5737,6 +5772,7 @@ function InboxPage({
         tasks={tasks}
         emptyMessage="Inbox is clear."
         onToggleTask={onToggleTask}
+        onReorderTask={onReorderTask}
         onReparentTaskAsSubtask={onReparentTaskAsSubtask}
         onPromoteSubtask={onPromoteSubtask}
         onOpenTask={openTaskEditor}
@@ -7842,6 +7878,21 @@ function TaskRow({
     setDropIntent(null);
   }
 
+  function getDropIntent(
+    event: DragEvent<HTMLDivElement>,
+    draggedTaskId: string,
+  ): "before" | "after" | "subtask" | null {
+    if (draggedTaskId === task.id) return null;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const canNest =
+      event.clientX - bounds.left >= 96 &&
+      canAcceptSubtaskDrop &&
+      canReparentTaskAsSubtask(payload, draggedTaskId, task.id);
+    if (canNest) return "subtask";
+    if (!onReorderTask) return null;
+    return event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+  }
+
   function handleDragOver(event: DragEvent<HTMLDivElement>) {
     const draggedTaskId = getDraggedTaskId(event);
     if (!draggedTaskId || draggedTaskId === task.id) {
@@ -7851,21 +7902,7 @@ function TaskRow({
 
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const shiftedRight = event.clientX - bounds.left >= 72;
-    const canNest =
-      shiftedRight &&
-      canAcceptSubtaskDrop &&
-      canReparentTaskAsSubtask(payload, draggedTaskId, task.id);
-    setDropIntent(
-      canNest
-        ? "subtask"
-        : onReorderTask
-          ? event.clientY < bounds.top + bounds.height / 2
-            ? "before"
-            : "after"
-          : null,
-    );
+    setDropIntent(getDropIntent(event, draggedTaskId));
   }
 
   function handleDragLeave(event: DragEvent<HTMLDivElement>) {
@@ -7877,7 +7914,7 @@ function TaskRow({
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     const draggedTaskId = getDraggedTaskId(event);
-    const intent = dropIntent;
+    const intent = draggedTaskId ? getDropIntent(event, draggedTaskId) : null;
     setDropIntent(null);
     if (!draggedTaskId || !intent) return;
 

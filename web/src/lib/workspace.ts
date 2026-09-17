@@ -97,7 +97,7 @@ export function getActiveProjects(payload: SyncPayload, includeArchived: boolean
 export function getInboxTasks(payload: SyncPayload): Task[] {
     return getOpenTasks(payload)
         .filter(task => task.projectId === null && task.parentTaskId === null)
-        .sort(compareTasks);
+        .sort(compareTaskOrder);
 }
 
 export function getCompletedInboxTasks(payload: SyncPayload): Task[] {
@@ -127,7 +127,7 @@ export function getProjectTasks(payload: SyncPayload, projectId: string, include
             if (includeArchived) return task.status !== 'COMPLETED';
             return task.status === 'OPEN';
         })
-        .sort((left, right) => left.order - right.order || left.title.localeCompare(right.title));
+        .sort(compareTaskOrder);
 }
 
 export function getCompletedProjectTasks(payload: SyncPayload, projectId: string): Task[] {
@@ -164,8 +164,8 @@ export function getTodayViewData(
     todayEnd: number,
 ): TodayViewData {
     const openTasks = getOpenTasks(payload);
-    const overdue = openTasks.filter(task => task.dueAt !== null && task.dueAt < todayStart).sort(compareTasks);
-    const today = openTasks.filter(task => task.dueAt !== null && task.dueAt >= todayStart && task.dueAt <= todayEnd).sort(compareTasks);
+    const overdue = openTasks.filter(task => task.dueAt !== null && task.dueAt < todayStart).sort(compareTaskOrder);
+    const today = openTasks.filter(task => task.dueAt !== null && task.dueAt >= todayStart && task.dueAt <= todayEnd).sort(compareTaskOrder);
     const completedToday = payload.tasks
         .filter(task =>
             !task.deletedAt &&
@@ -185,7 +185,7 @@ export function getUpcomingGroups(payload: SyncPayload): Array<{ dateKey: string
 
     getOpenTasks(payload)
         .filter(task => task.dueAt !== null && task.dueAt >= tomorrowStart)
-        .sort(compareTasks)
+        .sort(compareTaskOrder)
         .forEach(task => {
             const key = startOfDay(task.dueAt!).toISOString();
             const tasks = grouped.get(key) ?? [];
@@ -248,7 +248,7 @@ export function searchTasks(payload: SyncPayload, query: string, filters: Set<Se
 
     return openTasks
         .filter(task => includedIds.has(task.id))
-        .sort(compareTasks);
+        .sort(compareTaskOrder);
 }
 
 export function searchCompletedTasks(payload: SyncPayload, query: string, filters: Set<SearchFilter>): Task[] {
@@ -993,6 +993,10 @@ function compareTasks(left: Task, right: Task): number {
     if (leftDue !== rightDue) return leftDue - rightDue;
     if (left.order !== right.order) return left.order - right.order;
     return left.title.localeCompare(right.title);
+}
+
+function compareTaskOrder(left: Task, right: Task): number {
+    return left.order - right.order || left.title.localeCompare(right.title);
 }
 
 function finalizePayload(payload: SyncPayload): SyncPayload {
