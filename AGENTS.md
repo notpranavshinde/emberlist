@@ -93,10 +93,10 @@ Use `npm ci` for verification. Only change `package-lock.json` through an intent
 
 ### Local Web Browser Testing
 
-- Do not stop local web UI testing to request authentication, production secrets, or permission to create test data. Use a disposable local QA workspace with synthetic tasks instead of the user's real workspace.
-- Prefer the normal local runtime when its development auth environment is complete. When auth secrets are unavailable, use a temporary ignored Vite configuration that mocks only `/api/auth/session` and `/api/drive/sync-file` with a valid synthetic `SyncPayload`; do not weaken production auth code or copy production secrets/task data locally.
+- Do not stop local web UI testing to request authentication, production secrets, or permission to create test data. Use an isolated local QA workspace with synthetic tasks instead of the user's real workspace.
+- Before creating a QA harness, check for an existing ignored local harness and reuse it. When none exists and auth secrets are unavailable, create one in a Git-ignored or `.git/info/exclude`-listed path; it may persist across test runs. The harness should mock only `/api/auth/session` and `/api/drive/sync-file` with a valid synthetic `SyncPayload`; do not weaken production auth code or copy production secrets/task data locally.
 - Run the QA harness on a fresh localhost port so IndexedDB and account bindings cannot collide with prior sessions. Exercise the affected flow at desktop width and an explicit narrow viewport, capture visual evidence, then reset the viewport.
-- Delete temporary QA configuration and environment files and stop local servers before handoff. Never commit fixtures containing credentials, tokens, private workspace content, or temporary security-header changes.
+- Before handoff, stop local servers and verify the harness remains ignored with `git check-ignore` and absent from `git status`. Delete only one-off files that are not part of the reusable harness. Never commit the harness or fixtures containing credentials, tokens, private workspace content, or temporary security-header changes.
 
 Do not silently skip required checks. In the final handoff, list what ran, what passed, and anything that could not run.
 
