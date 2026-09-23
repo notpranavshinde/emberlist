@@ -582,9 +582,17 @@ function CalendarTaskChip({
       </div>
       <button
         type="button"
+        draggable
         aria-label={`Move ${task.title}`}
         title="Move task"
-        onPointerDown={(event) => event.stopPropagation()}
+        onDragStart={(event) => {
+          event.stopPropagation();
+          onDragStart(event, task.id);
+        }}
+        onDragEnd={(event) => {
+          event.stopPropagation();
+          onDragEnd();
+        }}
         onClick={(event) => {
           event.stopPropagation();
           onBeginMove(task.id);
