@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import type {
   CSSProperties,
   ComponentType,
@@ -3905,6 +3905,7 @@ function TodayPage({
   const [activeDropGroup, setActiveDropGroup] = useState<
     "overdue" | "today" | null
   >(null);
+  const [isTaskDragging, setIsTaskDragging] = useState(false);
   const visibleTasks = useMemo(
     () =>
       showCompletedToday
@@ -4109,6 +4110,12 @@ function TodayPage({
     <div
       className="w-full space-y-4"
       data-task-selection-mode={selectionMode ? "true" : undefined}
+      onDragStartCapture={(event) => {
+        if ((event.target as Element).closest("[data-task-id]")) {
+          flushSync(() => setIsTaskDragging(true));
+        }
+      }}
+      onDragEndCapture={() => setIsTaskDragging(false)}
     >
       {onboardingState?.status === "active" && !hasLiveTasks(payload) ? (
         <FirstRunWelcome
@@ -4179,32 +4186,32 @@ function TodayPage({
       ) : null}
 
       <TaskGroupGrid>
-        <TaskGroup
-          title="Overdue"
-          payload={payload}
-          todayStartMs={todayStartMs}
-          tasks={data.overdue}
-          emptyMessage="Nothing overdue."
-          onToggleTask={onToggleTask}
-          onReorderTask={onReorderTask}
-          onReparentTaskAsSubtask={onReparentTaskAsSubtask}
-          onOpenTask={openTaskEditor}
-          selectionMode={selectionMode}
-          selectedTaskIds={selectedTaskIds}
-          onToggleSelection={toggleSelection}
-          onStartSelection={openSelection}
-          onPromoteSubtask={onPromoteSubtask}
-          rowActions={renderTaskRowActions}
-          dropTargetState={{
-            active: activeDropGroup === "overdue",
-            hint: "Drop task here to make it overdue.",
-            ...getTodayGroupDropHandlers(
-              "overdue",
-              addDays(todayStartMs, -1).getTime(),
-            ),
-          }}
-          headerActions={
-            data.overdue.length ? (
+        {data.overdue.length ? (
+          <TaskGroup
+            title="Overdue"
+            payload={payload}
+            todayStartMs={todayStartMs}
+            tasks={data.overdue}
+            emptyMessage="Nothing overdue."
+            onToggleTask={onToggleTask}
+            onReorderTask={onReorderTask}
+            onReparentTaskAsSubtask={onReparentTaskAsSubtask}
+            onOpenTask={openTaskEditor}
+            selectionMode={selectionMode}
+            selectedTaskIds={selectedTaskIds}
+            onToggleSelection={toggleSelection}
+            onStartSelection={openSelection}
+            onPromoteSubtask={onPromoteSubtask}
+            rowActions={renderTaskRowActions}
+            dropTargetState={{
+              active: activeDropGroup === "overdue",
+              hint: "Drop task here to make it overdue.",
+              ...getTodayGroupDropHandlers(
+                "overdue",
+                addDays(todayStartMs, -1).getTime(),
+              ),
+            }}
+            headerActions={
               <button
                 type="button"
                 onClick={() => openDateDialog("reschedule-overdue")}
@@ -4212,9 +4219,25 @@ function TodayPage({
               >
                 Reschedule overdue
               </button>
-            ) : null
-          }
-        />
+            }
+          />
+        ) : null}
+
+        {!data.overdue.length && isTaskDragging ? (
+          <div
+            {...getTodayGroupDropHandlers(
+              "overdue",
+              addDays(todayStartMs, -1).getTime(),
+            )}
+            className={`absolute inset-x-0 top-0 z-30 flex min-h-20 items-center justify-center rounded-[18px] border-2 border-dashed bg-[#FFF7F2] px-4 text-sm font-semibold text-[#B64B28] shadow-lg transition ${
+              activeDropGroup === "overdue"
+                ? "border-[#EE6A3C] ring-2 ring-[#EE6A3C]/30"
+                : "border-[#E8A68E]"
+            }`}
+          >
+            Drop here to make task overdue
+          </div>
+        ) : null}
 
         <div data-onboarding-target="today-due">
           <TaskGroup
@@ -7501,7 +7524,7 @@ function SettingsPage({
 function TaskGroupGrid({ children }: { children: ReactNode }) {
   return (
     <div
-      className="grid items-start gap-4 2xl:gap-6"
+      className="relative grid items-start gap-4 2xl:gap-6"
       style={{
         gridTemplateColumns:
           "repeat(auto-fit, minmax(min(100%, 500px), 1fr))",
