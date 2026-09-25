@@ -368,6 +368,20 @@ describe('workspace bulk task helpers', () => {
     expect(todayData.today.map(task => task.id)).toContain('task-overdue');
   });
 
+  it('moves a task into overdue after rescheduling it to a past date', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date('2026-03-31T12:00:00').getTime());
+    const payload = createPayload();
+    const todayStart = new Date('2026-03-31T00:00:00').getTime();
+    const todayEnd = new Date('2026-03-31T23:59:59').getTime();
+    const pastDate = new Date('2026-03-30T00:00:00').getTime();
+
+    const updated = rescheduleTasksToDate(payload, ['task-today'], pastDate);
+    const todayData = getTodayViewData(updated, todayStart, todayEnd);
+
+    expect(todayData.today.map(task => task.id)).not.toContain('task-today');
+    expect(todayData.overdue.map(task => task.id)).toContain('task-today');
+  });
+
   it('returns only overdue and future-dated open tasks for Upcoming selection', () => {
     const payload = createPayload();
     payload.tasks.push(
