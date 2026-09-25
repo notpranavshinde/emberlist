@@ -2183,7 +2183,12 @@ function WorkspaceShell({
   const pendingGoPrefixRef = useRef(false);
   const bannerActionRef = useRef<() => Promise<void>>(async () => undefined);
   const [isBannerActionRunning, setIsBannerActionRunning] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() =>
+    readStoredBoolean("emberlist.sidebarCollapsed", false),
+  );
+  const [areProjectsCollapsed, setAreProjectsCollapsed] = useState(() =>
+    readStoredBoolean("emberlist.projectsCollapsed", false),
+  );
   const [isShortcutDialogOpen, setIsShortcutDialogOpen] = useState(false);
   const [isProjectSwitcherOpen, setIsProjectSwitcherOpen] = useState(false);
   const [isGettingStartedOpen, setIsGettingStartedOpen] = useState(false);
@@ -2228,6 +2233,20 @@ function WorkspaceShell({
   useEffect(() => {
     updateRouteMetadata(location.pathname, title);
   }, [location.pathname, title]);
+
+  useEffect(() => {
+    setStoredItem(
+      "emberlist.sidebarCollapsed",
+      JSON.stringify(isSidebarCollapsed),
+    );
+  }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    setStoredItem(
+      "emberlist.projectsCollapsed",
+      JSON.stringify(areProjectsCollapsed),
+    );
+  }, [areProjectsCollapsed]);
 
   useEffect(() => {
     if (previousPathRef.current !== location.key) {
@@ -2537,18 +2556,31 @@ function WorkspaceShell({
           <div
             className={`flex items-center rounded-[16px] py-2 ${isSidebarCollapsed ? "justify-center px-0" : "justify-between px-2"}`}
           >
-            <div
-              className={`flex items-center ${isSidebarCollapsed ? "justify-center" : "gap-3"}`}
+            {!isSidebarCollapsed ? (
+              <div className="flex items-center gap-3">
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#4ea0d8] text-sm font-semibold text-white">
+                  {workspaceIdentity.initial}
+                </div>
+                <div className="flex items-center gap-1 text-sm font-semibold text-[#2b2b2b]">
+                  <span>{workspaceIdentity.label}</span>
+                </div>
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed((value) => !value)}
+              aria-label={
+                isSidebarCollapsed ? "Open sidebar" : "Close sidebar"
+              }
+              title={isSidebarCollapsed ? "Open sidebar" : "Close sidebar"}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#6D5C50] transition hover:bg-[var(--app-surface)] hover:text-[#1E2D2F]"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#4ea0d8] text-sm font-semibold text-white">
-                {workspaceIdentity.initial}
-              </div>
-              <div
-                className={`flex items-center gap-1 text-sm font-semibold text-[#2b2b2b] ${isSidebarCollapsed ? "hidden" : ""}`}
-              >
-                <span>{workspaceIdentity.label}</span>
-              </div>
-            </div>
+              {isSidebarCollapsed ? (
+                <ChevronRight size={17} />
+              ) : (
+                <ChevronLeft size={17} />
+              )}
+            </button>
           </div>
 
           <button
@@ -2619,11 +2651,22 @@ function WorkspaceShell({
           <div
             className={`mt-8 flex items-center justify-between px-3 ${isSidebarCollapsed ? "hidden" : ""}`}
           >
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-[#5f5b57]">
+            <button
+              type="button"
+              onClick={() => setAreProjectsCollapsed((value) => !value)}
+              aria-expanded={!areProjectsCollapsed}
+              aria-controls="sidebar-project-list"
+              className="flex min-w-0 items-center gap-1.5 rounded-md text-left text-[#5f5b57] transition hover:text-[#1E2D2F]"
+            >
+              {areProjectsCollapsed ? (
+                <ChevronRight size={14} />
+              ) : (
+                <ChevronDown size={14} />
+              )}
+              <span className="text-sm font-semibold">
                 My Projects
-              </p>
-            </div>
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => requestCreateProject()}
@@ -2634,21 +2677,24 @@ function WorkspaceShell({
               <Plus size={14} />
             </button>
           </div>
-          <div
-            className={`mt-2 space-y-0.5 ${isSidebarCollapsed ? "hidden" : ""}`}
-          >
-            {regularProjects.map((project) => (
-              <RailLink
-                key={project.id}
-                to={`/project/${project.id}`}
-                icon={Folder}
-                label={project.name}
-                count={getProjectTasks(payload, project.id).length}
-                compact
-                tint={project.color}
-              />
-            ))}
-          </div>
+          {!areProjectsCollapsed ? (
+            <div
+              id="sidebar-project-list"
+              className={`mt-2 space-y-0.5 ${isSidebarCollapsed ? "hidden" : ""}`}
+            >
+              {regularProjects.map((project) => (
+                <RailLink
+                  key={project.id}
+                  to={`/project/${project.id}`}
+                  icon={Folder}
+                  label={project.name}
+                  count={getProjectTasks(payload, project.id).length}
+                  compact
+                  tint={project.color}
+                />
+              ))}
+            </div>
+          ) : null}
 
           {cloudConfigured ? (
           <div
